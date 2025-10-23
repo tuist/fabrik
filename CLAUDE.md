@@ -9,7 +9,7 @@ Fabrik is the foundational infrastructure for build caching, designed to be depl
 
 Just as Supabase deploys and manages Postgres databases for customers, Tuist will deploy and manage Fabrik instances to provide build cache as a service. Fabrik is tenant-agnostic infrastructure; Tuist handles all customer logic, billing, and orchestration.
 
-Fabrik provides a transparent, high-performance caching hierarchy to optimize build performance across different environments, supporting build systems like Gradle, Bazel, Nx, and TurboRepo.
+Fabrik provides a transparent, high-performance caching hierarchy to optimize build performance across different environments, supporting build systems like Gradle, Bazel, Nx, TurboRepo, and compiler caches like sccache (Cargo/Rust), with planned support for Vite+ when available.
 
 ## Implementation Plan
 
@@ -121,7 +121,7 @@ From the developer's perspective, there are three transparent caching layers:
 
 ### Build System Authentication Support
 
-All target build systems natively support Bearer tokens:
+All target build systems natively support Bearer tokens or S3 credentials:
 
 | Build System | Protocol | Auth Method | Environment Variable |
 |--------------|----------|-------------|----------------------|
@@ -129,8 +129,9 @@ All target build systems natively support Bearer tokens:
 | **Bazel** | gRPC | `--remote_header=Authorization=Bearer $TOKEN` | `$TOKEN` (user-defined) |
 | **Nx** | HTTP | `Authorization: Bearer <token>` | `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` |
 | **TurboRepo** | HTTP | `Authorization: Bearer <token>` | `TURBO_TOKEN` |
+| **sccache** | S3 API | AWS credentials or custom endpoint | `SCCACHE_BUCKET`, `SCCACHE_ENDPOINT` |
 
-Fabrik must support both HTTP and gRPC protocols to accommodate all build systems.
+Fabrik must support HTTP, gRPC, and S3-compatible protocols to accommodate all build systems.
 
 ## Analytics & Observability
 
@@ -193,7 +194,21 @@ Fabrik exposes metrics via HTTP endpoint (e.g., `/metrics`) that Tuist polls per
 - Endpoints: `PUT/GET /v8/artifacts/:hash?teamId=<id>`
 - Documentation: https://turborepo.com/docs/core-concepts/remote-caching
 
-**Protocol Support:** Fabrik must implement both HTTP and gRPC servers to support all four build systems.
+**sccache (Cargo/Rust)** (S3 API)
+- Protocol: S3 API (also supports GCS, Redis)
+- Integration: Via `RUSTC_WRAPPER` environment variable
+- Storage: Compatible with Fabrik's S3 storage layer
+- Documentation: https://github.com/mozilla/sccache
+
+### Planned Support
+
+**Vite+** (In Development)
+- Unified toolchain with built-in monorepo caching
+- Positioned as alternative to TurboRepo/Nx
+- Expected to support HTTP-based remote cache protocol
+- Website: https://viteplus.dev (Currently in early access)
+
+**Protocol Support:** Fabrik must implement both HTTP and gRPC servers, plus S3-compatible API to support all build systems.
 
 ## Configuration
 
@@ -325,6 +340,7 @@ fabrik server \
 - [ ] Rate limiting per customer (if needed)
 
 ### Long-term (v3.0+)
+- [ ] Vite+ support (when available)
 - [ ] Additional build systems (Buck2, Pants, etc.)
 - [ ] Cache warming strategies
 - [ ] Intelligent prefetching

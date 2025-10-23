@@ -340,6 +340,7 @@ lazy_static = "1.4"  # for global metrics
 - [ ] Intelligent prefetching
 
 ### Phase 12: Additional Build Systems
+- [ ] Vite+ support (when available - currently in early access)
 - [ ] Buck2 support
 - [ ] Pants support
 - [ ] Research other build systems
@@ -385,6 +386,8 @@ lazy_static = "1.4"  # for global metrics
 - Server command ready to accept all configuration options from CLAUDE.md
 - README.md created with emoji sections for better readability
 - GitHub repository description and topics updated for discoverability
+- Added support documentation for sccache (Cargo/Rust compiler cache)
+- Vite+ added as planned future support (currently in early access)
 
 ### Open Questions
 - Should we support custom storage backends via plugins? (Future consideration)
@@ -401,8 +404,10 @@ lazy_static = "1.4"  # for global metrics
 ## References
 
 - [CLAUDE.md](./CLAUDE.md) - Full architectural documentation
-- [README.md](./README.md) - User-facing documentation (to be created)
+- [README.md](./README.md) - User-facing documentation
 - [Bazel Remote Execution API](https://bazel.build/remote/rbe)
 - [Gradle Build Cache](https://docs.gradle.org/current/userguide/build_cache.html)
 - [Nx Remote Cache](https://nx.dev/docs/guides/tasks--caching/self-hosted-caching)
 - [TurboRepo Remote Cache](https://turborepo.com/docs/core-concepts/remote-caching)
+- [sccache (Cargo/Rust)](https://github.com/mozilla/sccache)
+- [Vite+](https://viteplus.dev) - In early access

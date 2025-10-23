@@ -6,7 +6,7 @@ Fabrik is the foundational infrastructure for build caching, designed to be depl
 
 ## 🎯 What is Fabrik?
 
-Fabrik provides transparent, high-performance caching for build systems like Gradle, Bazel, Nx, and TurboRepo. It supports a three-layer caching strategy:
+Fabrik provides transparent, high-performance caching for build systems like Gradle, Bazel, Nx, TurboRepo, and compiler caches like sccache (Cargo/Rust). It supports a three-layer caching strategy:
 
 - **Layer 1**: Local cache (CI environments with mounted volumes)
 - **Layer 2**: Regional cache (dedicated instances per customer)
@@ -16,11 +16,12 @@ Fabrik provides transparent, high-performance caching for build systems like Gra
 
 - 🚀 **High Performance**: Sub-10ms p99 latency for cache hits
 - 🔒 **Secure**: JWT-based authentication with zero-latency validation
-- 📦 **Multi-Protocol**: Supports both HTTP (Gradle, Nx, TurboRepo) and gRPC (Bazel)
+- 📦 **Multi-Protocol**: Supports HTTP (Gradle, Nx, TurboRepo), gRPC (Bazel), and S3 API (sccache)
 - 🗄️ **Smart Storage**: RocksDB for hot cache with LRU/LFU eviction, S3 for cold storage
 - 🔄 **Transparent Fallback**: Automatic cascading through cache layers
 - 📊 **Observable**: Prometheus metrics endpoint for monitoring
 - ⚙️ **Configurable**: Single binary with flexible deployment options
+- 🔮 **Future-Ready**: Planned support for Vite+ when available
 
 ## 🚀 Quick Start
 
