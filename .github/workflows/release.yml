@@ -110,12 +110,12 @@ jobs:
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
         run: |
-          cargo install cargo-zigbuild
+          cargo install cross --git https://github.com/cross-rs/cross
 
       - name: Build binary (Linux cross-compile)
         if: runner.os == 'Linux'
         run: |
-          cargo zigbuild --release --target ${{ matrix.target }}
+          cross build --release --target ${{ matrix.target }}
 
       - name: Build binary (macOS/Windows)
         if: runner.os != 'Linux'
