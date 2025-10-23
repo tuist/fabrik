@@ -17,12 +17,15 @@ This document tracks the implementation roadmap for Fabrik. Update this file as 
 - [x] Add mise configuration for Rust toolchain
 - [x] Create CLI with clap (basic help menu and server command structure)
 - [x] Create basic README with build/run instructions
+- [x] Configure CI/CD pipeline (GitHub Actions)
+  - [x] `cargo fmt` check
+  - [x] `cargo clippy` with zero warnings
+  - [x] `cargo test`
+  - [x] `cargo build --release`
+  - [x] Automated releases with git-cliff
+  - [x] Multi-platform binary builds (Linux, macOS, Windows)
+  - [x] SHA256 checksums generation
 - [ ] Set up project structure (modules: cache, storage, auth, server, config)
-- [ ] Configure CI/CD pipeline (GitHub Actions or similar)
-  - [ ] `cargo fmt` check
-  - [ ] `cargo clippy` with zero warnings
-  - [ ] `cargo test`
-  - [ ] `cargo build --release`
 - [ ] Set up development tools
   - [ ] `.editorconfig` or similar
   - [ ] Pre-commit hooks (optional)
@@ -353,13 +356,13 @@ lazy_static = "1.4"  # for global metrics
 - ✅ None yet (Phase 0 in progress)
 
 ### Current Phase
-- 🚧 Phase 0: Project Setup (4/9 tasks complete)
+- 🚧 Phase 0: Project Setup (5/7 tasks complete)
   - ✅ Rust project initialized with Cargo
-  - ✅ mise configuration added for toolchain management
+  - ✅ mise configuration added for toolchain management (rust + git-cliff)
   - ✅ CLI structure with clap (help menu working)
   - ✅ README with build/run instructions
+  - ✅ CI/CD pipeline (GitHub Actions with automated releases)
   - ⏳ Module structure
-  - ⏳ CI/CD pipeline
   - ⏳ Development tools
   - ⏳ License
 
@@ -388,6 +391,13 @@ lazy_static = "1.4"  # for global metrics
 - GitHub repository description and topics updated for discoverability
 - Added support documentation for sccache (Cargo/Rust compiler cache)
 - Vite+ added as planned future support (currently in early access)
+- CI/CD pipeline configured with GitHub Actions:
+  - CI workflow: fmt, clippy, test, build on all platforms
+  - Release workflow: automated releases using git-cliff with semantic versioning
+  - Multi-platform builds: Linux (x86_64, ARM64, ARMv7 GNU/musl), macOS (x86_64, ARM64), Windows (x86_64, ARM64)
+  - Multiple archive formats: tar.gz, tar.xz, tar.zst for Unix, zip for Windows
+  - SHA256 checksums generated for all artifacts
+  - CHANGELOG.md automatically updated on releases
 
 ### Open Questions
 - Should we support custom storage backends via plugins? (Future consideration)

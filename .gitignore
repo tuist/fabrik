@@ -1,1 +1,17 @@
+# Rust
 /target
+*.pdb
+
+# Release artifacts
+/dist
+
+# Editor files
+.idea
+.vscode
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
