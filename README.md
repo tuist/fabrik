@@ -1,11 +1,9 @@
 # Fabrik
 
-> Layered infrastructure for build system caching and remote execution
-
 Fabrik is the core infrastructure for build system caching and remote execution. Think of it as **Postgres to Supabase** - Fabrik provides the caching engine while the service layer manages deployment and multi-tenancy.
 
 > [!NOTE]
-> [Tuist](https://tuist.io) provides managed hosting of Fabrik as a service, similar to how Supabase hosts Postgres.
+> [Tuist](https://tuist.dev) provides managed hosting of Fabrik as a service, similar to how Supabase hosts Postgres.
 
 ## 🎯 Overview
 
