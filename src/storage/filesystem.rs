@@ -1,13 +1,17 @@
 use super::{Storage, StorageStats};
 use anyhow::{Context, Result};
+use crossbeam_channel::{bounded, Sender};
+use r2d2::Pool;
+use r2d2_sqlite::SqliteConnectionManager;
 use rusqlite::{params, Connection};
 use rusqlite_migration::{Migrations, M};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::thread;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tracing::debug;
 
 /// Database migrations for the cache metadata
 ///
@@ -52,20 +56,34 @@ fn migrations() -> Migrations<'static> {
     ])
 }
 
+/// Message type for batched access tracking updates
+#[derive(Debug, Clone)]
+struct TouchMessage {
+    id: Vec<u8>,
+    timestamp: i64,
+}
+
 /// Filesystem-based storage with SQLite metadata tracking
 ///
 /// Layout:
 /// - `.fabrik/cache/objects/ab/cd1234...` - Content-addressed blob storage (first 2 chars = subdir)
 /// - `.fabrik/cache/metadata.db` - SQLite database for access tracking and eviction
+///
+/// Optimizations:
+/// - Connection pool for concurrent database access
+/// - Async batched access tracking (touch operations)
+/// - WAL mode for better read/write concurrency
 pub struct FilesystemStorage {
     objects_dir: PathBuf,
-    db: Arc<Mutex<Connection>>,
+    db_pool: Pool<SqliteConnectionManager>,
+    touch_sender: Sender<TouchMessage>,
 }
 
 impl FilesystemStorage {
     /// Create a new filesystem storage at the given cache directory
     ///
     /// Runs database migrations to ensure the schema is up to date.
+    /// Spawns a background worker for batched access tracking.
     pub fn new<P: AsRef<Path>>(cache_dir: P) -> Result<Self> {
         let cache_dir = cache_dir.as_ref();
         let objects_dir = cache_dir.join("objects");
@@ -75,19 +93,119 @@ impl FilesystemStorage {
         fs::create_dir_all(&objects_dir)
             .context("Failed to create objects directory")?;
 
-        // Initialize SQLite database
-        let mut db = Connection::open(&db_path)
+        // Initialize database for migrations
+        let mut init_db = Connection::open(&db_path)
             .context("Failed to open metadata database")?;
+
+        // Enable WAL mode for better concurrency (multiple readers, single writer)
+        init_db.pragma_update(None, "journal_mode", "WAL")
+            .context("Failed to enable WAL mode")?;
+
+        // Set busy timeout to 5 seconds to handle lock contention
+        init_db.pragma_update(None, "busy_timeout", "5000")
+            .context("Failed to set busy timeout")?;
 
         // Run migrations
         migrations()
-            .to_latest(&mut db)
+            .to_latest(&mut init_db)
             .context("Failed to run database migrations")?;
+
+        // Drop initial connection before creating pool
+        drop(init_db);
+
+        // Create connection pool (max 16 connections for high concurrency)
+        let manager = SqliteConnectionManager::file(&db_path)
+            .with_init(|conn| {
+                // Ensure WAL mode for all connections
+                conn.pragma_update(None, "journal_mode", "WAL")?;
+                conn.pragma_update(None, "busy_timeout", "5000")?;
+                Ok(())
+            });
+
+        let db_pool = Pool::builder()
+            .max_size(16)
+            .build(manager)
+            .context("Failed to create connection pool")?;
+
+        // Create channel for async touch operations (buffered for batching)
+        let (touch_sender, touch_receiver) = bounded::<TouchMessage>(1000);
+
+        // Spawn background worker for batched access tracking
+        let pool_clone = db_pool.clone();
+        thread::spawn(move || {
+            let mut batch = Vec::with_capacity(100);
+            let batch_timeout = Duration::from_millis(100);
+
+            loop {
+                // Collect messages for up to 100ms or 100 items
+                match touch_receiver.recv_timeout(batch_timeout) {
+                    Ok(msg) => {
+                        batch.push(msg);
+
+                        // Drain the channel up to 100 items
+                        while batch.len() < 100 {
+                            match touch_receiver.try_recv() {
+                                Ok(msg) => batch.push(msg),
+                                Err(_) => break,
+                            }
+                        }
+
+                        // Execute batch update
+                        if let Err(e) = Self::batch_touch(&pool_clone, &batch) {
+                            debug!("Failed to batch update access tracking: {}", e);
+                        }
+
+                        batch.clear();
+                    }
+                    Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
+                        // Flush any pending items on timeout
+                        if !batch.is_empty() {
+                            if let Err(e) = Self::batch_touch(&pool_clone, &batch) {
+                                debug!("Failed to batch update access tracking: {}", e);
+                            }
+                            batch.clear();
+                        }
+                    }
+                    Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
+                        // Channel closed, flush and exit
+                        if !batch.is_empty() {
+                            let _ = Self::batch_touch(&pool_clone, &batch);
+                        }
+                        break;
+                    }
+                }
+            }
+        });
 
         Ok(Self {
             objects_dir,
-            db: Arc::new(Mutex::new(db)),
+            db_pool,
+            touch_sender,
         })
+    }
+
+    /// Batch update access tracking for multiple objects
+    fn batch_touch(pool: &Pool<SqliteConnectionManager>, batch: &[TouchMessage]) -> Result<()> {
+        if batch.is_empty() {
+            return Ok(());
+        }
+
+        let conn = pool.get().context("Failed to get database connection")?;
+
+        // Use a transaction for batched updates
+        let tx = conn.unchecked_transaction()?;
+
+        for msg in batch {
+            tx.execute(
+                "UPDATE objects SET accessed_at = ?1, access_count = access_count + 1 WHERE id = ?2",
+                params![msg.timestamp, msg.id],
+            ).ok(); // Ignore errors for individual updates
+        }
+
+        tx.commit().context("Failed to commit batch touch transaction")?;
+        debug!("Batched {} access tracking updates", batch.len());
+
+        Ok(())
     }
 
     /// Convert blob ID to filesystem path
@@ -118,7 +236,15 @@ impl Storage for FilesystemStorage {
         }
 
         // Write data atomically (write to temp file, then rename)
-        let temp_path = path.with_extension("tmp");
+        // Use PID + thread ID to avoid collisions in concurrent writes
+        let temp_name = format!(
+            "{}.tmp.{}.{:?}",
+            path.file_name().unwrap().to_str().unwrap(),
+            std::process::id(),
+            thread::current().id()
+        );
+        let temp_path = path.parent().unwrap().join(temp_name);
+
         let mut file = fs::File::create(&temp_path)
             .context("Failed to create temp file")?;
         file.write_all(data)
@@ -128,12 +254,12 @@ impl Storage for FilesystemStorage {
         fs::rename(&temp_path, &path)
             .context("Failed to rename temp file")?;
 
-        // Update metadata
+        // Update metadata using connection pool
         let now = Self::current_timestamp();
         let size = data.len() as i64;
-        let db = self.db.lock().unwrap();
+        let conn = self.db_pool.get().context("Failed to get database connection")?;
 
-        db.execute(
+        conn.execute(
             "INSERT OR REPLACE INTO objects (id, size, created_at, accessed_at, access_count)
              VALUES (?1, ?2, ?3, ?3, COALESCE((SELECT access_count FROM objects WHERE id = ?1), 0))",
             params![id, size, now],
@@ -154,7 +280,7 @@ impl Storage for FilesystemStorage {
         let data = fs::read(&path)
             .context("Failed to read object")?;
 
-        // Update access metadata
+        // Update access metadata asynchronously (non-blocking)
         self.touch(id)?;
 
         Ok(Some(data))
@@ -175,16 +301,16 @@ impl Storage for FilesystemStorage {
         }
 
         // Delete metadata
-        let db = self.db.lock().unwrap();
-        db.execute("DELETE FROM objects WHERE id = ?1", params![id])
+        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
             .context("Failed to delete metadata")?;
 
         Ok(())
     }
 
     fn size(&self, id: &[u8]) -> Result<Option<u64>> {
-        let db = self.db.lock().unwrap();
-        let mut stmt = db.prepare("SELECT size FROM objects WHERE id = ?1")?;
+        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let mut stmt = conn.prepare("SELECT size FROM objects WHERE id = ?1")?;
         let mut rows = stmt.query(params![id])?;
 
         if let Some(row) = rows.next()? {
@@ -196,21 +322,22 @@ impl Storage for FilesystemStorage {
     }
 
     fn touch(&self, id: &[u8]) -> Result<()> {
-        let now = Self::current_timestamp();
-        let db = self.db.lock().unwrap();
+        // Send to async batch worker (non-blocking)
+        let msg = TouchMessage {
+            id: id.to_vec(),
+            timestamp: Self::current_timestamp(),
+        };
 
-        db.execute(
-            "UPDATE objects SET accessed_at = ?1, access_count = access_count + 1 WHERE id = ?2",
-            params![now, id],
-        )
-        .context("Failed to update access metadata")?;
+        // Use try_send to avoid blocking if channel is full
+        // If channel is full, we simply drop the update (acceptable trade-off for performance)
+        self.touch_sender.try_send(msg).ok();
 
         Ok(())
     }
 
     fn list_ids(&self) -> Result<Vec<Vec<u8>>> {
-        let db = self.db.lock().unwrap();
-        let mut stmt = db.prepare("SELECT id FROM objects")?;
+        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let mut stmt = conn.prepare("SELECT id FROM objects")?;
         let rows = stmt.query_map([], |row| {
             let id: Vec<u8> = row.get(0)?;
             Ok(id)
@@ -225,8 +352,8 @@ impl Storage for FilesystemStorage {
     }
 
     fn stats(&self) -> Result<StorageStats> {
-        let db = self.db.lock().unwrap();
-        let mut stmt = db.prepare("SELECT COUNT(*), COALESCE(SUM(size), 0) FROM objects")?;
+        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let mut stmt = conn.prepare("SELECT COUNT(*), COALESCE(SUM(size), 0) FROM objects")?;
         let mut rows = stmt.query([])?;
 
         if let Some(row) = rows.next()? {
