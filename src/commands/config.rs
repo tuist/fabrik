@@ -26,7 +26,12 @@ fn validate(path: &str) -> Result<()> {
     println!("  - Upstream layers: {}", config.upstream.len());
 
     for (i, upstream) in config.upstream.iter().enumerate() {
-        println!("    {}. {} (timeout: {})", i + 1, upstream.url, upstream.timeout);
+        println!(
+            "    {}. {} (timeout: {})",
+            i + 1,
+            upstream.url,
+            upstream.timeout
+        );
     }
 
     Ok(())
@@ -39,7 +44,10 @@ fn generate(template: &str) -> Result<()> {
         "exec" | "daemon" => FabrikConfig::example_exec(),
         "server" => FabrikConfig::example_server(),
         _ => {
-            anyhow::bail!("Unknown template: {}. Valid templates: exec, daemon, server", template);
+            anyhow::bail!(
+                "Unknown template: {}. Valid templates: exec, daemon, server",
+                template
+            );
         }
     };
 

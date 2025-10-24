@@ -1,3 +1,6 @@
+// API types are defined here for future implementation but not yet used
+#![allow(dead_code)]
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 

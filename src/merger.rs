@@ -5,12 +5,12 @@
 /// 2. Environment variables
 /// 3. Configuration file
 /// 4. Built-in defaults (lowest priority)
-
 use crate::cli::{ExecArgs, ServerArgs};
 use crate::config::FabrikConfig;
 
 /// Merged configuration for exec/daemon commands
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields will be used when implementing actual functionality
 pub struct MergedExecConfig {
     pub cache_dir: String,
     pub max_cache_size: String,
@@ -30,6 +30,7 @@ pub struct MergedExecConfig {
 
 /// Merged configuration for server command
 #[derive(Debug, Clone)]
+#[allow(dead_code)] // Fields will be used when implementing actual functionality
 pub struct MergedServerConfig {
     pub cache_dir: String,
     pub max_cache_size: String,
@@ -81,9 +82,10 @@ impl MergedExecConfig {
                 .config_max_cache_size
                 .clone()
                 .unwrap_or_else(|| file.cache.max_size.clone()),
-            upstream: args.config_upstream.clone().unwrap_or_else(|| {
-                file.upstream.iter().map(|u| u.url.clone()).collect()
-            }),
+            upstream: args
+                .config_upstream
+                .clone()
+                .unwrap_or_else(|| file.upstream.iter().map(|u| u.url.clone()).collect()),
             upstream_timeout: args
                 .config_upstream_timeout
                 .clone()
@@ -143,9 +145,10 @@ impl MergedServerConfig {
                 .config_max_cache_size
                 .clone()
                 .unwrap_or_else(|| file.cache.max_size.clone()),
-            upstream: args.config_upstream.clone().unwrap_or_else(|| {
-                file.upstream.iter().map(|u| u.url.clone()).collect()
-            }),
+            upstream: args
+                .config_upstream
+                .clone()
+                .unwrap_or_else(|| file.upstream.iter().map(|u| u.url.clone()).collect()),
             s3_region,
             s3_endpoint: args.config_s3_endpoint.clone(),
             s3_access_key,

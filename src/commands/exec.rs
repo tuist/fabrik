@@ -52,9 +52,18 @@ pub fn run(args: ExecArgs) -> Result<()> {
 
     if args.export_env {
         println!("\n[NOOP] Would export environment variables:");
-        println!("  {}HTTP_URL=http://127.0.0.1:{}", args.env_prefix, config.http_port);
-        println!("  {}GRPC_URL=grpc://127.0.0.1:{}", args.env_prefix, config.grpc_port);
-        println!("  {}S3_ENDPOINT=http://127.0.0.1:{}", args.env_prefix, config.s3_port);
+        println!(
+            "  {}HTTP_URL=http://127.0.0.1:{}",
+            args.env_prefix, config.http_port
+        );
+        println!(
+            "  {}GRPC_URL=grpc://127.0.0.1:{}",
+            args.env_prefix, config.grpc_port
+        );
+        println!(
+            "  {}S3_ENDPOINT=http://127.0.0.1:{}",
+            args.env_prefix, config.s3_port
+        );
     }
 
     println!("\n[NOOP] Would execute command:");

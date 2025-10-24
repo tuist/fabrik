@@ -16,10 +16,7 @@ fn main() -> Result<()> {
         .or_else(|_| EnvFilter::try_new("info"))
         .unwrap();
 
-    fmt()
-        .with_env_filter(filter)
-        .with_target(false)
-        .init();
+    fmt().with_env_filter(filter).with_target(false).init();
 
     // Parse CLI arguments
     let cli = Cli::parse();
@@ -28,7 +25,7 @@ fn main() -> Result<()> {
     match cli.command {
         Commands::Exec(args) => commands::exec::run(args),
         Commands::Daemon(args) => commands::daemon::run(args),
-        Commands::Server(args) => commands::server::run(args),
+        Commands::Server(args) => commands::server::run(*args),
         Commands::Config(args) => commands::config::run(args.command),
         Commands::Health(args) => commands::health::run(args),
     }

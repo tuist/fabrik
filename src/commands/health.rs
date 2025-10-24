@@ -6,7 +6,9 @@ use crate::cli::HealthArgs;
 pub fn run(args: HealthArgs) -> Result<()> {
     info!("Running health check");
 
-    let url = args.url.unwrap_or_else(|| "http://localhost:8080".to_string());
+    let url = args
+        .url
+        .unwrap_or_else(|| "http://localhost:8080".to_string());
 
     // Noop: In real implementation, would:
     // 1. Make HTTP request to {url}/health

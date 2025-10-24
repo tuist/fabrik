@@ -362,7 +362,7 @@ impl FabrikConfig {
                 default_ttl: "7d".to_string(),
             },
             upstream: vec![UpstreamConfig {
-                url: "grpc://cache.example.com:7070".to_string(),  // Fabrik protocol
+                url: "grpc://cache.example.com:7070".to_string(), // Fabrik protocol
                 timeout: "30s".to_string(),
                 read_only: false,
                 permanent: false,
@@ -411,11 +411,11 @@ impl FabrikConfig {
                 required: true,
             },
             build_systems: BuildSystemsConfig {
-                enabled: vec![],  // Layer 2 doesn't run build system adapters
+                enabled: vec![], // Layer 2 doesn't run build system adapters
                 ..Default::default()
             },
             fabrik: FabrikProtocolConfig {
-                enabled: true,  // Layer 2 runs Fabrik protocol server
+                enabled: true, // Layer 2 runs Fabrik protocol server
                 bind: "0.0.0.0:7070".to_string(),
             },
             ..Default::default()
@@ -434,7 +434,8 @@ impl FabrikConfig {
         // Validate cache size format
         if !self.cache.max_size.ends_with("GB")
             && !self.cache.max_size.ends_with("MB")
-            && !self.cache.max_size.ends_with("TB") {
+            && !self.cache.max_size.ends_with("TB")
+        {
             anyhow::bail!("cache.max_size must end with GB, MB, or TB");
         }
 
@@ -448,7 +449,8 @@ impl FabrikConfig {
             if !upstream.url.starts_with("http://")
                 && !upstream.url.starts_with("https://")
                 && !upstream.url.starts_with("s3://")
-                && !upstream.url.starts_with("gcs://") {
+                && !upstream.url.starts_with("gcs://")
+            {
                 anyhow::bail!(
                     "upstream.url must start with http://, https://, s3://, or gcs://: {}",
                     upstream.url

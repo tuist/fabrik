@@ -60,10 +60,16 @@ pub fn run(args: ServerArgs) -> Result<()> {
 
     println!("\n  Network:");
     println!("    - Fabrik Protocol (gRPC): {}", config.fabrik_bind);
-    println!("    - Health API:             {} (enabled: {})", config.health_bind, config.health_enabled);
+    println!(
+        "    - Health API:             {} (enabled: {})",
+        config.health_bind, config.health_enabled
+    );
     println!("    - API Server:             {}", config.api_bind);
     println!("      - Metrics API:          {}", config.metrics_enabled);
-    println!("      - Cache Query API:      {}", config.cache_query_api_enabled);
+    println!(
+        "      - Cache Query API:      {}",
+        config.cache_query_api_enabled
+    );
     println!("      - Admin API:            {}", config.admin_api_enabled);
     println!("      - Auth required:        {}", config.api_auth_required);
 

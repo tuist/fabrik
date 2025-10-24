@@ -23,7 +23,7 @@ pub enum Commands {
     Daemon(DaemonArgs),
 
     /// Run regional/cloud cache server (Layer 2)
-    Server(ServerArgs),
+    Server(Box<ServerArgs>),
 
     /// Configuration management utilities
     Config(ConfigArgs),
@@ -220,7 +220,11 @@ pub struct ServerArgs {
     pub config_s3_bind: String,
 
     /// Fabrik protocol server bind address (gRPC)
-    #[arg(long, env = "FABRIK_CONFIG_FABRIK_BIND", default_value = "0.0.0.0:7070")]
+    #[arg(
+        long,
+        env = "FABRIK_CONFIG_FABRIK_BIND",
+        default_value = "0.0.0.0:7070"
+    )]
     pub config_fabrik_bind: String,
 
     // AUTHENTICATION
