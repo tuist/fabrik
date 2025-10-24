@@ -207,7 +207,7 @@ jobs:
           git-cliff --tag "$VERSION" -o CHANGELOG.md
 
           # Generate release notes (latest version only)
-          git-cliff --tag "$VERSION" --unreleased --strip header,footer -o RELEASE_NOTES.md
+          git-cliff --tag "$VERSION" --unreleased --strip all -o RELEASE_NOTES.md
 
       - name: Create SHA256SUMS file
         run: |
