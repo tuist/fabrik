@@ -90,19 +90,19 @@ impl FilesystemStorage {
         let db_path = cache_dir.join("metadata.db");
 
         // Create directories
-        fs::create_dir_all(&objects_dir)
-            .context("Failed to create objects directory")?;
+        fs::create_dir_all(&objects_dir).context("Failed to create objects directory")?;
 
         // Initialize database for migrations
-        let mut init_db = Connection::open(&db_path)
-            .context("Failed to open metadata database")?;
+        let mut init_db = Connection::open(&db_path).context("Failed to open metadata database")?;
 
         // Enable WAL mode for better concurrency (multiple readers, single writer)
-        init_db.pragma_update(None, "journal_mode", "WAL")
+        init_db
+            .pragma_update(None, "journal_mode", "WAL")
             .context("Failed to enable WAL mode")?;
 
         // Set busy timeout to 5 seconds to handle lock contention
-        init_db.pragma_update(None, "busy_timeout", "5000")
+        init_db
+            .pragma_update(None, "busy_timeout", "5000")
             .context("Failed to set busy timeout")?;
 
         // Run migrations
@@ -114,13 +114,12 @@ impl FilesystemStorage {
         drop(init_db);
 
         // Create connection pool (max 16 connections for high concurrency)
-        let manager = SqliteConnectionManager::file(&db_path)
-            .with_init(|conn| {
-                // Ensure WAL mode for all connections
-                conn.pragma_update(None, "journal_mode", "WAL")?;
-                conn.pragma_update(None, "busy_timeout", "5000")?;
-                Ok(())
-            });
+        let manager = SqliteConnectionManager::file(&db_path).with_init(|conn| {
+            // Ensure WAL mode for all connections
+            conn.pragma_update(None, "journal_mode", "WAL")?;
+            conn.pragma_update(None, "busy_timeout", "5000")?;
+            Ok(())
+        });
 
         let db_pool = Pool::builder()
             .max_size(16)
@@ -202,7 +201,8 @@ impl FilesystemStorage {
             ).ok(); // Ignore errors for individual updates
         }
 
-        tx.commit().context("Failed to commit batch touch transaction")?;
+        tx.commit()
+            .context("Failed to commit batch touch transaction")?;
         debug!("Batched {} access tracking updates", batch.len());
 
         Ok(())
@@ -231,8 +231,7 @@ impl Storage for FilesystemStorage {
 
         // Create parent directory
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)
-                .context("Failed to create parent directory")?;
+            fs::create_dir_all(parent).context("Failed to create parent directory")?;
         }
 
         // Write data atomically (write to temp file, then rename)
@@ -245,19 +244,18 @@ impl Storage for FilesystemStorage {
         );
         let temp_path = path.parent().unwrap().join(temp_name);
 
-        let mut file = fs::File::create(&temp_path)
-            .context("Failed to create temp file")?;
-        file.write_all(data)
-            .context("Failed to write data")?;
-        file.sync_all()
-            .context("Failed to sync file")?;
-        fs::rename(&temp_path, &path)
-            .context("Failed to rename temp file")?;
+        let mut file = fs::File::create(&temp_path).context("Failed to create temp file")?;
+        file.write_all(data).context("Failed to write data")?;
+        file.sync_all().context("Failed to sync file")?;
+        fs::rename(&temp_path, &path).context("Failed to rename temp file")?;
 
         // Update metadata using connection pool
         let now = Self::current_timestamp();
         let size = data.len() as i64;
-        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let conn = self
+            .db_pool
+            .get()
+            .context("Failed to get database connection")?;
 
         conn.execute(
             "INSERT OR REPLACE INTO objects (id, size, created_at, accessed_at, access_count)
@@ -277,8 +275,7 @@ impl Storage for FilesystemStorage {
         }
 
         // Read data
-        let data = fs::read(&path)
-            .context("Failed to read object")?;
+        let data = fs::read(&path).context("Failed to read object")?;
 
         // Update access metadata asynchronously (non-blocking)
         self.touch(id)?;
@@ -296,12 +293,14 @@ impl Storage for FilesystemStorage {
 
         // Delete file
         if path.exists() {
-            fs::remove_file(&path)
-                .context("Failed to delete object")?;
+            fs::remove_file(&path).context("Failed to delete object")?;
         }
 
         // Delete metadata
-        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let conn = self
+            .db_pool
+            .get()
+            .context("Failed to get database connection")?;
         conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
             .context("Failed to delete metadata")?;
 
@@ -309,7 +308,10 @@ impl Storage for FilesystemStorage {
     }
 
     fn size(&self, id: &[u8]) -> Result<Option<u64>> {
-        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let conn = self
+            .db_pool
+            .get()
+            .context("Failed to get database connection")?;
         let mut stmt = conn.prepare("SELECT size FROM objects WHERE id = ?1")?;
         let mut rows = stmt.query(params![id])?;
 
@@ -336,7 +338,10 @@ impl Storage for FilesystemStorage {
     }
 
     fn list_ids(&self) -> Result<Vec<Vec<u8>>> {
-        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let conn = self
+            .db_pool
+            .get()
+            .context("Failed to get database connection")?;
         let mut stmt = conn.prepare("SELECT id FROM objects")?;
         let rows = stmt.query_map([], |row| {
             let id: Vec<u8> = row.get(0)?;
@@ -352,7 +357,10 @@ impl Storage for FilesystemStorage {
     }
 
     fn stats(&self) -> Result<StorageStats> {
-        let conn = self.db_pool.get().context("Failed to get database connection")?;
+        let conn = self
+            .db_pool
+            .get()
+            .context("Failed to get database connection")?;
         let mut stmt = conn.prepare("SELECT COUNT(*), COALESCE(SUM(size), 0) FROM objects")?;
         let mut rows = stmt.query([])?;
 

@@ -160,10 +160,9 @@ mod tests {
         let env_lookup = |key: &str| env.get(key).cloned();
 
         let temp_dir = TempDir::new().unwrap();
-        let backend = StorageBackend::auto_detect_with_env(
-            temp_dir.path().to_str().unwrap(),
-            env_lookup
-        ).unwrap();
+        let backend =
+            StorageBackend::auto_detect_with_env(temp_dir.path().to_str().unwrap(), env_lookup)
+                .unwrap();
 
         assert!(matches!(backend, StorageBackend::Filesystem(_)));
     }
@@ -171,16 +170,18 @@ mod tests {
     #[test]
     fn test_auto_detect_github_actions() {
         let mut env = HashMap::new();
-        env.insert("ACTIONS_CACHE_URL".to_string(), "https://test.com".to_string());
+        env.insert(
+            "ACTIONS_CACHE_URL".to_string(),
+            "https://test.com".to_string(),
+        );
         env.insert("ACTIONS_RUNTIME_TOKEN".to_string(), "token".to_string());
 
         let env_lookup = |key: &str| env.get(key).cloned();
 
         let temp_dir = TempDir::new().unwrap();
-        let backend = StorageBackend::auto_detect_with_env(
-            temp_dir.path().to_str().unwrap(),
-            env_lookup
-        ).unwrap();
+        let backend =
+            StorageBackend::auto_detect_with_env(temp_dir.path().to_str().unwrap(), env_lookup)
+                .unwrap();
 
         assert!(matches!(backend, StorageBackend::GithubActions(_)));
     }
@@ -188,17 +189,19 @@ mod tests {
     #[test]
     fn test_auto_detect_github_actions_missing_token() {
         let mut env = HashMap::new();
-        env.insert("ACTIONS_CACHE_URL".to_string(), "https://test.com".to_string());
+        env.insert(
+            "ACTIONS_CACHE_URL".to_string(),
+            "https://test.com".to_string(),
+        );
         // Missing ACTIONS_RUNTIME_TOKEN
 
         let env_lookup = |key: &str| env.get(key).cloned();
 
         let temp_dir = TempDir::new().unwrap();
         // Should fall back to filesystem since env is incomplete
-        let backend = StorageBackend::auto_detect_with_env(
-            temp_dir.path().to_str().unwrap(),
-            env_lookup
-        ).unwrap();
+        let backend =
+            StorageBackend::auto_detect_with_env(temp_dir.path().to_str().unwrap(), env_lookup)
+                .unwrap();
 
         assert!(matches!(backend, StorageBackend::Filesystem(_)));
     }

@@ -76,9 +76,9 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
         debug!("==> CAS Put request received");
         let req = request.into_inner();
 
-        let object = req.data.ok_or_else(|| {
-            Status::invalid_argument("Missing CASObject data")
-        })?;
+        let object = req
+            .data
+            .ok_or_else(|| Status::invalid_argument("Missing CASObject data"))?;
 
         // Serialize the object
         let serialized = Self::serialize_object(&object)
@@ -92,7 +92,10 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
             .put(&id, &serialized)
             .map_err(|e| Status::internal(format!("Failed to store object: {}", e)))?;
 
-        info!("<== CAS Put completed - Stored object with ID: {}", hex::encode(&id));
+        info!(
+            "<== CAS Put completed - Stored object with ID: {}",
+            hex::encode(&id)
+        );
 
         Ok(Response::new(CasPutResponse {
             contents: Some(cas_put_response::Contents::CasId(CasDataId {
@@ -106,24 +109,29 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
         request: Request<CasGetRequest>,
     ) -> Result<Response<CasGetResponse>, Status> {
         let req = request.into_inner();
-        let cas_id = req.cas_id.ok_or_else(|| {
-            Status::invalid_argument("Missing CAS ID")
-        })?;
+        let cas_id = req
+            .cas_id
+            .ok_or_else(|| Status::invalid_argument("Missing CAS ID"))?;
 
         debug!("==> CAS Get request for ID: {}", hex::encode(&cas_id.id));
 
         // Retrieve from storage
-        let data = self.storage
+        let data = self
+            .storage
             .get(&cas_id.id)
             .map_err(|e| Status::internal(format!("Failed to retrieve object: {}", e)))?;
 
         match data {
             Some(bytes) => {
                 // Deserialize the object
-                let object = Self::deserialize_object(&bytes)
-                    .map_err(|e| Status::internal(format!("Failed to deserialize object: {}", e)))?;
+                let object = Self::deserialize_object(&bytes).map_err(|e| {
+                    Status::internal(format!("Failed to deserialize object: {}", e))
+                })?;
 
-                info!("<== CAS Get completed - Retrieved object with ID: {}", hex::encode(&cas_id.id));
+                info!(
+                    "<== CAS Get completed - Retrieved object with ID: {}",
+                    hex::encode(&cas_id.id)
+                );
 
                 Ok(Response::new(CasGetResponse {
                     outcome: cas_get_response::Outcome::Success as i32,
@@ -131,7 +139,10 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
                 }))
             }
             None => {
-                debug!("<== CAS Get completed - Object not found: {}", hex::encode(&cas_id.id));
+                debug!(
+                    "<== CAS Get completed - Object not found: {}",
+                    hex::encode(&cas_id.id)
+                );
                 Ok(Response::new(CasGetResponse {
                     outcome: cas_get_response::Outcome::ObjectNotFound as i32,
                     contents: None,
@@ -147,9 +158,9 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
         let req = request.into_inner();
         debug!("==> CAS Save request received");
 
-        let blob = req.data.ok_or_else(|| {
-            Status::invalid_argument("Missing CASBlob data")
-        })?;
+        let blob = req
+            .data
+            .ok_or_else(|| Status::invalid_argument("Missing CASBlob data"))?;
 
         // Serialize the blob
         let serialized = Self::serialize_blob(&blob)
@@ -163,7 +174,10 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
             .put(&id, &serialized)
             .map_err(|e| Status::internal(format!("Failed to store blob: {}", e)))?;
 
-        info!("<== CAS Save completed - Saved blob with ID: {}", hex::encode(&id));
+        info!(
+            "<== CAS Save completed - Saved blob with ID: {}",
+            hex::encode(&id)
+        );
 
         Ok(Response::new(CasSaveResponse {
             contents: Some(cas_save_response::Contents::CasId(CasDataId {
@@ -177,14 +191,15 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
         request: Request<CasLoadRequest>,
     ) -> Result<Response<CasLoadResponse>, Status> {
         let req = request.into_inner();
-        let cas_id = req.cas_id.ok_or_else(|| {
-            Status::invalid_argument("Missing CAS ID")
-        })?;
+        let cas_id = req
+            .cas_id
+            .ok_or_else(|| Status::invalid_argument("Missing CAS ID"))?;
 
         debug!("==> CAS Load request for ID: {}", hex::encode(&cas_id.id));
 
         // Retrieve from storage
-        let data = self.storage
+        let data = self
+            .storage
             .get(&cas_id.id)
             .map_err(|e| Status::internal(format!("Failed to retrieve blob: {}", e)))?;
 
@@ -194,7 +209,10 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
                 let blob = Self::deserialize_blob(&bytes)
                     .map_err(|e| Status::internal(format!("Failed to deserialize blob: {}", e)))?;
 
-                info!("<== CAS Load completed - Loaded blob with ID: {}", hex::encode(&cas_id.id));
+                info!(
+                    "<== CAS Load completed - Loaded blob with ID: {}",
+                    hex::encode(&cas_id.id)
+                );
 
                 Ok(Response::new(CasLoadResponse {
                     outcome: cas_load_response::Outcome::Success as i32,
@@ -202,7 +220,10 @@ impl<S: Storage + 'static> super::proto::cas::casdb_service_server::CasdbService
                 }))
             }
             None => {
-                debug!("<== CAS Load completed - Blob not found: {}", hex::encode(&cas_id.id));
+                debug!(
+                    "<== CAS Load completed - Blob not found: {}",
+                    hex::encode(&cas_id.id)
+                );
                 Ok(Response::new(CasLoadResponse {
                     outcome: cas_load_response::Outcome::ObjectNotFound as i32,
                     contents: None,

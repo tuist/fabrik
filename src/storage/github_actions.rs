@@ -57,16 +57,15 @@ impl GithubActionsStorage {
     pub fn from_env() -> Result<Self> {
         let cache_url = std::env::var("ACTIONS_CACHE_URL")
             .context("ACTIONS_CACHE_URL not found (not running in GitHub Actions?)")?;
-        let token = std::env::var("ACTIONS_RUNTIME_TOKEN")
-            .context("ACTIONS_RUNTIME_TOKEN not found")?;
+        let token =
+            std::env::var("ACTIONS_RUNTIME_TOKEN").context("ACTIONS_RUNTIME_TOKEN not found")?;
 
         Ok(Self::new(cache_url, token))
     }
 
     /// Check if GitHub Actions environment is available
     pub fn is_available() -> bool {
-        std::env::var("ACTIONS_CACHE_URL").is_ok()
-            && std::env::var("ACTIONS_RUNTIME_TOKEN").is_ok()
+        std::env::var("ACTIONS_CACHE_URL").is_ok() && std::env::var("ACTIONS_RUNTIME_TOKEN").is_ok()
     }
 
     /// Check if GitHub Actions environment is available with provided environment
@@ -74,8 +73,7 @@ impl GithubActionsStorage {
     where
         F: Fn(&str) -> Option<String>,
     {
-        env_lookup("ACTIONS_CACHE_URL").is_some()
-            && env_lookup("ACTIONS_RUNTIME_TOKEN").is_some()
+        env_lookup("ACTIONS_CACHE_URL").is_some() && env_lookup("ACTIONS_RUNTIME_TOKEN").is_some()
     }
 
     /// Generate cache key from ID
@@ -117,7 +115,10 @@ impl GithubActionsStorage {
             .await
             .context("Failed to parse cache response")?;
 
-        debug!("Cache hit for key: {} at {}", key, cache_entry.archive_location);
+        debug!(
+            "Cache hit for key: {} at {}",
+            key, cache_entry.archive_location
+        );
 
         // Download the cached artifact
         let data = self
@@ -181,7 +182,10 @@ impl GithubActionsStorage {
             .patch(&upload_url)
             .bearer_auth(&self.token)
             .header("Content-Type", "application/octet-stream")
-            .header("Content-Range", format!("bytes 0-{}/{}", data.len() - 1, data.len()))
+            .header(
+                "Content-Range",
+                format!("bytes 0-{}/{}", data.len() - 1, data.len()),
+            )
             .body(data.to_vec())
             .send()
             .await
@@ -228,16 +232,19 @@ impl GithubActionsStorage {
 impl Storage for GithubActionsStorage {
     fn put(&self, id: &[u8], data: &[u8]) -> Result<()> {
         let key = self.cache_key(id);
-        debug!("Putting {} bytes to GitHub Actions cache (key: {})", data.len(), key);
+        debug!(
+            "Putting {} bytes to GitHub Actions cache (key: {})",
+            data.len(),
+            key
+        );
 
         // Run async operation in blocking context
-        let runtime = tokio::runtime::Handle::try_current()
-            .or_else(|_| {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .map(|rt| rt.handle().clone())
-            })?;
+        let runtime = tokio::runtime::Handle::try_current().or_else(|_| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map(|rt| rt.handle().clone())
+        })?;
 
         runtime.block_on(self.save_cache(&key, data))?;
         Ok(())
@@ -248,13 +255,12 @@ impl Storage for GithubActionsStorage {
         debug!("Getting from GitHub Actions cache (key: {})", key);
 
         // Run async operation in blocking context
-        let runtime = tokio::runtime::Handle::try_current()
-            .or_else(|_| {
-                tokio::runtime::Builder::new_current_thread()
-                    .enable_all()
-                    .build()
-                    .map(|rt| rt.handle().clone())
-            })?;
+        let runtime = tokio::runtime::Handle::try_current().or_else(|_| {
+            tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map(|rt| rt.handle().clone())
+        })?;
 
         runtime.block_on(self.get_cache(&key))
     }
@@ -319,7 +325,10 @@ mod tests {
     #[test]
     fn test_is_available_with_env() {
         let mut env = HashMap::new();
-        env.insert("ACTIONS_CACHE_URL".to_string(), "https://test.com".to_string());
+        env.insert(
+            "ACTIONS_CACHE_URL".to_string(),
+            "https://test.com".to_string(),
+        );
         env.insert("ACTIONS_RUNTIME_TOKEN".to_string(), "token".to_string());
 
         let env_lookup = |key: &str| env.get(key).cloned();
@@ -329,7 +338,10 @@ mod tests {
     #[test]
     fn test_is_available_with_partial_env() {
         let mut env = HashMap::new();
-        env.insert("ACTIONS_CACHE_URL".to_string(), "https://test.com".to_string());
+        env.insert(
+            "ACTIONS_CACHE_URL".to_string(),
+            "https://test.com".to_string(),
+        );
         // Missing ACTIONS_RUNTIME_TOKEN
 
         let env_lookup = |key: &str| env.get(key).cloned();
@@ -338,10 +350,8 @@ mod tests {
 
     #[test]
     fn test_new_storage() {
-        let storage = GithubActionsStorage::new(
-            "https://test.com".to_string(),
-            "token".to_string(),
-        );
+        let storage =
+            GithubActionsStorage::new("https://test.com".to_string(), "token".to_string());
         assert_eq!(storage.cache_url, "https://test.com");
         assert_eq!(storage.token, "token");
         assert_eq!(storage.cache_version, "v1");
@@ -349,20 +359,16 @@ mod tests {
 
     #[test]
     fn test_cache_key_format() {
-        let storage = GithubActionsStorage::new(
-            "https://test.com".to_string(),
-            "token".to_string(),
-        );
+        let storage =
+            GithubActionsStorage::new("https://test.com".to_string(), "token".to_string());
         let key = storage.cache_key(b"test");
         assert_eq!(key, "fabrik-74657374");
     }
 
     #[test]
     fn test_cache_key_with_different_data() {
-        let storage = GithubActionsStorage::new(
-            "https://test.com".to_string(),
-            "token".to_string(),
-        );
+        let storage =
+            GithubActionsStorage::new("https://test.com".to_string(), "token".to_string());
         let key1 = storage.cache_key(b"data1");
         let key2 = storage.cache_key(b"data2");
         assert_ne!(key1, key2);

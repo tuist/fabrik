@@ -41,17 +41,22 @@ impl<S: Storage> KeyValueService<S> {
 }
 
 #[tonic::async_trait]
-impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValueDb for KeyValueService<S> {
+impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValueDb
+    for KeyValueService<S>
+{
     async fn put_value(
         &self,
         request: Request<PutValueRequest>,
     ) -> Result<Response<PutValueResponse>, Status> {
         let req = request.into_inner();
-        debug!("==> KeyValue Put request for key: {}", hex::encode(&req.key));
+        debug!(
+            "==> KeyValue Put request for key: {}",
+            hex::encode(&req.key)
+        );
 
-        let value = req.value.ok_or_else(|| {
-            Status::invalid_argument("Missing value")
-        })?;
+        let value = req
+            .value
+            .ok_or_else(|| Status::invalid_argument("Missing value"))?;
 
         // Serialize the value
         let serialized = Self::serialize_value(&value)?;
@@ -76,7 +81,10 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
         request: Request<GetValueRequest>,
     ) -> Result<Response<GetValueResponse>, Status> {
         let req = request.into_inner();
-        debug!("==> KeyValue Get request for key: {}", hex::encode(&req.key));
+        debug!(
+            "==> KeyValue Get request for key: {}",
+            hex::encode(&req.key)
+        );
 
         // Retrieve with prefixed key
         let storage_key = Self::storage_key(&req.key);
@@ -102,7 +110,10 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
                 }))
             }
             None => {
-                debug!("<== KeyValue Get completed - Key not found: {}", hex::encode(&req.key));
+                debug!(
+                    "<== KeyValue Get completed - Key not found: {}",
+                    hex::encode(&req.key)
+                );
                 Ok(Response::new(GetValueResponse {
                     outcome: get_value_response::Outcome::KeyNotFound as i32,
                     contents: None,
