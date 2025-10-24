@@ -26,6 +26,7 @@ fn main() -> Result<()> {
     // Dispatch to appropriate command handler
     match cli.command {
         Commands::Exec(args) => commands::exec::run(args),
+        Commands::Xcodebuild(args) => commands::xcodebuild::run(args),
         Commands::Daemon(args) => commands::daemon::run(args),
         Commands::Server(args) => commands::server::run(*args),
         Commands::Config(args) => commands::config::run(args.command),
