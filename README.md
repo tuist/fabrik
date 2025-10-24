@@ -1,8 +1,11 @@
 # Fabrik
 
-> Multi-layer build cache infrastructure
+> Layered infrastructure for build system caching and remote execution
 
-Fabrik is tenant-agnostic infrastructure for build caching. Think of it as **Postgres to Supabase** - Fabrik provides the core caching engine while the service layer manages deployment, multi-tenancy, and tenant experience.
+Fabrik is tenant-agnostic infrastructure for build system caching and remote execution. Think of it as **Postgres to Supabase** - Fabrik provides the core caching engine while the service layer manages deployment, multi-tenancy, and tenant experience.
+
+> [!NOTE]
+> [Tuist](https://tuist.io) provides managed hosting of Fabrik as a service, similar to how Supabase hosts Postgres.
 
 ## 🎯 Overview
 
