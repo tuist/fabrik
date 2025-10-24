@@ -2,106 +2,76 @@
 
 > Multi-layer build cache infrastructure
 
-Fabrik is the foundational infrastructure for build caching, designed to be deployed and managed as a service. Think of it as **Postgres to Supabase** - Fabrik provides the core caching engine while Tuist manages deployment and customer experience.
+Fabrik is tenant-agnostic infrastructure for build caching. Think of it as **Postgres to Supabase** - Fabrik provides the core caching engine while the service layer manages deployment, multi-tenancy, and tenant experience.
 
-## 🎯 What is Fabrik?
+## 🎯 Overview
 
-Fabrik provides transparent, high-performance caching for build systems like Gradle, Bazel, Nx, TurboRepo, and compiler caches like sccache (Cargo/Rust). It supports a three-layer caching strategy:
+High-performance caching for build systems (Gradle, Bazel, Nx, TurboRepo, sccache) with transparent multi-layer fallback:
 
-- **Layer 1**: Local cache (CI environments with mounted volumes)
-- **Layer 2**: Regional cache (dedicated instances per customer)
+- **Layer 1**: Local cache (CI/dev environments)
+- **Layer 2**: Regional cache (tenant-dedicated instances)
 - **Layer 3**: S3-backed permanent storage
 
 ## ✨ Features
 
-- 🚀 **High Performance**: Sub-10ms p99 latency for cache hits
-- 🔒 **Secure**: JWT-based authentication with zero-latency validation
-- 📦 **Multi-Protocol**: Supports HTTP (Gradle, Nx, TurboRepo), gRPC (Bazel), and S3 API (sccache)
-- 🗄️ **Smart Storage**: RocksDB for hot cache with LRU/LFU eviction, S3 for cold storage
-- 🔄 **Transparent Fallback**: Automatic cascading through cache layers
-- 📊 **Observable**: Prometheus metrics endpoint for monitoring
-- ⚙️ **Configurable**: Single binary with flexible deployment options
-- 🔮 **Future-Ready**: Planned support for Vite+ when available
+- 🚀 **High Performance**: Sub-10ms p99 latency target
+- 🔒 **Secure**: JWT-based authentication (RS256)
+- 📦 **Multi-Protocol**: HTTP, gRPC, S3 API
+- 🗄️ **Smart Storage**: RocksDB + S3
+- 📊 **Observable**: Health, Metrics, Cache Query, and Admin APIs
+- ⚙️ **Configurable**: CLI args > env vars > config file
 
-## 🚀 Quick Start
+## 🚀 Installation
 
-### Prerequisites
-
-- Rust 1.90+ (managed via mise)
-
-### Installation
+### Using Mise
 
 ```bash
-# Install dependencies
-mise install
+# Install globally
+mise use -g ubi:tuist/fabrik
 
-# Build the project
-mise exec -- cargo build --release
-
-# Run Fabrik
-mise exec -- cargo run -- server --help
+# Or in .mise.toml
+[tools]
+"ubi:tuist/fabrik" = "latest"
 ```
 
-### Running the Server
+### From Source
 
 ```bash
-# Start with RocksDB storage
-fabrik server \
-  --storage-backend=rocksdb \
-  --rocksdb-path=/tmp/cache \
-  --max-cache-size=10GB \
-  --jwt-public-key=/path/to/public-key.pem
+git clone https://github.com/tuist/fabrik.git
+cd fabrik
+cargo build --release
+```
 
-# Start with S3 storage
-fabrik server \
-  --storage-backend=s3 \
-  --s3-bucket=my-build-cache \
-  --jwt-public-key=/path/to/public-key.pem
+## 📘 Usage
+
+```bash
+# Ephemeral local cache
+fabrik exec -- gradle build
+
+# Long-running daemon
+fabrik daemon
+
+# Regional server
+fabrik server
+
+# Configuration management
+fabrik config generate --template=server
 ```
 
 ## 📖 Documentation
 
-- **[CLAUDE.md](./CLAUDE.md)** - Full architectural documentation and guidelines
-- **[PLAN.md](./PLAN.md)** - Implementation roadmap and progress tracking
+- [CLAUDE.md](./CLAUDE.md) - Architecture and design decisions
+- [PLAN.md](./PLAN.md) - Implementation roadmap
 
 ## 🛠️ Development
 
-### Building
-
 ```bash
-mise exec -- cargo build
+cargo build
+cargo test
+cargo fmt
+cargo clippy
 ```
-
-### Running Tests
-
-```bash
-mise exec -- cargo test
-```
-
-### Code Quality
-
-```bash
-# Format code
-mise exec -- cargo fmt
-
-# Run linter
-mise exec -- cargo clippy
-```
-
-## 🏗️ Project Status
-
-**Current Phase**: Phase 0 - Project Setup (In Progress)
-
-See [PLAN.md](./PLAN.md) for detailed progress tracking.
-
-## 🤝 Contributing
-
-This project is in early development. Contributions will be welcome once the initial architecture is established.
 
 ## 📝 License
 
 MIT
-
-## 🔗 Related Projects
-
-- [Tuist](https://github.com/tuist/tuist) - The managed service built on top of Fabrik
