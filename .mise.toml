@@ -1,3 +1,4 @@
 [tools]
 rust = "latest"
 git-cliff = "latest"
+bazel = "latest"

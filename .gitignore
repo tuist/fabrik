@@ -15,3 +15,8 @@
 # OS files
 .DS_Store
 Thumbs.db
+
+# Bazel
+bazel-*
+MODULE.bazel.lock
+.bazelrc.user

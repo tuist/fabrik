@@ -71,6 +71,345 @@ From the developer's perspective, there are three transparent caching layers:
 - **Content Addressing**: Artifacts identified by content hash (natural deduplication)
 - **Lifecycle**: Layer 1 instances start/stop with build process; Layer 2/3 are long-running
 
+### Protocol Architecture
+
+**Key Design Decision: Build System Adapters + Unified Fabrik Protocol**
+
+**Two-Protocol Design:**
+1. **Build System Protocols** (Layer 1 only): Gradle HTTP, Bazel gRPC, sccache S3, etc.
+2. **Fabrik Protocol** (inter-layer): Unified gRPC-based protocol for Layer 1 ↔ Layer 2 communication
+
+**Architecture Diagram:**
+
+```
+┌─────────────────────────────────────────────────────────┐
+│ Build Systems                                           │
+│  - Gradle (HTTP API)                                    │
+│  - Bazel (gRPC API)                                     │
+│  - Nx/TurboRepo (HTTP API)                             │
+│  - sccache (S3 API)                                     │
+└──────────────────┬──────────────────────────────────────┘
+                   │
+                   ▼
+┌─────────────────────────────────────────────────────────┐
+│ Layer 1: Local Cache (Build System Adapters)           │
+│                                                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
+│  │ Gradle   │  │ Bazel    │  │ sccache  │             │
+│  │ Adapter  │  │ Adapter  │  │ Adapter  │             │
+│  │ (HTTP)   │  │ (gRPC)   │  │ (S3 API) │             │
+│  └────┬─────┘  └────┬─────┘  └────┬─────┘             │
+│       └────────────┬┴──────────────┘                   │
+│                    ▼                                    │
+│           Content-Addressed                             │
+│           Normalization                                 │
+│                    │                                    │
+│                    ▼                                    │
+│          ┌────────────────┐                             │
+│          │  RocksDB Cache │                             │
+│          └────────────────┘                             │
+│                    │                                    │
+│                    ▼                                    │
+│        ┌─────────────────────┐                          │
+│        │ Fabrik Protocol     │  ◄── Unified gRPC        │
+│        │ Client (gRPC)       │                          │
+│        └─────────────────────┘                          │
+└────────────────────┬────────────────────────────────────┘
+                     │
+            Fabrik Protocol (gRPC)
+          GET/PUT/EXISTS /v1/cache/{hash}
+                     │
+                     ▼
+┌─────────────────────────────────────────────────────────┐
+│ Layer 2: Regional Cache (Fabrik Protocol Server)       │
+│                                                         │
+│        ┌─────────────────────┐                          │
+│        │ Fabrik Protocol     │                          │
+│        │ Server (gRPC)       │                          │
+│        └─────────────────────┘                          │
+│                    │                                    │
+│                    ▼                                    │
+│          ┌────────────────┐                             │
+│          │  RocksDB Cache │                             │
+│          └────────────────┘                             │
+│                    │                                    │
+│                    ▼                                    │
+│             S3 Client                                   │
+└────────────────────┬───────────────────────────────────┘
+                     │
+                     ▼
+              ┌──────────┐
+              │ S3 (S3)  │
+              └──────────┘
+```
+
+**Example flow (Gradle build):**
+1. Gradle makes `GET /cache/abc123` to Layer 1 Gradle adapter (HTTP)
+2. Layer 1 Gradle adapter normalizes to content hash
+3. Layer 1 checks local RocksDB → MISS
+4. Layer 1 Fabrik client makes `Get(hash)` to Layer 2 (gRPC)
+5. Layer 2 checks local RocksDB → MISS
+6. Layer 2 fetches from S3 → HIT
+7. Layer 2 caches locally, returns to Layer 1 (gRPC)
+8. Layer 1 caches locally, returns to Gradle (HTTP)
+
+**Key Insights:**
+- **Layer 1**: Runs build system adapters, speaks Fabrik protocol to upstream
+- **Layer 2**: Only speaks Fabrik protocol (no build system knowledge)
+- **Build system independence**: Layer 2 doesn't care about Gradle vs Bazel
+- **Simplified Layer 2**: Single protocol implementation, multi-tenant by default
+
+**Benefits:**
+- ✅ **Simpler Layer 2**: Only implements Fabrik protocol
+- ✅ **Easier to extend**: Add new build systems by writing Layer 1 adapters
+- ✅ **Efficient inter-layer**: gRPC for low latency and streaming
+- ✅ **Build system agnostic**: Layer 2 works with any build system
+
+### Fabrik Protocol Specification
+
+**Protocol Definition**: `proto/fabrik.proto`
+
+**gRPC Service:**
+```protobuf
+service FabrikCache {
+  // Check if artifact exists
+  rpc Exists(ExistsRequest) returns (ExistsResponse);
+
+  // Retrieve artifact (streaming)
+  rpc Get(GetRequest) returns (stream GetResponse);
+
+  // Store artifact (streaming)
+  rpc Put(stream PutRequest) returns (PutResponse);
+
+  // Delete artifact (optional)
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+
+  // Get cache statistics
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+}
+```
+
+**Key characteristics:**
+- **Content-addressed**: All operations use SHA256 hash as identifier
+- **Streaming**: Get/Put support streaming for large artifacts (efficient memory usage)
+- **Stateless**: No session state, each request is independent
+- **Port**: Default 7070 for Fabrik protocol gRPC server
+
+**Example usage:**
+```rust
+// Layer 1 client queries Layer 2
+let response = client.exists(ExistsRequest { hash: "abc123..." }).await?;
+if response.exists {
+    let stream = client.get(GetRequest { hash: "abc123..." }).await?;
+    // Stream chunks...
+}
+```
+
+### Auto-Configuration of Build Systems
+
+**Feature**: `fabrik exec` automatically configures build systems by setting environment variables.
+
+**How it works:**
+1. `fabrik exec` starts build system adapters on random ports
+2. For each enabled adapter, sets corresponding environment variable
+3. Executes wrapped command with configured environment
+
+**Environment Variable Mapping:**
+
+| Build System | Environment Variable | Value Example |
+|--------------|---------------------|---------------|
+| **Gradle** | `GRADLE_BUILD_CACHE_URL` | `http://127.0.0.1:54321` |
+| **Bazel** | `BAZEL_REMOTE_CACHE` | `grpc://127.0.0.1:54322` |
+| **Nx** | `NX_CACHE_DIRECTORY` | `http://127.0.0.1:54323` |
+| **TurboRepo** | `TURBO_API` | `http://127.0.0.1:54324` |
+| **TurboRepo** | `TURBO_TEAM` | `local` |
+| **sccache** | `SCCACHE_ENDPOINT` | `http://127.0.0.1:54325` |
+| **sccache** | `SCCACHE_BUCKET` | `cache` |
+| **sccache** | `RUSTC_WRAPPER` | `sccache` |
+
+**Configuration:**
+```toml
+[build_systems.gradle]
+port = 0              # 0 = random port (default)
+auto_configure = true  # Auto-set env vars (default)
+
+[build_systems.bazel]
+port = 9090           # Fixed port (optional)
+auto_configure = false # Manual configuration (optional)
+```
+
+**CLI override:**
+```bash
+# Disable auto-configuration
+fabrik exec --no-auto-configure -- ./gradlew build
+
+# Show what would be configured (dry-run)
+fabrik exec --dry-run -- ./gradlew build
+# Output:
+#   Would set: GRADLE_BUILD_CACHE_URL=http://127.0.0.1:54321
+#   Would execute: ./gradlew build
+```
+
+**Benefits:**
+- ✅ **Zero configuration**: Build systems work out-of-the-box
+- ✅ **Flexible**: Can disable and configure manually if needed
+- ✅ **Portable**: Same config works across different build systems
+
+### Multi-Instance Configuration
+
+**How to Model Multiple Regions/Instances:**
+
+The upstream array naturally models multiple instances. Array order determines priority.
+
+**Use Case 1: Fallback Chain (Office → Regional → S3)**
+
+```toml
+# Layer 1 configuration
+[[upstream]]
+url = "https://office-cache.local"      # Try office first (5ms)
+timeout = "5s"
+
+[[upstream]]
+url = "https://cache.tuist.io"          # Fallback to regional (20ms)
+timeout = "15s"
+
+[[upstream]]
+url = "s3://backup/tenant-123/"         # Ultimate fallback
+timeout = "60s"
+permanent = true
+```
+
+**Behavior:**
+- **Reads**: Sequential fallback (try each in order until hit)
+- **Writes**: Write-through to all if `write_through=true`
+
+**Use Case 2: Multi-Region with Geographic Priority**
+
+```toml
+# Layer 1 in US (prefers US region)
+[[upstream]]
+url = "https://cache-us-east.tuist.io"  # Primary (low latency)
+timeout = "10s"
+
+[[upstream]]
+url = "https://cache-eu-west.tuist.io"  # Fallback (high latency)
+timeout = "30s"
+```
+
+```toml
+# Layer 1 in EU (reversed priority)
+[[upstream]]
+url = "https://cache-eu-west.tuist.io"  # Primary (low latency)
+timeout = "10s"
+
+[[upstream]]
+url = "https://cache-us-east.tuist.io"  # Fallback (high latency)
+timeout = "30s"
+```
+
+**Use Case 3: DNS-Based Geo-Routing (Recommended)**
+
+```toml
+# Layer 1 anywhere in the world (same config)
+[[upstream]]
+url = "https://cache.tuist.io"          # DNS resolves to nearest region
+timeout = "15s"
+
+[[upstream]]
+url = "s3://global/tenant-123/"
+permanent = true
+```
+
+**How it works:**
+- Tuist manages GeoDNS for `cache.tuist.io`
+- DNS returns different IPs based on client location
+- Layer 1 doesn't need region-specific configuration
+- Simpler deployment, more scalable
+
+**Use Case 4: Cross-Region Replication (Layer 2)**
+
+```toml
+# Layer 2 US server configuration
+[[upstream]]
+url = "s3://us-cache/tenant-123/"
+region = "us-east-1"
+permanent = true
+write_through = true
+workers = 20
+
+[[upstream]]
+url = "s3://eu-cache/tenant-123/"
+region = "eu-west-1"
+permanent = true
+write_through = true      # Replicate writes to EU
+workers = 10
+read_only = true          # Don't read from EU (higher latency)
+```
+
+**Design Principles:**
+- **Array order = priority order** for reads
+- **No built-in load balancing** - use external load balancer or DNS
+- **No parallel queries** - sequential fallback keeps behavior predictable
+- **Per-upstream configuration** - each upstream can have different settings
+
+### Layer 2 High Availability & Multi-Region
+
+**Design Decision: Independent Instances (No Clustering)**
+
+Each Layer 2 instance is completely independent - no distributed consensus, no cache synchronization, no inter-instance communication.
+
+**Single Region HA (3 instances behind load balancer):**
+```
+                    DNS: cache-us-east.tuist.io
+                              │
+                              ▼
+                    ┌──────────────────┐
+                    │  Load Balancer   │
+                    │  (AWS ALB/NLB)   │
+                    └──────────────────┘
+                       │      │      │
+          ─────────────┴──────┴──────┴─────────────
+          │                  │                    │
+          ▼                  ▼                    ▼
+    ┌─────────┐        ┌─────────┐        ┌─────────┐
+    │ Layer 2 │        │ Layer 2 │        │ Layer 2 │
+    │ Instance│        │ Instance│        │ Instance│
+    │   #1    │        │   #2    │        │   #3    │
+    └────┬────┘        └────┬────┘        └────┬────┘
+         │                  │                    │
+         └──────────────────┴────────────────────┘
+                            │
+                            ▼
+                  S3 us-cache/tenant-123/
+```
+
+**Multi-Region (independent instances per region):**
+```
+┌────────────────────────────────┐  ┌────────────────────────────────┐
+│ US Region                      │  │ EU Region                      │
+│ cache-us-east.tuist.io:7070    │  │ cache-eu-west.tuist.io:7070    │
+│                                │  │                                │
+│  ┌────────────────┐            │  │  ┌────────────────┐            │
+│  │ RocksDB        │            │  │  │ RocksDB        │            │
+│  │ (US hot set)   │            │  │  │ (EU hot set)   │            │
+│  └────────┬───────┘            │  │  └────────┬───────┘            │
+│           │                    │  │           │                    │
+│           ▼                    │  │           ▼                    │
+│  S3 us-cache/tenant/           │  │  S3 eu-cache/tenant/           │
+└────────────────────────────────┘  └────────────────────────────────┘
+```
+
+**Why No Clustering:**
+- ✅ **Simpler architecture**: No Raft/Paxos, no distributed state
+- ✅ **More reliable**: No cascading failures, no split-brain
+- ✅ **Scales linearly**: Add regions without coordination overhead
+- ✅ **Predictable latency**: No cross-region synchronization
+- ✅ **S3 as shared state**: Eliminates need for distributed consensus
+
+**Tradeoff:**
+- Duplicate S3 fetches when load balancer routes same hash to different instances
+- Acceptable because S3 is fast and hot cache naturally forms per instance
+
 ## Authentication & Security
 
 ### JWT-Based Authentication
@@ -135,29 +474,335 @@ Fabrik must support HTTP, gRPC, and S3-compatible protocols to accommodate all b
 
 ## Analytics & Observability
 
-### Metrics Interface
+### Design Philosophy: Pull-Based Model (Like Supabase)
 
-**Design: In-memory aggregation + pull-based metrics**
+**Tuist actively queries Fabrik instances** rather than Fabrik pushing telemetry elsewhere.
 
-Fabrik exposes metrics via HTTP endpoint (e.g., `/metrics`) that Tuist polls periodically (e.g., every 30 seconds). This allows Tuist to:
-- Monitor instance health
-- Generate customer billing data
-- Provide analytics dashboards (like Supabase's table editor/analytics)
+**Why Pull-Based:**
+- ✅ Tuist controls query frequency (no overwhelming)
+- ✅ No additional infrastructure (no telemetry pipeline, no Kafka/PubSub)
+- ✅ Simpler security (Fabrik doesn't need outbound access)
+- ✅ Works in private networks
+- ✅ Real-time on-demand data when needed
 
-**Metrics to track:**
-- **Cache performance**: hits/misses (total + windowed), hit ratio
-- **Storage**: bytes used, object count, growth rate
-- **Bandwidth**: upload/download bytes per time window
-- **Latency**: p50, p95, p99 for GET/PUT operations
-- **Errors**: error rates by type (auth failures, storage errors, etc.)
-- **Connections**: active connections, request rate
-- **Evictions**: objects evicted, eviction rate
+**This gives Tuist the same visibility that Supabase has over Postgres, but for build caches.**
 
-**Format**: Prometheus format or custom JSON (configurable)
+---
 
-**Optional: Async event stream** for critical events that need immediate attention (auth failures, disk full, crashes) without blocking cache operations.
+### API Surface for Tuist
 
-**Implementation note:** Metrics aggregation happens in-memory with minimal overhead. Fabrik exposes the data; Tuist processes and augments it with customer context.
+Fabrik exposes **three HTTP APIs** for Tuist to consume:
+
+#### 1. Health API (Port 8888)
+
+**Simple health checks for orchestration**
+
+```http
+GET /health
+```
+
+**Response:**
+```json
+{
+  "status": "healthy",
+  "uptime_seconds": 345600,
+  "version": "0.1.0"
+}
+```
+
+**Use cases:**
+- Load balancer health checks
+- Kubernetes liveness/readiness probes
+- Tuist instance monitoring
+
+---
+
+#### 2. Metrics API (Port 9091)
+
+**Prometheus-compatible metrics for monitoring & billing**
+
+```http
+GET /metrics
+```
+
+**Response (Prometheus format):**
+```prometheus
+# Cache performance
+fabrik_cache_hits_total 123456
+fabrik_cache_misses_total 7890
+fabrik_cache_hit_ratio 0.94
+
+# Storage
+fabrik_cache_size_bytes 5368709120
+fabrik_cache_objects 45678
+
+# Latency (histogram)
+fabrik_request_duration_seconds_bucket{le="0.005"} 9500
+fabrik_request_duration_seconds_bucket{le="0.01"} 9800
+fabrik_request_duration_seconds_bucket{le="0.025"} 9950
+
+# Bandwidth
+fabrik_bandwidth_bytes_total{direction="upload"} 1073741824
+fabrik_bandwidth_bytes_total{direction="download"} 5368709120
+
+# Upstream
+fabrik_upstream_requests_total{result="hit"} 5000
+fabrik_upstream_requests_total{result="miss"} 200
+
+# Evictions
+fabrik_evictions_total 123
+```
+
+**Use cases:**
+- Tuist Grafana dashboards
+- Customer billing (bandwidth, storage)
+- Performance monitoring
+- Alerting (high miss rate, disk full)
+
+**Tuist polling:** Every 30-60 seconds, stores time-series data in Prometheus/TimescaleDB
+
+---
+
+#### 3. Cache Query API (Port 9091)
+
+**REST API for Tuist to query cache state (like Supabase table viewer)**
+
+**List artifacts (paginated):**
+```http
+GET /api/v1/artifacts?limit=100&offset=0&sort=size_desc
+```
+
+**Response:**
+```json
+{
+  "artifacts": [
+    {
+      "hash": "abc123def456...",
+      "size_bytes": 104857600,
+      "created_at": "2025-10-24T10:00:00Z",
+      "last_accessed": "2025-10-24T12:30:00Z",
+      "access_count": 45,
+      "metadata": {
+        "build_system": "gradle"
+      }
+    }
+  ],
+  "total": 45678,
+  "limit": 100,
+  "offset": 0
+}
+```
+
+**Check artifact existence:**
+```http
+GET /api/v1/artifacts/{hash}
+```
+
+**Cache statistics (detailed):**
+```http
+GET /api/v1/stats
+```
+
+**Response:**
+```json
+{
+  "cache": {
+    "total_objects": 45678,
+    "total_size_bytes": 5368709120,
+    "size_by_type": {
+      "gradle": 2147483648,
+      "bazel": 1073741824
+    }
+  },
+  "performance": {
+    "cache_hits": 123456,
+    "cache_misses": 7890,
+    "hit_ratio": 0.94,
+    "latency_p50_ms": 5,
+    "latency_p95_ms": 12,
+    "latency_p99_ms": 25
+  },
+  "bandwidth": {
+    "upload_bytes_total": 1073741824,
+    "download_bytes_total": 5368709120
+  },
+  "upstream": {
+    "requests_total": 5200,
+    "hits": 5000,
+    "misses": 200
+  },
+  "evictions": {
+    "total": 123,
+    "eviction_rate_per_hour": 5
+  }
+}
+```
+
+**Top artifacts (most accessed):**
+```http
+GET /api/v1/artifacts/top?limit=50
+```
+
+**Search artifacts:**
+```http
+GET /api/v1/artifacts/search?query=gradle&min_size=1MB
+```
+
+**Use cases:**
+- Tuist Dashboard: "Cache Explorer" (like Supabase table viewer)
+- Customer support: "Why is my cache not working?"
+- Debugging: "Is artifact X cached?"
+- Analytics: "Which artifacts are most popular?"
+- Billing: "Show storage breakdown by build system"
+
+---
+
+#### 4. Admin API (Port 9091, Optional)
+
+**Management operations for Tuist orchestration**
+
+**Trigger eviction:**
+```http
+POST /api/v1/admin/evict
+{
+  "target_size_bytes": 4294967296,
+  "strategy": "lru"
+}
+```
+
+**Clear cache:**
+```http
+POST /api/v1/admin/clear
+{
+  "confirm": true
+}
+```
+
+**Get configuration:**
+```http
+GET /api/v1/admin/config
+```
+
+**Update configuration (hot-reload):**
+```http
+POST /api/v1/admin/config
+{
+  "max_cache_size": "100GB",
+  "eviction_policy": "lfu"
+}
+```
+
+**Use cases:**
+- Tuist orchestration: resize instances dynamically
+- Emergency: clear cache if corrupted
+- Operations: change eviction policy without restart
+
+---
+
+### Configuration
+
+```toml
+[observability]
+# Health check endpoint
+health_bind = "0.0.0.0:8888"
+health_enabled = true
+
+# Metrics + Cache Query API + Admin API
+api_bind = "0.0.0.0:9091"
+
+# Enable/disable APIs
+metrics_enabled = true
+cache_query_api_enabled = true   # For Tuist Dashboard
+admin_api_enabled = false        # Disable in production by default
+
+# Authentication for APIs
+api_auth_required = true
+api_jwt_public_key_file = "/etc/fabrik/api-public-key.pem"
+
+# Logging
+log_level = "info"
+log_format = "json"
+
+# Tracing
+tracing_enabled = false
+tracing_endpoint = ""
+```
+
+---
+
+### Tuist Dashboard Integration
+
+**How Tuist uses these APIs:**
+
+```
+┌─────────────────────────────────────────────────────┐
+│ Tuist Dashboard (Web UI)                            │
+│                                                     │
+│  Cache Explorer:                                    │
+│  - List all artifacts                               │
+│  - Search by hash/build system                      │
+│  - Show access patterns                             │
+│                                                     │
+│  Analytics:                                         │
+│  - Cache hit ratio chart                            │
+│  - Bandwidth usage (for billing)                    │
+│  - Top artifacts                                    │
+│  - Latency metrics                                  │
+│                                                     │
+│  Billing:                                           │
+│  - Storage used: 5.0 GB                             │
+│  - Bandwidth this month: 500 GB                     │
+└─────────────────────────────────────────────────────┘
+                        │
+                        ▼
+              ┌──────────────────┐
+              │ Tuist API Server │
+              └──────────────────┘
+                        │
+            ┌───────────┴───────────┐
+            ▼                       ▼
+  ┌──────────────────┐    ┌──────────────────┐
+  │ Fabrik (US East) │    │ Fabrik (EU West) │
+  │ GET /metrics     │    │ GET /metrics     │
+  │ GET /api/v1/...  │    │ GET /api/v1/...  │
+  └──────────────────┘    └──────────────────┘
+```
+
+**Tuist polling loop (pseudocode):**
+```python
+# Every 60 seconds
+for instance in fabrik_instances:
+    # Pull metrics
+    metrics = http.get(f"{instance.url}:9091/metrics")
+    store_in_timeseries_db(metrics)
+
+    # Pull cache stats
+    stats = http.get(f"{instance.url}:9091/api/v1/stats")
+    update_billing(customer_id, stats.bandwidth)
+
+    # Check health
+    health = http.get(f"{instance.url}:8888/health")
+    if not health.ok:
+        alert_ops_team(instance)
+```
+
+---
+
+### Summary: API Endpoints
+
+| API | Port | Endpoint | Purpose |
+|-----|------|----------|---------|
+| **Health** | 8888 | `GET /health` | Health checks, uptime monitoring |
+| **Metrics** | 9091 | `GET /metrics` | Prometheus metrics for monitoring/billing |
+| **Cache Query** | 9091 | `GET /api/v1/artifacts` | List/search artifacts (Tuist Dashboard) |
+| **Cache Query** | 9091 | `GET /api/v1/stats` | Detailed statistics |
+| **Admin** | 9091 | `POST /api/v1/admin/*` | Management operations (optional) |
+
+**Security:**
+- Health API: Public (for load balancers)
+- Metrics API: JWT authentication (Tuist token)
+- Cache Query API: JWT authentication (Tuist token)
+- Admin API: JWT authentication with admin scope
 
 ## Technical Stack
 
@@ -219,40 +864,289 @@ Fabrik exposes metrics via HTTP endpoint (e.g., `/metrics`) that Tuist polls per
 
 ### Design Philosophy
 - **Single binary** with configurable behavior via flags
-- **No predefined "modes"** - users configure which layers to enable and how they behave
-- **Flexible deployment**: Same binary can be Layer 1 (local), Layer 2 (regional), or Layer 3 (S3)
+- **Unified upstream model**: S3, GCS, and other Fabrik instances are all treated as "upstream" layers
+- **Config-backed options**: CLI flags prefixed with `--config-*` can be set via config file, env vars, or CLI
+- **Flexible deployment**: Same binary can be Layer 1 (local/CI), Layer 2 (regional server), or both
 
-### Example Configurations
+### CLI Commands
 
-**Layer 1 (Local CI cache):**
+**`fabrik exec`** - Wrap command with ephemeral cache (Layer 1 for CI/local builds)
 ```bash
-fabrik server \
-  --storage-backend=rocksdb \
-  --rocksdb-path=/mnt/cache \
-  --max-cache-size=10GB \
-  --upstream-url=https://regional.fabrik.example.com \
-  --jwt-public-key=/etc/fabrik/public-key.pem
+fabrik exec [OPTIONS] -- <COMMAND> [ARGS...]
 ```
 
-**Layer 2 (Regional dedicated instance):**
+**`fabrik daemon`** - Run long-lived local cache daemon (Layer 1 for development)
 ```bash
-fabrik server \
-  --storage-backend=rocksdb \
-  --rocksdb-path=/data/cache \
-  --max-cache-size=100GB \
-  --upstream-url=https://tuist-server.example.com \
-  --jwt-public-key=/etc/fabrik/public-key.pem \
-  --metrics-port=9090
+fabrik daemon [OPTIONS]
 ```
 
-**Layer 3 (S3-backed Tuist server):**
+**`fabrik server`** - Run regional/cloud cache server (Layer 2)
 ```bash
-fabrik server \
-  --storage-backend=s3 \
-  --s3-bucket=tuist-build-cache \
-  --s3-prefix=customer-{customer_id}/ \
-  --jwt-public-key=/etc/fabrik/public-key.pem \
-  --metrics-port=9090
+fabrik server [OPTIONS]
+```
+
+**`fabrik config`** - Configuration utilities (validate, generate, show)
+```bash
+fabrik config <validate|generate|show> [OPTIONS]
+```
+
+**`fabrik health`** - Health check and diagnostics
+```bash
+fabrik health [OPTIONS]
+```
+
+### Configuration File Format (TOML)
+
+```toml
+# Local storage (always present, first layer)
+[cache]
+dir = "/data/fabrik/cache"
+max_size = "100GB"
+eviction_policy = "lfu"  # lru | lfu | ttl
+default_ttl = "7d"
+
+# Upstream array (optional, each entry is tried in order)
+[[upstream]]
+url = "https://regional-cache.example.com"
+timeout = "10s"
+read_only = false        # Optional: if true, never write to this upstream
+permanent = false        # Optional: if true, never evict from this upstream
+
+[[upstream]]
+url = "s3://tuist-build-cache/customer-{customer_id}/"
+timeout = "60s"
+permanent = true         # S3 is permanent storage
+write_through = true     # Write immediately
+workers = 20             # Concurrent upload workers
+
+# S3-specific settings
+region = "us-east-1"
+endpoint = ""            # Optional: for S3-compatible services
+access_key = ""          # Or use AWS_ACCESS_KEY_ID env
+secret_key = ""          # Or use AWS_SECRET_ACCESS_KEY env
+
+# Authentication (for server mode)
+[auth]
+public_key_file = "/etc/fabrik/jwt-public-key.pem"
+key_refresh_interval = "5m"
+required = true
+
+# Build system adapters (Layer 1 only)
+[build_systems]
+enabled = ["gradle", "bazel", "nx", "turborepo", "sccache"]
+
+# Optional: Per-adapter configuration
+[build_systems.gradle]
+port = 0  # 0 = random port
+auto_configure = true  # Auto-set GRADLE_BUILD_CACHE_URL
+
+# Fabrik protocol (Layer 2 server, Layer 1 client)
+[fabrik]
+enabled = false  # true for Layer 2, false for Layer 1
+bind = "0.0.0.0:7070"  # gRPC bind address
+
+# Observability
+[observability]
+log_level = "info"
+log_format = "json"
+metrics_bind = "0.0.0.0:9091"
+metrics_enabled = true
+tracing_enabled = false
+health_bind = "0.0.0.0:8888"
+
+# Runtime
+[runtime]
+graceful_shutdown_timeout = "30s"
+max_concurrent_requests = 10000
+worker_threads = 0  # 0 = auto (num CPUs)
+```
+
+### Example Configurations by Layer
+
+**Layer 1 (CI with mounted volume - Gradle only):**
+```toml
+# .fabrik.toml in repository (optimized for Gradle)
+[cache]
+dir = "/mnt/build-cache"
+max_size = "20GB"
+
+[[upstream]]
+url = "grpc://cache-us-east.tuist.io:7070"  # Fabrik protocol
+timeout = "30s"
+
+[build_systems]
+enabled = ["gradle"]  # Only run Gradle adapter
+```
+
+```bash
+# CI command (auto-configures GRADLE_BUILD_CACHE_URL):
+fabrik exec --config .fabrik.toml --config-jwt-token $TUIST_TOKEN -- ./gradlew build
+```
+
+**Layer 1 (CI with mounted volume - Bazel only):**
+```toml
+# .fabrik.toml in repository (optimized for Bazel)
+[cache]
+dir = "/mnt/build-cache"
+max_size = "20GB"
+
+[[upstream]]
+url = "grpc://cache-us-east.tuist.io:7070"  # Fabrik protocol
+timeout = "30s"
+
+[build_systems]
+enabled = ["bazel"]  # Only run Bazel adapter
+```
+
+```bash
+# CI command (auto-configures BAZEL_REMOTE_CACHE):
+fabrik exec --config .fabrik.toml --config-jwt-token $TUIST_TOKEN -- bazel build //...
+```
+
+**Layer 1 (Local development - mixed build systems):**
+```toml
+# .fabrik.toml in repository
+[cache]
+dir = ".fabrik/cache"
+max_size = "5GB"
+
+[[upstream]]
+url = "grpc://cache.tuist.io:7070"  # Fabrik protocol
+timeout = "30s"
+
+[build_systems]
+enabled = ["gradle", "bazel", "nx", "turborepo", "sccache"]  # All build systems
+```
+
+```bash
+# Commands work for any build system (auto-configured):
+fabrik exec --config .fabrik.toml -- npm run build
+fabrik exec --config .fabrik.toml -- cargo build --release
+fabrik exec --config .fabrik.toml -- ./gradlew build
+```
+
+**Layer 2 (Regional server with S3 upstream):**
+```toml
+# /etc/fabrik/config.toml on server
+[cache]
+dir = "/data/fabrik/cache"
+max_size = "500GB"
+eviction_policy = "lfu"
+
+[[upstream]]
+url = "s3://tuist-build-cache/tenant-acme-corp/"
+timeout = "60s"
+permanent = true
+write_through = true
+region = "us-east-1"
+workers = 20
+
+[auth]
+public_key_file = "/etc/fabrik/jwt-public-key.pem"
+key_refresh_interval = "5m"
+required = true
+
+# Layer 2 doesn't run build system adapters
+[build_systems]
+enabled = []  # Empty - Layer 2 only speaks Fabrik protocol
+
+# Instead, run Fabrik protocol server
+[fabrik]
+enabled = true
+bind = "0.0.0.0:7070"  # gRPC server for Fabrik protocol
+
+[observability]
+metrics_bind = "0.0.0.0:9091"
+health_bind = "0.0.0.0:8888"
+```
+
+**Command:**
+```bash
+fabrik server --config /etc/fabrik/config.toml
+```
+
+**What Layer 2 does:**
+- ✅ Runs Fabrik protocol gRPC server on port 7070
+- ✅ Does NOT run Gradle/Bazel/Nx adapters
+- ✅ Multi-tenant by default (all tenants use same Fabrik protocol)
+- ✅ Simpler, more efficient
+
+**Layer 2 (Multi-region with replication):**
+```toml
+[[upstream]]
+url = "s3://us-cache/tenant-acme/"
+region = "us-east-1"
+permanent = true
+workers = 20
+
+[[upstream]]
+url = "s3://eu-cache/tenant-acme/"
+region = "eu-west-1"
+permanent = true
+workers = 10
+```
+
+### Configuration Naming Convention
+
+**Config-backed options** use `--config-*` prefix:
+- CLI: `--config-cache-dir /tmp/cache`
+- Env: `FABRIK_CONFIG_CACHE_DIR=/tmp/cache`
+- File: `cache.dir = "/tmp/cache"`
+
+**Runtime-only options** have no prefix:
+- `--config <path>` - config file path
+- `--export-env` - export cache URLs as env vars
+- `--help`, `--version`
+
+### Environment Variable Fallbacks
+
+Fabrik checks both `FABRIK_CONFIG_*` and standard environment variables:
+
+| Config Option | FABRIK_CONFIG_* | Standard Env Var |
+|---------------|----------------|------------------|
+| S3 access key | `FABRIK_CONFIG_S3_ACCESS_KEY` | `AWS_ACCESS_KEY_ID` |
+| S3 secret key | `FABRIK_CONFIG_S3_SECRET_KEY` | `AWS_SECRET_ACCESS_KEY` |
+| S3 region | `FABRIK_CONFIG_S3_REGION` | `AWS_REGION` |
+
+### Complete Flow Examples
+
+**Scenario: CI build (Layer 1 -> Layer 2 -> S3)**
+
+1. **CI runner** runs:
+   ```bash
+   fabrik exec \
+     --config-cache-dir /mnt/build-cache \
+     --config-max-cache-size 20GB \
+     --config-upstream https://cache-us-east.tuist.io \
+     --config-jwt-token $TUIST_TOKEN \
+     -- ./gradlew build
+   ```
+
+2. On cache miss:
+   - Layer 1 (CI) checks local RocksDB → MISS
+   - Layer 1 queries Layer 2 (regional server) → ...
+
+3. **Layer 2 (regional server)** receives request:
+   - Layer 2 checks local RocksDB → MISS
+   - Layer 2 queries S3 → HIT
+   - Layer 2 downloads from S3, caches locally
+   - Layer 2 returns artifact to Layer 1
+
+4. Layer 1 receives artifact, caches locally, serves to build
+
+**Generating config files:**
+```bash
+# Generate example exec config
+fabrik config generate --template exec > .fabrik.toml
+
+# Generate example server config
+fabrik config generate --template server > /etc/fabrik/config.toml
+
+# Validate config
+fabrik config validate /etc/fabrik/config.toml
+
+# Show effective configuration (merged from all sources)
+fabrik config show --config config.toml --config-upstream s3://override
 ```
 
 ## Development Guidelines

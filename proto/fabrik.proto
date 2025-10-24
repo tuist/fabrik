@@ -1,0 +1,128 @@
+syntax = "proto3";
+
+package fabrik.v1;
+
+// Fabrik Cache Service
+//
+// Unified protocol for inter-layer communication (Layer 1 <-> Layer 2).
+// Uses content-addressed storage: all artifacts are identified by their hash.
+service FabrikCache {
+  // Check if an artifact exists in the cache
+  rpc Exists(ExistsRequest) returns (ExistsResponse);
+
+  // Retrieve an artifact from the cache (streaming)
+  rpc Get(GetRequest) returns (stream GetResponse);
+
+  // Store an artifact in the cache (streaming)
+  rpc Put(stream PutRequest) returns (PutResponse);
+
+  // Delete an artifact from the cache (optional, for cleanup)
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+
+  // Get cache statistics (for monitoring)
+  rpc GetStats(GetStatsRequest) returns (GetStatsResponse);
+}
+
+// ============================================================================
+// Exists
+// ============================================================================
+
+message ExistsRequest {
+  // Content hash (SHA256, hex-encoded)
+  string hash = 1;
+}
+
+message ExistsResponse {
+  // Whether the artifact exists
+  bool exists = 1;
+
+  // Size in bytes (if exists)
+  int64 size_bytes = 2;
+
+  // Optional: Metadata
+  map<string, string> metadata = 3;
+}
+
+// ============================================================================
+// Get
+// ============================================================================
+
+message GetRequest {
+  // Content hash (SHA256, hex-encoded)
+  string hash = 1;
+}
+
+message GetResponse {
+  // Artifact data (streamed in chunks)
+  bytes chunk = 1;
+
+  // Optional: Metadata (sent in first message)
+  map<string, string> metadata = 2;
+}
+
+// ============================================================================
+// Put
+// ============================================================================
+
+message PutRequest {
+  // Content hash (SHA256, hex-encoded)
+  // Sent in first message only
+  string hash = 1;
+
+  // Artifact data (streamed in chunks)
+  bytes chunk = 2;
+
+  // Optional: Metadata (sent in first message)
+  map<string, string> metadata = 3;
+}
+
+message PutResponse {
+  // Whether the put was successful
+  bool success = 1;
+
+  // Size in bytes that was stored
+  int64 size_bytes = 2;
+}
+
+// ============================================================================
+// Delete
+// ============================================================================
+
+message DeleteRequest {
+  // Content hash (SHA256, hex-encoded)
+  string hash = 1;
+}
+
+message DeleteResponse {
+  // Whether the delete was successful
+  bool success = 1;
+
+  // Whether the artifact existed before deletion
+  bool existed = 2;
+}
+
+// ============================================================================
+// Stats
+// ============================================================================
+
+message GetStatsRequest {
+  // Optional: Filter by time range
+  optional int64 since_timestamp = 1;
+}
+
+message GetStatsResponse {
+  // Cache hit count
+  uint64 cache_hits = 1;
+
+  // Cache miss count
+  uint64 cache_misses = 2;
+
+  // Total artifacts stored
+  uint64 artifact_count = 3;
+
+  // Total bytes stored
+  uint64 total_bytes = 4;
+
+  // Uptime in seconds
+  uint64 uptime_seconds = 5;
+}

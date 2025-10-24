@@ -1,0 +1,7 @@
+module(
+    name = "fabrik_swift_test",
+    version = "0.1.0",
+)
+
+bazel_dep(name = "rules_swift", version = "2.2.1")
+bazel_dep(name = "apple_support", version = "1.17.1")
