@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
 
@@ -34,7 +34,7 @@ fn fixture_path() -> PathBuf {
 }
 
 /// Helper to count objects in Fabrik cache
-fn count_fabrik_cache_objects(cache_dir: &PathBuf) -> usize {
+fn count_fabrik_cache_objects(cache_dir: &Path) -> usize {
     let db_path = cache_dir.join("metadata.db");
     if !db_path.exists() {
         return 0;
@@ -102,7 +102,7 @@ fn test_xcode_cache_server_workflow() {
     // Step 2: Check that Fabrik cache is populated
     println!("\n=== STEP 2: Verify Fabrik cache is populated ===");
 
-    let fabrik_object_count = count_fabrik_cache_objects(&fabrik_cache_dir.path().to_path_buf());
+    let fabrik_object_count = count_fabrik_cache_objects(fabrik_cache_dir.path());
     println!("Fabrik cache objects: {}", fabrik_object_count);
     assert!(
         fabrik_object_count > 0,
@@ -234,8 +234,7 @@ fn test_xcode_cache_server_workflow() {
     // Step 6: Verify cache persists and count remains stable
     println!("\n=== STEP 4: Verify cache persistence ===");
 
-    let fabrik_object_count_after =
-        count_fabrik_cache_objects(&fabrik_cache_dir.path().to_path_buf());
+    let fabrik_object_count_after = count_fabrik_cache_objects(fabrik_cache_dir.path());
     println!(
         "Fabrik cache objects after second build: {}",
         fabrik_object_count_after

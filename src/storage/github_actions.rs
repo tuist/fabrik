@@ -54,6 +54,7 @@ impl GithubActionsStorage {
     /// Requires:
     /// - ACTIONS_CACHE_URL: Cache service endpoint (auto-provided by GitHub Actions)
     /// - ACTIONS_RUNTIME_TOKEN: Authentication token (auto-provided by GitHub Actions)
+    #[allow(dead_code)]
     pub fn from_env() -> Result<Self> {
         let cache_url = std::env::var("ACTIONS_CACHE_URL")
             .context("ACTIONS_CACHE_URL not found (not running in GitHub Actions?)")?;
@@ -64,6 +65,7 @@ impl GithubActionsStorage {
     }
 
     /// Check if GitHub Actions environment is available
+    #[allow(dead_code)]
     pub fn is_available() -> bool {
         std::env::var("ACTIONS_CACHE_URL").is_ok() && std::env::var("ACTIONS_RUNTIME_TOKEN").is_ok()
     }
@@ -277,14 +279,10 @@ impl Storage for GithubActionsStorage {
         Ok(())
     }
 
-    fn size(&self, id: &[u8]) -> Result<Option<u64>> {
+    fn size(&self, _id: &[u8]) -> Result<Option<u64>> {
         // Would need to fetch the artifact to determine size
         // For now, return None (not available without full download)
-        if self.exists(id)? {
-            Ok(None) // Exists but size unknown without downloading
-        } else {
-            Ok(None)
-        }
+        Ok(None)
     }
 
     fn touch(&self, _id: &[u8]) -> Result<()> {

@@ -1,3 +1,5 @@
+// This module is only available on Unix platforms (macOS, Linux) since it uses UnixListener
+
 use anyhow::{Context, Result};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;

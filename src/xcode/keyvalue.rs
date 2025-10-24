@@ -17,6 +17,7 @@ impl<S: Storage> KeyValueService<S> {
     }
 
     /// Serialize a Value to bytes
+    #[allow(clippy::result_large_err)]
     fn serialize_value(value: &Value) -> Result<Vec<u8>, Status> {
         let mut buf = Vec::new();
         value
@@ -26,6 +27,7 @@ impl<S: Storage> KeyValueService<S> {
     }
 
     /// Deserialize bytes to Value
+    #[allow(clippy::result_large_err)]
     fn deserialize_value(data: &[u8]) -> Result<Value, Status> {
         Value::decode(data)
             .map_err(|e| Status::internal(format!("Failed to deserialize value: {}", e)))

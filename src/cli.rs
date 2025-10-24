@@ -43,7 +43,8 @@ pub enum Commands {
     /// Wrap a command with ephemeral cache server (Layer 1)
     Exec(ExecArgs),
 
-    /// Wrap xcodebuild with Fabrik cache enabled
+    /// Wrap xcodebuild with Fabrik cache enabled (Unix only)
+    #[cfg(unix)]
     Xcodebuild(XcodebuildArgs),
 
     /// Run long-lived local cache daemon (Layer 1)
@@ -140,6 +141,7 @@ pub struct ExecArgs {
     pub command: Vec<String>,
 }
 
+#[cfg(unix)]
 #[derive(Parser, Debug)]
 pub struct XcodebuildArgs {
     #[command(flatten)]
