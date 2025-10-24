@@ -80,6 +80,12 @@ fn test_xcode_cache_server_workflow() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
 
+    // Print output if RUST_LOG or verbose mode is enabled
+    if std::env::var("RUST_LOG").is_ok() || std::env::var("VERBOSE").is_ok() {
+        println!("=== First build stdout ===\n{}", stdout);
+        eprintln!("=== First build stderr ===\n{}", stderr);
+    }
+
     if !output.status.success() {
         eprintln!("STDOUT:\n{}", stdout);
         eprintln!("STDERR:\n{}", stderr);
@@ -116,6 +122,12 @@ fn test_xcode_cache_server_workflow() {
 
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     let stderr2 = String::from_utf8_lossy(&output2.stderr);
+
+    // Print output if RUST_LOG or verbose mode is enabled
+    if std::env::var("RUST_LOG").is_ok() || std::env::var("VERBOSE").is_ok() {
+        println!("=== Second build stdout ===\n{}", stdout2);
+        eprintln!("=== Second build stderr ===\n{}", stderr2);
+    }
 
     if !output2.status.success() {
         eprintln!("STDOUT:\n{}", stdout2);
