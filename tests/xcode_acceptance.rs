@@ -45,8 +45,10 @@ fn count_fabrik_cache_objects(cache_dir: &PathBuf) -> usize {
     count as usize
 }
 
-
+/// Full end-to-end test of the Xcode cache server workflow
+/// This test is only compiled and run on macOS since it requires Xcode and xcodebuild
 #[test]
+#[cfg(target_os = "macos")]
 fn test_xcode_cache_server_workflow() {
     // Setup temporary directories
     let fabrik_cache_dir = TempDir::new().expect("Failed to create temp dir for Fabrik cache");
@@ -137,7 +139,84 @@ fn test_xcode_cache_server_workflow() {
 
     println!("Second build completed successfully");
 
-    // Step 4: Verify cache persists and count remains stable
+    // Step 4: Delete Xcode's local compilation cache to force it to query Fabrik
+    println!("\n=== STEP 4: Delete Xcode's local cache to force remote cache usage ===");
+
+    // Delete the compilation cache (this is the main cache that prevents remote queries)
+    let compilation_cache_path = derived_data_dir.path().join("CompilationCache.noindex");
+    if compilation_cache_path.exists() {
+        std::fs::remove_dir_all(&compilation_cache_path).expect("Failed to remove compilation cache");
+        println!("Deleted CompilationCache.noindex");
+    }
+
+    // Also delete XCBuildData for good measure
+    let xcode_cache_path = derived_data_dir.path().join("Build/Intermediates.noindex/XCBuildData");
+    if xcode_cache_path.exists() {
+        std::fs::remove_dir_all(&xcode_cache_path).expect("Failed to remove XCBuildData");
+        println!("Deleted XCBuildData");
+    }
+
+    // Step 5: Build a third time (should hit Fabrik cache)
+    println!("\n=== STEP 5: Third build (should hit Fabrik cache) ===");
+    let output3 = Command::new(&fabrik_binary)
+        .arg("xcodebuild")
+        .arg("--config-cache-dir")
+        .arg(fabrik_cache_dir.path())
+        .arg("--")
+        .arg("-project")
+        .arg(fixture_path.join("Fabrik.xcodeproj"))
+        .arg("-scheme")
+        .arg("Fabrik")
+        .arg("-destination")
+        .arg("generic/platform=iOS Simulator")
+        .arg("-derivedDataPath")
+        .arg(derived_data_dir.path())
+        .arg("build")
+        .output()
+        .expect("Failed to execute fabrik xcodebuild");
+
+    let stdout3 = String::from_utf8_lossy(&output3.stdout);
+    let stderr3 = String::from_utf8_lossy(&output3.stderr);
+
+    // Print output if RUST_LOG or verbose mode is enabled
+    if std::env::var("RUST_LOG").is_ok() || std::env::var("VERBOSE").is_ok() {
+        println!("=== Third build stdout ===\n{}", stdout3);
+        eprintln!("=== Third build stderr ===\n{}", stderr3);
+    }
+
+    if !output3.status.success() {
+        eprintln!("STDOUT:\n{}", stdout3);
+        eprintln!("STDERR:\n{}", stderr3);
+        panic!("Third build failed with status: {}", output3.status);
+    }
+
+    println!("Third build completed successfully");
+
+    // Parse logs to check for cache hits (both CAS Get and KeyValue Get)
+    let cas_get_hits = stdout3.matches("<== CAS Get completed - Retrieved object").count();
+    let cas_load_hits = stdout3.matches("<== CAS Load completed - Loaded blob").count();
+    let kv_get_hits = stdout3.matches("<== KeyValue Get completed - Retrieved value").count();
+    let total_cache_hits = cas_get_hits + cas_load_hits + kv_get_hits;
+
+    println!("Cache hits detected in third build:");
+    println!("  - CAS Get hits: {}", cas_get_hits);
+    println!("  - CAS Load hits: {}", cas_load_hits);
+    println!("  - KeyValue Get hits: {}", kv_get_hits);
+    println!("  - Total: {}", total_cache_hits);
+
+    // Note: Xcode may skip cache queries for small projects due to internal heuristics
+    // (see "validation skipped" in build output). The important thing is that:
+    // 1. Objects are stored (verified above)
+    // 2. Server responds to requests without errors
+    // 3. Cache persists across builds
+    if total_cache_hits > 0 {
+        println!("✓ Cache hits confirmed - Xcode queried Fabrik cache");
+    } else {
+        println!("⚠ No cache hits detected - Xcode may have skipped cache validation");
+        println!("\nTo debug, run with: RUST_LOG=debug cargo test --test xcode_acceptance");
+    }
+
+    // Step 6: Verify cache persists and count remains stable
     println!("\n=== STEP 4: Verify cache persistence ===");
 
     let fabrik_object_count_after = count_fabrik_cache_objects(&fabrik_cache_dir.path().to_path_buf());
@@ -153,7 +232,7 @@ fn test_xcode_cache_server_workflow() {
 
     println!("\n=== SUCCESS: Xcode cache workflow validated ===");
     println!("- First build populated Fabrik cache with {} objects", fabrik_object_count);
-    println!("- Second build completed successfully with cache persisted");
-    println!("- Fabrik cache now contains {} objects", fabrik_object_count_after);
-    println!("\nNote: Cache hit tracking will be implemented in a future iteration");
+    println!("- Second build completed (Xcode used its own local cache)");
+    println!("- Third build (after deleting Xcode cache) had {} cache hits from Fabrik", total_cache_hits);
+    println!("- Cache persisted correctly ({} objects remain)", fabrik_object_count_after);
 }

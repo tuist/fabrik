@@ -8,7 +8,7 @@ use tracing::info;
 
 use crate::cli::XcodebuildArgs;
 use crate::config::FabrikConfig;
-use crate::storage::FilesystemStorage;
+use crate::storage::StorageBackend;
 use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
 use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
 use crate::xcode::{CasService, KeyValueService};
@@ -57,9 +57,9 @@ pub async fn run(args: XcodebuildArgs) -> Result<()> {
         std::fs::remove_file(&socket_path).context("Failed to remove existing socket")?;
     }
 
-    // Initialize storage
-    info!("Initializing storage at {}", config.cache_dir);
-    let storage = Arc::new(FilesystemStorage::new(&config.cache_dir)?);
+    // Initialize storage with auto-detection
+    info!("Initializing storage...");
+    let storage = Arc::new(StorageBackend::auto_detect(&config.cache_dir)?);
 
     // Create gRPC services
     let cas_service = CasService::new(storage.clone());

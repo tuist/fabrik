@@ -47,7 +47,7 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
         request: Request<PutValueRequest>,
     ) -> Result<Response<PutValueResponse>, Status> {
         let req = request.into_inner();
-        debug!("KeyValue Put request for key: {}", hex::encode(&req.key));
+        debug!("==> KeyValue Put request for key: {}", hex::encode(&req.key));
 
         let value = req.value.ok_or_else(|| {
             Status::invalid_argument("Missing value")
@@ -63,7 +63,7 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
             .map_err(|e| Status::internal(format!("Failed to store value: {}", e)))?;
 
         info!(
-            "Stored KeyValue for key: {} ({} entries)",
+            "<== KeyValue Put completed - Stored value for key: {} ({} entries)",
             hex::encode(&req.key),
             value.entries.len()
         );
@@ -76,7 +76,7 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
         request: Request<GetValueRequest>,
     ) -> Result<Response<GetValueResponse>, Status> {
         let req = request.into_inner();
-        debug!("KeyValue Get request for key: {}", hex::encode(&req.key));
+        debug!("==> KeyValue Get request for key: {}", hex::encode(&req.key));
 
         // Retrieve with prefixed key
         let storage_key = Self::storage_key(&req.key);
@@ -91,7 +91,7 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
                 let value = Self::deserialize_value(&bytes)?;
 
                 info!(
-                    "Retrieved KeyValue for key: {} ({} entries)",
+                    "<== KeyValue Get completed - Retrieved value for key: {} ({} entries)",
                     hex::encode(&req.key),
                     value.entries.len()
                 );
@@ -102,7 +102,7 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
                 }))
             }
             None => {
-                debug!("KeyValue not found for key: {}", hex::encode(&req.key));
+                debug!("<== KeyValue Get completed - Key not found: {}", hex::encode(&req.key));
                 Ok(Response::new(GetValueResponse {
                     outcome: get_value_response::Outcome::KeyNotFound as i32,
                     contents: None,

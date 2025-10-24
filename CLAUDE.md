@@ -961,6 +961,108 @@ max_concurrent_requests = 10000
 worker_threads = 0  # 0 = auto (num CPUs)
 ```
 
+### Automatic Storage Backend Detection
+
+**Design Philosophy: Zero Configuration**
+
+Fabrik automatically detects the best storage backend for the environment with zero configuration required. This means the same configuration (or no configuration at all) works seamlessly in CI and local development.
+
+#### Detection Logic
+
+When Fabrik starts, it automatically detects the runtime environment:
+
+1. **GitHub Actions**: Detected via `ACTIONS_CACHE_URL` + `ACTIONS_RUNTIME_TOKEN` environment variables
+   - Automatically uses GitHub Actions Cache API
+   - Up to 10GB cache storage (GitHub's limit)
+   - 7-day retention for unused caches
+   - No configuration needed - just works
+
+2. **GitLab CI**: Detected via `CI_API_V4_URL` + `CI_JOB_TOKEN` (planned)
+   - Automatically uses GitLab CI cache
+
+3. **Local/Other**: Falls back to filesystem storage
+   - Uses `cache.dir` from config or default `/tmp/fabrik-cache`
+
+#### Environment Variables
+
+All configuration options can be overridden via environment variables with the `TUIST_CONFIG_*` prefix:
+
+| Config Option | Environment Variable | Example |
+|--------------|---------------------|---------|
+| `cache.dir` | `TUIST_CONFIG_CACHE_DIR` | `/tmp/fabrik-cache` |
+| `cache.max_size` | `TUIST_CONFIG_CACHE_MAX_SIZE` | `10GB` |
+| `cache.eviction_policy` | `TUIST_CONFIG_CACHE_EVICTION_POLICY` | `lfu` |
+| `auth.token` | `TUIST_CONFIG_AUTH_TOKEN` or `TUIST_TOKEN` | `eyJ0eXAi...` |
+| `upstream[0].url` | `TUIST_CONFIG_UPSTREAM_0_URL` | `grpc://cache.tuist.io:7070` |
+| `upstream[0].timeout` | `TUIST_CONFIG_UPSTREAM_0_TIMEOUT` | `30s` |
+
+**AWS Credentials** (for S3 upstream):
+- `AWS_ACCESS_KEY_ID` or `TUIST_CONFIG_UPSTREAM_X_ACCESS_KEY`
+- `AWS_SECRET_ACCESS_KEY` or `TUIST_CONFIG_UPSTREAM_X_SECRET_KEY`
+- `AWS_REGION` or `TUIST_CONFIG_UPSTREAM_X_REGION`
+
+#### Zero-Config CI Examples
+
+**GitHub Actions** (no configuration needed):
+```yaml
+name: Build
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Fabrik automatically detects GitHub Actions and uses cache API
+      - run: fabrik xcodebuild -- xcodebuild build
+        env:
+          TUIST_TOKEN: ${{ secrets.TUIST_TOKEN }}  # Optional: for upstream cache
+```
+
+**What happens:**
+1. Fabrik detects `ACTIONS_CACHE_URL` environment variable (auto-provided by GitHub)
+2. Automatically uses GitHub Actions Cache as primary storage
+3. Cache persists across workflow runs
+4. No `.fabrik.toml` needed
+
+**GitLab CI** (no configuration needed):
+```yaml
+build:
+  script:
+    - fabrik xcodebuild -- xcodebuild build
+  variables:
+    TUIST_TOKEN: $CI_TUIST_TOKEN
+```
+
+**Local Development** (no configuration needed):
+```bash
+# Set token once
+export TUIST_TOKEN=xxx
+
+# Just run - uses filesystem automatically
+fabrik xcodebuild -- xcodebuild build
+```
+
+#### Logging
+
+Fabrik logs the detected storage backend at startup:
+
+```
+INFO fabrik::storage - Detected GitHub Actions environment (ACTIONS_CACHE_URL present)
+INFO fabrik::storage - Using storage backend: github-actions
+INFO fabrik::storage - Cache URL: https://artifactcache.actions.githubusercontent.com/...
+```
+
+Or in local dev:
+
+```
+INFO fabrik::storage - No CI environment detected
+INFO fabrik::storage - Using storage backend: filesystem
+INFO fabrik::storage - Cache directory: /tmp/fabrik-cache
+```
+
 ### Example Configurations by Layer
 
 **Layer 1 (CI with mounted volume - Gradle only):**
