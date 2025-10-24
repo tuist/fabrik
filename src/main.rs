@@ -3,6 +3,8 @@ mod cli;
 mod commands;
 mod config;
 mod merger;
+mod storage;
+mod xcode;
 
 use anyhow::Result;
 use clap::Parser;
