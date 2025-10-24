@@ -18,6 +18,11 @@ jobs:
         with:
           components: rustfmt
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "fmt"
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -31,6 +36,11 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "clippy"
 
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
@@ -47,6 +57,12 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "test-${{ matrix.os }}"
+          cache-on-failure: true
+
       - name: Run tests
         run: cargo test --all-features
 
@@ -61,6 +77,12 @@ jobs:
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "build-${{ matrix.os }}"
+          cache-on-failure: true
 
       - name: Build
         run: cargo build --release --all-features
