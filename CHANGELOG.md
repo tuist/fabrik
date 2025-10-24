@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.2] - 2025-10-24
+
+### 📚 Documentation
+
+- Simplify README and add Mise installation instructions ([03492f0](03492f0c1d5c5c4469fab92e0827aa5b2ae34da4))
+
 ## [0.1.1] - 2025-10-24
 
 ### 🐛 Bug Fixes
