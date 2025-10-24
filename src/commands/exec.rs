@@ -1,21 +1,11 @@
-use anyhow::{Context, Result};
-use std::os::unix::fs::PermissionsExt;
-use std::path::PathBuf;
-use std::process::{Command as ProcessCommand, Stdio};
-use std::sync::Arc;
-use tokio::net::UnixListener;
+use anyhow::Result;
 use tracing::info;
 
 use crate::cli::ExecArgs;
 use crate::config::FabrikConfig;
 use crate::merger::MergedExecConfig;
-use crate::storage::FilesystemStorage;
-use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
-use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
-use crate::xcode::{CasService, KeyValueService};
 
-#[tokio::main]
-pub async fn run(args: ExecArgs) -> Result<()> {
+pub fn run(args: ExecArgs) -> Result<()> {
     // Load config file if specified
     let file_config = if let Some(config_path) = &args.config {
         Some(FabrikConfig::from_file(config_path)?)
@@ -27,80 +17,59 @@ pub async fn run(args: ExecArgs) -> Result<()> {
     let config = MergedExecConfig::merge(&args, file_config);
 
     info!("Starting Fabrik exec mode");
+    info!("Configuration:");
     info!("  Cache directory: {}", config.cache_dir);
+    info!("  Max cache size: {}", config.max_cache_size);
+    info!("  Upstream: {:?}", config.upstream);
+    info!("  HTTP port: {}", config.http_port);
+    info!("  gRPC port: {}", config.grpc_port);
+    info!("  S3 port: {}", config.s3_port);
+    info!("  Build systems: {:?}", config.build_systems);
+    info!("  Write-through: {}", config.write_through);
+    info!("  Read-through: {}", config.read_through);
+    info!("  Offline mode: {}", config.offline);
+    info!("  Log level: {}", config.log_level);
 
-    // Create temporary Unix socket in cache directory
-    let socket_path = PathBuf::from(&config.cache_dir).join("fabrik.sock");
+    // Noop: In real implementation, would:
+    // 1. Start local cache server (RocksDB)
+    // 2. Configure upstream connections
+    // 3. Start HTTP/gRPC/S3 servers on random ports
+    // 4. Export environment variables if requested
+    // 5. Execute the command: args.command
+    // 6. Wait for command to complete
+    // 7. Shutdown cache server
 
-    // Remove socket if it already exists
-    if socket_path.exists() {
-        std::fs::remove_file(&socket_path)
-            .context("Failed to remove existing socket")?;
+    println!("\n[NOOP] Would start cache server with:");
+    println!("  - Local cache at: {}", config.cache_dir);
+    println!("  - Max size: {}", config.max_cache_size);
+
+    if !config.upstream.is_empty() {
+        println!("  - Upstreams:");
+        for (i, upstream) in config.upstream.iter().enumerate() {
+            println!("    {}. {}", i + 1, upstream);
+        }
     }
 
-    // Initialize storage
-    info!("Initializing storage at {}", config.cache_dir);
-    let storage = Arc::new(FilesystemStorage::new(&config.cache_dir)?);
-
-    // Create gRPC services
-    let cas_service = CasService::new(storage.clone());
-    let keyvalue_service = KeyValueService::new(storage.clone());
-
-    info!("Starting gRPC server on Unix socket: {}", socket_path.display());
-
-    // Create Unix socket listener
-    let uds = UnixListener::bind(&socket_path)
-        .context("Failed to bind Unix socket")?;
-
-    // Set socket permissions (readable/writable by owner)
-    std::fs::set_permissions(&socket_path, std::fs::Permissions::from_mode(0o600))?;
-
-    // Spawn server in background task
-    let server_handle = tokio::spawn(async move {
-        let incoming = tokio_stream::wrappers::UnixListenerStream::new(uds);
-
-        tonic::transport::Server::builder()
-            .add_service(CasdbServiceServer::new(cas_service))
-            .add_service(KeyValueDbServer::new(keyvalue_service))
-            .serve_with_incoming(incoming)
-            .await
-    });
-
-    // Give the server a moment to start
-    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
-
-    info!("Executing command with cache enabled");
-
-    // Prepare command with environment variables
-    let mut cmd = ProcessCommand::new(&args.command[0]);
-    cmd.args(&args.command[1..]);
-
-    // Set Xcode cache environment variables
-    cmd.env("COMPILATION_CACHE_ENABLE_CACHING", "YES");
-    cmd.env("COMPILATION_CACHE_ENABLE_PLUGIN", "YES");
-    cmd.env("COMPILATION_CACHE_REMOTE_SERVICE_PATH", socket_path.to_str().unwrap());
-
-    // Execute command
-    let status = cmd
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .status()
-        .context("Failed to execute command")?;
-
-    info!("Command completed with status: {}", status);
-
-    // Shutdown server
-    server_handle.abort();
-
-    // Clean up socket
-    if socket_path.exists() {
-        std::fs::remove_file(&socket_path)?;
+    if args.export_env {
+        println!("\n[NOOP] Would export environment variables:");
+        println!(
+            "  {}HTTP_URL=http://127.0.0.1:{}",
+            args.env_prefix, config.http_port
+        );
+        println!(
+            "  {}GRPC_URL=grpc://127.0.0.1:{}",
+            args.env_prefix, config.grpc_port
+        );
+        println!(
+            "  {}S3_ENDPOINT=http://127.0.0.1:{}",
+            args.env_prefix, config.s3_port
+        );
     }
 
-    if !status.success() {
-        anyhow::bail!("Command failed with exit code: {}", status.code().unwrap_or(-1));
-    }
+    println!("\n[NOOP] Would execute command:");
+    println!("  {}", args.command.join(" "));
+
+    println!("\n[NOOP] After command completes, would shutdown cache server");
 
     Ok(())
 }
