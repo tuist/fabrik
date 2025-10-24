@@ -26,6 +26,7 @@ impl MergedXcodebuildConfig {
 
         Self {
             cache_dir: args
+                .common
                 .config_cache_dir
                 .clone()
                 .unwrap_or_else(|| config.cache.dir.clone()),
@@ -36,7 +37,7 @@ impl MergedXcodebuildConfig {
 #[tokio::main]
 pub async fn run(args: XcodebuildArgs) -> Result<()> {
     // Load config file if specified
-    let file_config = if let Some(config_path) = &args.config {
+    let file_config = if let Some(config_path) = &args.common.config {
         Some(FabrikConfig::from_file(config_path)?)
     } else {
         None
