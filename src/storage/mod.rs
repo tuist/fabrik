@@ -1,6 +1,6 @@
 pub mod filesystem;
 
-pub use filesystem::{FilesystemStorage, hash_data};
+pub use filesystem::FilesystemStorage;
 
 use anyhow::Result;
 use std::path::PathBuf;

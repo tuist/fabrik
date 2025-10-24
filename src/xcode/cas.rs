@@ -41,6 +41,7 @@ impl<S: Storage> CasService<S> {
     }
 
     /// Extract bytes from CASBytes (either inline data or file path)
+    #[allow(dead_code)]
     fn extract_cas_bytes(cas_bytes: Option<CasBytes>) -> Result<Vec<u8>> {
         match cas_bytes {
             Some(CasBytes {
@@ -58,6 +59,7 @@ impl<S: Storage> CasService<S> {
     }
 
     /// Create CASBytes from data (inline)
+    #[allow(dead_code)]
     fn create_cas_bytes(data: Vec<u8>) -> CasBytes {
         CasBytes {
             contents: Some(cas_bytes::Contents::Data(data)),

@@ -45,49 +45,6 @@ fn count_fabrik_cache_objects(cache_dir: &PathBuf) -> usize {
     count as usize
 }
 
-/// Helper to count access hits for objects in Fabrik cache (objects with access_count > 0)
-fn count_fabrik_cache_hits(cache_dir: &PathBuf) -> i64 {
-    let db_path = cache_dir.join("metadata.db");
-    if !db_path.exists() {
-        return 0;
-    }
-
-    let conn = rusqlite::Connection::open(&db_path).expect("Failed to open metadata.db");
-    let total_hits: i64 = conn
-        .query_row("SELECT SUM(access_count) FROM objects WHERE access_count > 0", [], |row| row.get(0))
-        .unwrap_or(0);
-
-    total_hits
-}
-
-/// Helper to count objects that have been accessed (accessed_at > created_at)
-fn count_accessed_objects(cache_dir: &PathBuf) -> usize {
-    let db_path = cache_dir.join("metadata.db");
-    if !db_path.exists() {
-        return 0;
-    }
-
-    let conn = rusqlite::Connection::open(&db_path).expect("Failed to open metadata.db");
-    let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM objects WHERE accessed_at > created_at", [], |row| row.get(0))
-        .unwrap_or(0);
-
-    count as usize
-}
-
-/// Helper to check if Xcode's compilation cache exists
-fn xcode_cache_exists(derived_data: &PathBuf) -> bool {
-    let cache_path = derived_data.join("Build/Intermediates.noindex/XCBuildData");
-    cache_path.exists() && cache_path.read_dir().map(|mut d| d.next().is_some()).unwrap_or(false)
-}
-
-/// Helper to delete Xcode's compilation cache
-fn delete_xcode_cache(derived_data: &PathBuf) {
-    let cache_path = derived_data.join("Build/Intermediates.noindex/XCBuildData");
-    if cache_path.exists() {
-        std::fs::remove_dir_all(&cache_path).expect("Failed to remove Xcode cache");
-    }
-}
 
 #[test]
 #[ignore] // Run with: cargo test --test xcode_acceptance -- --ignored
