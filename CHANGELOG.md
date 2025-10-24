@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.1] - 2025-10-24
+
+### 🐛 Bug Fixes
+
+- Remove version header from release notes body ([af8f907](af8f9078e922d57ccf30c253409a48ddc00b1dcd))
+
 ## [0.1.0] - 2025-10-24
 
 ### 🐛 Bug Fixes
