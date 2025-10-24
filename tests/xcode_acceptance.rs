@@ -47,7 +47,6 @@ fn count_fabrik_cache_objects(cache_dir: &PathBuf) -> usize {
 
 
 #[test]
-#[ignore] // Run with: cargo test --test xcode_acceptance -- --ignored
 fn test_xcode_cache_server_workflow() {
     // Setup temporary directories
     let fabrik_cache_dir = TempDir::new().expect("Failed to create temp dir for Fabrik cache");
