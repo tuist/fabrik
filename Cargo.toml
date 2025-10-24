@@ -16,6 +16,7 @@ anyhow = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+rusqlite_migration = "1.0"
 sha2 = "0.10"
 hex = "0.4"
 tonic = "0.12"

@@ -1,12 +1,56 @@
 use super::{Storage, StorageStats};
 use anyhow::{Context, Result};
 use rusqlite::{params, Connection};
+use rusqlite_migration::{Migrations, M};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Database migrations for the cache metadata
+///
+/// Migrations are run automatically on storage initialization.
+/// The migration version is tracked using SQLite's `user_version` pragma.
+///
+/// ## Adding a new migration
+///
+/// To add a new migration, append a new `M::up()` to the vector:
+///
+/// ```ignore
+/// M::up("ALTER TABLE objects ADD COLUMN ttl INTEGER;"),
+/// ```
+///
+/// **Important**: Never modify existing migrations. Always add new ones to the end.
+///
+/// ## Example migration sequence
+///
+/// ```ignore
+/// vec![
+///     M::up("CREATE TABLE objects (...);"),           // Migration 1
+///     M::up("ALTER TABLE objects ADD COLUMN ttl;"),   // Migration 2
+///     M::up("CREATE INDEX idx_ttl ON objects(ttl);"), // Migration 3
+/// ]
+/// ```
+fn migrations() -> Migrations<'static> {
+    Migrations::new(vec![
+        // Migration 1: Initial schema
+        M::up(
+            "CREATE TABLE objects (
+                id BLOB PRIMARY KEY,
+                size INTEGER NOT NULL,
+                created_at INTEGER NOT NULL,
+                accessed_at INTEGER NOT NULL,
+                access_count INTEGER NOT NULL DEFAULT 0
+            );
+            CREATE INDEX idx_accessed_at ON objects(accessed_at);
+            CREATE INDEX idx_access_count ON objects(access_count);",
+        ),
+        // Future migrations go here:
+        // M::up("ALTER TABLE objects ADD COLUMN ttl INTEGER;"),
+    ])
+}
 
 /// Filesystem-based storage with SQLite metadata tracking
 ///
@@ -20,6 +64,8 @@ pub struct FilesystemStorage {
 
 impl FilesystemStorage {
     /// Create a new filesystem storage at the given cache directory
+    ///
+    /// Runs database migrations to ensure the schema is up to date.
     pub fn new<P: AsRef<Path>>(cache_dir: P) -> Result<Self> {
         let cache_dir = cache_dir.as_ref();
         let objects_dir = cache_dir.join("objects");
@@ -30,33 +76,13 @@ impl FilesystemStorage {
             .context("Failed to create objects directory")?;
 
         // Initialize SQLite database
-        let db = Connection::open(&db_path)
+        let mut db = Connection::open(&db_path)
             .context("Failed to open metadata database")?;
 
-        db.execute(
-            "CREATE TABLE IF NOT EXISTS objects (
-                id BLOB PRIMARY KEY,
-                size INTEGER NOT NULL,
-                created_at INTEGER NOT NULL,
-                accessed_at INTEGER NOT NULL,
-                access_count INTEGER NOT NULL DEFAULT 0
-            )",
-            [],
-        )
-        .context("Failed to create objects table")?;
-
-        // Create index for LRU/LFU eviction queries
-        db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_accessed_at ON objects(accessed_at)",
-            [],
-        )
-        .context("Failed to create accessed_at index")?;
-
-        db.execute(
-            "CREATE INDEX IF NOT EXISTS idx_access_count ON objects(access_count)",
-            [],
-        )
-        .context("Failed to create access_count index")?;
+        // Run migrations
+        migrations()
+            .to_latest(&mut db)
+            .context("Failed to run database migrations")?;
 
         Ok(Self {
             objects_dir,
