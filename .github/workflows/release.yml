@@ -206,8 +206,12 @@ jobs:
           VERSION="${{ needs.check-release.outputs.new_version }}"
           git-cliff --tag "$VERSION" -o CHANGELOG.md
 
-          # Generate release notes (latest version only)
+          # Generate release notes (latest version only, without version header)
           git-cliff --tag "$VERSION" --unreleased --strip all -o RELEASE_NOTES.md
+
+          # Remove the version header line (e.g., "## [0.1.0] - 2025-10-24")
+          # Keep only the grouped changes
+          tail -n +2 RELEASE_NOTES.md > RELEASE_NOTES.tmp && mv RELEASE_NOTES.tmp RELEASE_NOTES.md
 
       - name: Create SHA256SUMS file
         run: |
