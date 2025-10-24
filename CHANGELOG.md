@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.1.3] - 2025-10-24
+
+### 🐛 Bug Fixes
+
+- Correct README description and add Tuist hosting note ([276ac06](276ac061e95a0bb11d886ae323a46e49771f6f4a))
+- Remove "tenant-agnostic" from README description ([d281773](d28177374233652065b11b6e3d0fb32b3cfda505))
+
+### 📚 Documentation
+
+- Update README - remove tagline and fix Tuist URL ([04eb02d](04eb02deafc3caf7e7a23f2ce2f8f5d6fa21a85e))
+
 ## [0.1.2] - 2025-10-24
 
 ### 📚 Documentation
