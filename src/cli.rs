@@ -14,10 +14,38 @@ pub struct Cli {
     pub command: Commands,
 }
 
+/// Common configuration arguments shared across commands
+#[derive(Parser, Debug, Clone)]
+pub struct CommonConfigArgs {
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+
+    /// Local cache directory
+    #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
+    pub config_cache_dir: Option<String>,
+
+    /// Max local cache size (e.g., "5GB", "500MB")
+    #[arg(long, env = "FABRIK_CONFIG_MAX_CACHE_SIZE")]
+    pub config_max_cache_size: Option<String>,
+
+    /// Upstream cache URL(s), comma-separated
+    #[arg(long, env = "FABRIK_CONFIG_UPSTREAM", value_delimiter = ',')]
+    pub config_upstream: Option<Vec<String>>,
+
+    /// Log level (trace|debug|info|warn|error)
+    #[arg(long, env = "FABRIK_CONFIG_LOG_LEVEL")]
+    pub config_log_level: Option<String>,
+}
+
 #[derive(Subcommand, Debug)]
 pub enum Commands {
     /// Wrap a command with ephemeral cache server (Layer 1)
     Exec(ExecArgs),
+
+    /// Wrap xcodebuild with Fabrik cache enabled (Unix only)
+    #[cfg(unix)]
+    Xcodebuild(XcodebuildArgs),
 
     /// Run long-lived local cache daemon (Layer 1)
     Daemon(DaemonArgs),
@@ -111,6 +139,17 @@ pub struct ExecArgs {
     /// Command to execute
     #[arg(last = true, required = true)]
     pub command: Vec<String>,
+}
+
+#[cfg(unix)]
+#[derive(Parser, Debug)]
+pub struct XcodebuildArgs {
+    #[command(flatten)]
+    pub common: CommonConfigArgs,
+
+    /// xcodebuild arguments (e.g., -project, -scheme, -destination, etc.)
+    #[arg(last = true, required = true)]
+    pub xcodebuild_args: Vec<String>,
 }
 
 #[derive(Parser, Debug)]

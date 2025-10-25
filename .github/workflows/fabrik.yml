@@ -18,6 +18,11 @@ jobs:
         with:
           components: rustfmt
 
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "fmt"
+
       - name: Check formatting
         run: cargo fmt --all -- --check
 
@@ -32,6 +37,14 @@ jobs:
         with:
           components: clippy
 
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "clippy"
+
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
@@ -44,8 +57,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select Xcode version (macOS)
+        if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protobuf compiler (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install protobuf compiler (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install protobuf compiler (Windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "test-${{ matrix.os }}"
+          cache-on-failure: true
 
       - name: Run tests
         run: cargo test --all-features
@@ -59,8 +96,32 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Select Xcode version (macOS)
+        if: runner.os == 'macOS'
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protobuf compiler (Ubuntu)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      - name: Install protobuf compiler (macOS)
+        if: runner.os == 'macOS'
+        run: brew install protobuf
+
+      - name: Install protobuf compiler (Windows)
+        if: runner.os == 'Windows'
+        run: choco install protoc
+
+      - name: Cache Rust dependencies
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "build-${{ matrix.os }}"
+          cache-on-failure: true
 
       - name: Build
         run: cargo build --release --all-features
