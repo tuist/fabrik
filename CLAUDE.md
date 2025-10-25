@@ -1323,3 +1323,4 @@ This document will evolve as the project matures. Update both CLAUDE.md and PLAN
 
 **Workflow**: As you complete tasks in PLAN.md, update the "Current Phase" and mark tasks as done. If architectural decisions change, update both CLAUDE.md and the "Notes & Decisions" section in PLAN.md.
 - Keep the documentation up to date whenever you change something adding or removing pages, or adjusting the content on existing ones. Make sure the navigation of the site is well designed such that's easy to navigate.
+- Ensure cargo format and clippy pass before consider the work done

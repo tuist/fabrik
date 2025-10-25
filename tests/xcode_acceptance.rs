@@ -38,17 +38,18 @@ fn fixture_path() -> PathBuf {
 
 /// Helper to count objects in Fabrik cache
 fn count_fabrik_cache_objects(cache_dir: &Path) -> usize {
-    let db_path = cache_dir.join("metadata.db");
+    let db_path = cache_dir.join("metadata");
     if !db_path.exists() {
         return 0;
     }
 
-    let conn = rusqlite::Connection::open(&db_path).expect("Failed to open metadata.db");
-    let count: i64 = conn
-        .query_row("SELECT COUNT(*) FROM objects", [], |row| row.get(0))
-        .unwrap_or(0);
+    // Open RocksDB in read-only mode
+    let db = rocksdb::DB::open_for_read_only(&rocksdb::Options::default(), &db_path, false)
+        .expect("Failed to open RocksDB");
 
-    count as usize
+    // Count all keys in the default column family
+    let iter = db.iterator(rocksdb::IteratorMode::Start);
+    iter.count()
 }
 
 /// Full end-to-end test of the Xcode cache server workflow
