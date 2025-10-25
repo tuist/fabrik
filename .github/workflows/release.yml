@@ -124,15 +124,14 @@ jobs:
             if [[ "$PROTOC_ARCH" == "arm64" ]]; then
               PROTOC_ARCH="aarch_64"
             fi
+            PROTOC_ZIP="protoc-${PROTOC_VERSION}-${OS}-${PROTOC_ARCH}.zip"
           elif [[ "$OS" == "linux" ]]; then
             PROTOC_ARCH="x86_64"
+            PROTOC_ZIP="protoc-${PROTOC_VERSION}-${OS}-${PROTOC_ARCH}.zip"
           else
-            # Windows
-            PROTOC_ARCH="x86_64"
-            OS="win64"
+            # Windows - no arch suffix, just win64 or win32
+            PROTOC_ZIP="protoc-${PROTOC_VERSION}-win64.zip"
           fi
-
-          PROTOC_ZIP="protoc-${PROTOC_VERSION}-${OS}-${PROTOC_ARCH}.zip"
 
           curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}
           unzip ${PROTOC_ZIP} -d $HOME/.local
