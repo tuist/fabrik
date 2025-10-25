@@ -79,11 +79,21 @@ impl GithubActionsStorage {
     }
 
     /// Check if GitHub Actions environment is available with provided environment
+    ///
+    /// Based on actions/toolkit implementation, the cache service URL can come from:
+    /// - v1: ACTIONS_CACHE_URL or ACTIONS_RESULTS_URL
+    /// - v2: ACTIONS_RESULTS_URL
+    ///
+    /// We check for either URL plus the runtime token
     pub fn is_available_with_env<F>(env_lookup: F) -> bool
     where
         F: Fn(&str) -> Option<String>,
     {
-        env_lookup("ACTIONS_CACHE_URL").is_some() && env_lookup("ACTIONS_RUNTIME_TOKEN").is_some()
+        let has_token = env_lookup("ACTIONS_RUNTIME_TOKEN").is_some();
+        let has_cache_url = env_lookup("ACTIONS_CACHE_URL").is_some();
+        let has_results_url = env_lookup("ACTIONS_RESULTS_URL").is_some();
+
+        has_token && (has_cache_url || has_results_url)
     }
 
     /// Generate cache key from ID

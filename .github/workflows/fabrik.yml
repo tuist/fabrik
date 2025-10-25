@@ -163,17 +163,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-gha-test-
 
-      - name: Verify cache environment (expected to be NOT SET)
+      - name: Check ALL cache-related environment variables
         run: |
           echo "=== GitHub Actions Cache Environment Check ==="
           echo "ACTIONS_CACHE_URL: ${ACTIONS_CACHE_URL:-NOT SET}"
-          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<present (empty if not set)>}"
-          echo ""
-          echo "FINDING: These variables are NOT exposed to workflow steps."
-          echo "They are internal to the GitHub Actions runner and only"
-          echo "accessible to custom actions with runner integration."
-          echo ""
-          echo "For regular CI usage, filesystem backend is the correct choice."
+          echo "ACTIONS_RESULTS_URL: ${ACTIONS_RESULTS_URL:-NOT SET}"
+          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<PRESENT>}"
+          echo "ACTIONS_RUNTIME_URL: ${ACTIONS_RUNTIME_URL:-NOT SET}"
+          echo "ACTIONS_CACHE_SERVICE_V2: ${ACTIONS_CACHE_SERVICE_V2:-NOT SET}"
+          echo "GITHUB_SERVER_URL: ${GITHUB_SERVER_URL:-NOT SET}"
           echo "=================================================="
 
       - name: Run integration test (will skip - no env vars)

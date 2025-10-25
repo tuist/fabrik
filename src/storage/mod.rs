@@ -81,8 +81,13 @@ impl StorageBackend {
             info!("✓ Detected GitHub Actions environment");
             info!("✓ Using storage backend: github-actions");
 
+            // Try ACTIONS_CACHE_URL first (v1), then ACTIONS_RESULTS_URL (v2)
+            // This matches the behavior of actions/toolkit
             let cache_url = env_lookup("ACTIONS_CACHE_URL")
-                .ok_or_else(|| anyhow::anyhow!("ACTIONS_CACHE_URL not found"))?;
+                .or_else(|| env_lookup("ACTIONS_RESULTS_URL"))
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Neither ACTIONS_CACHE_URL nor ACTIONS_RESULTS_URL found")
+                })?;
             let token = env_lookup("ACTIONS_RUNTIME_TOKEN")
                 .ok_or_else(|| anyhow::anyhow!("ACTIONS_RUNTIME_TOKEN not found"))?;
 
