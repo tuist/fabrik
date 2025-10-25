@@ -18,7 +18,10 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
-#[cfg_attr(target_os = "windows", ignore = "Bazel has directory creation issues on Windows CI")]
+#[cfg_attr(
+    target_os = "windows",
+    ignore = "Bazel has directory creation issues on Windows CI"
+)]
 fn test_bazel_cache_integration() {
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
 
@@ -98,6 +101,10 @@ fn test_bazel_wrapper_starts_server() {
     // This test verifies the wrapper starts without building
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
 
+    // Create temporary cache directory to avoid database locking with parallel tests
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let cache_dir = temp_dir.path().join("cache");
+
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
         .join("bazel")
@@ -114,6 +121,7 @@ fn test_bazel_wrapper_starts_server() {
     // Just run 'bazel version' which should be fast
     let output = Command::new(fabrik_bin)
         .arg("bazel")
+        .arg(format!("--config-cache-dir={}", cache_dir.display()))
         .arg("--")
         .arg("version")
         .current_dir(&fixture_path)
@@ -140,6 +148,10 @@ fn test_bazel_wrapper_starts_server() {
 fn test_bazel_cache_passes_through_args() {
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
 
+    // Create temporary cache directory to avoid database locking with parallel tests
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let cache_dir = temp_dir.path().join("cache");
+
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
         .join("bazel")
@@ -156,6 +168,7 @@ fn test_bazel_cache_passes_through_args() {
     // Test that fabrik passes through bazel arguments correctly
     let output = Command::new(fabrik_bin)
         .arg("bazel")
+        .arg(format!("--config-cache-dir={}", cache_dir.display()))
         .arg("--")
         .arg("help")
         .current_dir(&fixture_path)

@@ -13,6 +13,7 @@ node = "24.10.0"
 pnpm = "latest"
 fnox = "latest"
 age = "latest"
+java = "21"
 "npm:wrangler" = "latest"
 
 [tasks."docs:deploy-with-secrets"]
