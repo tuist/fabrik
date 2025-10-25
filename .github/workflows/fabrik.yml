@@ -137,3 +137,44 @@ jobs:
 
       - name: Build
         run: cargo build --release --all-features
+
+  github-actions-cache-test:
+    name: GitHub Actions Cache Integration Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install protobuf compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+
+      # This is the KEY step - using actions/cache sets ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN
+      - name: Enable GitHub Actions Cache (sets env vars)
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ runner.os }}-cargo-gha-test-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-gha-test-
+
+      - name: Verify cache environment variables are set
+        run: |
+          echo "=== GitHub Actions Cache Environment ==="
+          echo "ACTIONS_CACHE_URL: ${ACTIONS_CACHE_URL:-NOT SET}"
+          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<present>}"
+          echo "========================================"
+          if [ -z "$ACTIONS_CACHE_URL" ]; then
+            echo "ERROR: ACTIONS_CACHE_URL is not set!"
+            echo "The actions/cache step should have set this."
+            exit 1
+          fi
+
+      - name: Run GitHub Actions cache integration test
+        run: cargo test --test github_actions_integration -- --nocapture
+        env:
+          RUST_LOG: info
