@@ -2,7 +2,7 @@
 lockfile = true
 
 [env]
-FNOX_AGE_KEY_FILE = "/Users/pepicrft/.config/fnox/tuist-fabrik-age.txt"
+FNOX_AGE_KEY_FILE = "~/.config/fnox/tuist-fabrik-age.txt"
 
 [tools]
 rust = "latest"
