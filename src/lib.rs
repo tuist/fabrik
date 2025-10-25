@@ -2,6 +2,7 @@
 // This allows integration tests and external code to use Fabrik's modules
 
 pub mod bazel;
+pub mod logging;
 pub mod storage;
 
 // Re-export commonly used types

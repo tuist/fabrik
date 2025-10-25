@@ -1,4 +1,5 @@
 use super::proto::keyvalue::*;
+use crate::logging::{operations, services, status};
 use crate::storage::Storage;
 use prost::Message;
 use std::sync::Arc;
@@ -51,14 +52,21 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
         request: Request<PutValueRequest>,
     ) -> Result<Response<PutValueResponse>, Status> {
         let req = request.into_inner();
-        debug!(
-            "==> KeyValue Put request for key: {}",
-            hex::encode(&req.key)
-        );
+        let key = hex::encode(&req.key);
 
         let value = req
             .value
             .ok_or_else(|| Status::invalid_argument("Missing value"))?;
+
+        let entry_count = value.entries.len();
+
+        debug!(
+            service = services::XCODE_KEYVALUE,
+            operation = operations::PUT,
+            key = %key,
+            entry_count,
+            "storing value"
+        );
 
         // Serialize the value
         let serialized = Self::serialize_value(&value)?;
@@ -70,9 +78,13 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
             .map_err(|e| Status::internal(format!("Failed to store value: {}", e)))?;
 
         info!(
-            "<== KeyValue Put completed - Stored value for key: {} ({} entries)",
-            hex::encode(&req.key),
-            value.entries.len()
+            service = services::XCODE_KEYVALUE,
+            operation = operations::PUT,
+            status = status::SUCCESS,
+            key = %key,
+            entry_count,
+            size_bytes = serialized.len(),
+            "value stored"
         );
 
         Ok(Response::new(PutValueResponse { error: None }))
@@ -83,9 +95,13 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
         request: Request<GetValueRequest>,
     ) -> Result<Response<GetValueResponse>, Status> {
         let req = request.into_inner();
+        let key = hex::encode(&req.key);
+
         debug!(
-            "==> KeyValue Get request for key: {}",
-            hex::encode(&req.key)
+            service = services::XCODE_KEYVALUE,
+            operation = operations::GET,
+            key = %key,
+            "retrieving value"
         );
 
         // Retrieve with prefixed key
@@ -101,9 +117,13 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
                 let value = Self::deserialize_value(&bytes)?;
 
                 info!(
-                    "<== KeyValue Get completed - Retrieved value for key: {} ({} entries)",
-                    hex::encode(&req.key),
-                    value.entries.len()
+                    service = services::XCODE_KEYVALUE,
+                    operation = operations::GET,
+                    status = status::SUCCESS,
+                    key = %key,
+                    entry_count = value.entries.len(),
+                    size_bytes = bytes.len(),
+                    "cache hit"
                 );
 
                 Ok(Response::new(GetValueResponse {
@@ -112,9 +132,12 @@ impl<S: Storage + 'static> super::proto::keyvalue::key_value_db_server::KeyValue
                 }))
             }
             None => {
-                debug!(
-                    "<== KeyValue Get completed - Key not found: {}",
-                    hex::encode(&req.key)
+                info!(
+                    service = services::XCODE_KEYVALUE,
+                    operation = operations::GET,
+                    status = status::MISS,
+                    key = %key,
+                    "cache miss"
                 );
                 Ok(Response::new(GetValueResponse {
                     outcome: get_value_response::Outcome::KeyNotFound as i32,

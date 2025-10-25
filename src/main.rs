@@ -3,24 +3,20 @@ mod bazel;
 mod cli;
 mod commands;
 mod config;
+mod logging;
 mod merger;
 mod storage;
 mod xcode;
 
 use anyhow::Result;
 use clap::Parser;
-use tracing_subscriber::{fmt, EnvFilter};
 
 use cli::{Cli, Commands};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // Initialize logging
-    let filter = EnvFilter::try_from_default_env()
-        .or_else(|_| EnvFilter::try_new("info"))
-        .unwrap();
-
-    fmt().with_env_filter(filter).with_target(false).init();
+    // Initialize structured logging
+    logging::init();
 
     // Parse CLI arguments
     let cli = Cli::parse();

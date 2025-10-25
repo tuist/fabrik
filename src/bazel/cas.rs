@@ -1,5 +1,6 @@
 use super::proto::google::rpc::Status as RpcStatus;
 use super::proto::remote_execution::*;
+use crate::logging::{operations, services, status};
 use crate::storage::Storage;
 use std::sync::Arc;
 use tonic::{Request, Response, Status};
@@ -31,11 +32,14 @@ impl<S: Storage + 'static> content_addressable_storage_server::ContentAddressabl
         request: Request<FindMissingBlobsRequest>,
     ) -> Result<Response<FindMissingBlobsResponse>, Status> {
         let req = request.into_inner();
+        let blob_count = req.blob_digests.len();
 
         debug!(
-            "==> FindMissingBlobs - instance: {}, checking {} blobs",
-            req.instance_name,
-            req.blob_digests.len()
+            service = services::BAZEL_CAS,
+            operation = operations::FIND_MISSING,
+            instance = %req.instance_name,
+            blob_count,
+            "checking blobs"
         );
 
         let mut missing = Vec::new();
@@ -43,27 +47,25 @@ impl<S: Storage + 'static> content_addressable_storage_server::ContentAddressabl
         for digest in req.blob_digests {
             let key = Self::cas_blob_key(&digest);
 
-            debug!(
-                "  Checking blob: hash={}, size={}",
-                digest.hash, digest.size_bytes
-            );
-
             // Check if blob exists in storage
             match self.storage.get(&key) {
                 Ok(None) | Err(_) => {
-                    debug!("    MISS - blob not found");
                     missing.push(digest);
                 }
                 Ok(Some(_)) => {
-                    debug!("    HIT - blob found");
                     // Blob exists, don't add to missing
                 }
             }
         }
 
         info!(
-            "<== FindMissingBlobs - Found {} missing blobs",
-            missing.len()
+            service = services::BAZEL_CAS,
+            operation = operations::FIND_MISSING,
+            status = status::SUCCESS,
+            instance = %req.instance_name,
+            blob_count,
+            missing_count = missing.len(),
+            "check completed"
         );
 
         Ok(Response::new(FindMissingBlobsResponse {

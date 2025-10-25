@@ -203,15 +203,16 @@ fn test_xcode_cache_server_workflow() {
 
     println!("Third build completed successfully");
 
-    // Parse logs to check for cache hits (both CAS Get and KeyValue Get)
+    // Parse logs to check for cache hits using structured logging fields
+    // Look for log lines with: service="xcode.cas" operation="get" status="success"
     let cas_get_hits = stdout3
-        .matches("<== CAS Get completed - Retrieved object")
+        .matches(r#"service="xcode.cas" operation="get" status="success""#)
         .count();
     let cas_load_hits = stdout3
-        .matches("<== CAS Load completed - Loaded blob")
+        .matches(r#"service="xcode.cas" operation="load" status="success""#)
         .count();
     let kv_get_hits = stdout3
-        .matches("<== KeyValue Get completed - Retrieved value")
+        .matches(r#"service="xcode.keyvalue" operation="get" status="success""#)
         .count();
     let total_cache_hits = cas_get_hits + cas_load_hits + kv_get_hits;
 
