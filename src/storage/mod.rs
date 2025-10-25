@@ -91,8 +91,10 @@ impl StorageBackend {
         }
 
         // Fallback to filesystem
-        info!("✓ No CI environment detected (GITHUB_ACTIONS={})",
-              env_lookup("GITHUB_ACTIONS").unwrap_or_else(|| "false".to_string()));
+        info!(
+            "✓ No CI environment detected (GITHUB_ACTIONS={})",
+            env_lookup("GITHUB_ACTIONS").unwrap_or_else(|| "false".to_string())
+        );
         info!("✓ Using storage backend: filesystem");
         info!("✓ Cache directory: {}", cache_dir);
         let storage = FilesystemStorage::new(cache_dir)?;
@@ -187,9 +189,20 @@ mod tests {
         match backend {
             StorageBackend::Filesystem(_) => {
                 println!("✓ Using Filesystem storage backend");
-                println!("  ACTIONS_CACHE_URL: {:?}", std::env::var("ACTIONS_CACHE_URL").ok());
-                println!("  ACTIONS_RUNTIME_TOKEN: {:?}", std::env::var("ACTIONS_RUNTIME_TOKEN").ok().map(|_| "<redacted>"));
-                println!("  GITHUB_ACTIONS: {:?}", std::env::var("GITHUB_ACTIONS").ok());
+                println!(
+                    "  ACTIONS_CACHE_URL: {:?}",
+                    std::env::var("ACTIONS_CACHE_URL").ok()
+                );
+                println!(
+                    "  ACTIONS_RUNTIME_TOKEN: {:?}",
+                    std::env::var("ACTIONS_RUNTIME_TOKEN")
+                        .ok()
+                        .map(|_| "<redacted>")
+                );
+                println!(
+                    "  GITHUB_ACTIONS: {:?}",
+                    std::env::var("GITHUB_ACTIONS").ok()
+                );
             }
             StorageBackend::GithubActions(_) => {
                 println!("✓ Using GitHub Actions storage backend");
