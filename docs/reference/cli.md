@@ -2,6 +2,71 @@
 
 Complete reference for all Fabrik CLI commands.
 
+## `fabrik bazel`
+
+Wrapper for Bazel with automatic remote cache configuration.
+
+### Usage
+
+```bash
+fabrik bazel [OPTIONS] -- <BAZEL_ARGS>...
+```
+
+### Options
+
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--config <PATH>` | - | Path to configuration file |
+| `--config-cache-dir <DIR>` | `TUIST_CONFIG_CACHE_DIR` | Cache directory path |
+| `--config-cache-max-size <SIZE>` | `TUIST_CONFIG_CACHE_MAX_SIZE` | Maximum cache size (e.g., "10GB") |
+| `--config-upstream <URL>` | `TUIST_CONFIG_UPSTREAM_0_URL` | Upstream cache URL |
+| `--config-jwt-token <TOKEN>` | `TUIST_CONFIG_AUTH_TOKEN` or `TUIST_TOKEN` | JWT authentication token |
+| `--config-bazel-port <PORT>` | `FABRIK_CONFIG_BAZEL_PORT` | Bazel gRPC server port (0 = random) |
+
+### Examples
+
+```bash
+# Basic usage (local cache only)
+fabrik bazel -- build //...
+
+# Build specific target
+fabrik bazel -- build //src:myapp
+
+# Run tests
+fabrik bazel -- test //...
+
+# Build with Bazel configuration
+fabrik bazel -- build //... --config=release --jobs=8
+
+# With upstream cache
+fabrik bazel --config-upstream grpc://cache.example.com:7070 -- build //...
+
+# With authentication
+fabrik bazel \
+  --config-upstream grpc://cache.example.com:7070 \
+  --config-jwt-token $TUIST_TOKEN \
+  -- build //...
+
+# Using configuration file
+fabrik bazel --config .fabrik.toml -- build //...
+
+# Custom cache directory and port
+fabrik bazel \
+  --config-cache-dir /tmp/bazel-cache \
+  --config-bazel-port 9090 \
+  -- build //...
+```
+
+### How It Works
+
+The `fabrik bazel` command:
+1. Starts a local gRPC server implementing the Bazel Remote Caching protocol
+2. Automatically injects `--remote_cache=grpc://localhost:{port}` flag
+3. Passes through all other Bazel arguments unchanged
+4. Handles graceful shutdown when Bazel exits
+
+See the [Bazel integration guide](/build-systems/bazel) for more details.
+
 ## `fabrik exec`
 
 Wrap a command with ephemeral cache (hot cache for CI/local builds).

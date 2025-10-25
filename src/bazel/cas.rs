@@ -77,6 +77,8 @@ impl<S: Storage + 'static> content_addressable_storage_server::ContentAddressabl
         );
 
         let mut responses = Vec::new();
+        let mut success_count = 0;
+        let mut error_count = 0;
 
         for blob_request in req.requests {
             let digest = blob_request
@@ -85,18 +87,40 @@ impl<S: Storage + 'static> content_addressable_storage_server::ContentAddressabl
 
             let key = Self::cas_blob_key(&digest);
 
+            debug!(
+                "  Uploading blob: hash={}, size={}",
+                digest.hash, digest.size_bytes
+            );
+
+            // Verify digest size matches data size
+            if digest.size_bytes != blob_request.data.len() as i64 {
+                debug!(
+                    "  Size mismatch: expected {}, got {}",
+                    digest.size_bytes,
+                    blob_request.data.len()
+                );
+            }
+
             // Store blob in storage
             let status = match self.storage.put(&key, &blob_request.data) {
-                Ok(_) => RpcStatus {
-                    code: 0, // OK
-                    message: String::new(),
-                    details: Vec::new(),
-                },
-                Err(e) => RpcStatus {
-                    code: 13, // INTERNAL
-                    message: format!("Failed to store blob: {}", e),
-                    details: Vec::new(),
-                },
+                Ok(_) => {
+                    success_count += 1;
+                    debug!("  Blob stored successfully");
+                    RpcStatus {
+                        code: 0, // OK
+                        message: String::new(),
+                        details: Vec::new(),
+                    }
+                }
+                Err(e) => {
+                    error_count += 1;
+                    debug!("  Failed to store blob: {}", e);
+                    RpcStatus {
+                        code: 13, // INTERNAL
+                        message: format!("Failed to store blob: {}", e),
+                        details: Vec::new(),
+                    }
+                }
             };
 
             responses.push(batch_update_blobs_response::Response {
@@ -106,8 +130,8 @@ impl<S: Storage + 'static> content_addressable_storage_server::ContentAddressabl
         }
 
         info!(
-            "<== BatchUpdateBlobs - Uploaded {} blobs successfully",
-            responses.iter().filter(|r| r.status.as_ref().map(|s| s.code == 0).unwrap_or(false)).count()
+            "<== BatchUpdateBlobs - Success: {}, Errors: {}",
+            success_count, error_count
         );
 
         Ok(Response::new(BatchUpdateBlobsResponse { responses }))

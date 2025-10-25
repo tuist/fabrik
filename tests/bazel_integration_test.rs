@@ -18,7 +18,6 @@ use std::path::PathBuf;
 use tempfile::TempDir;
 
 #[test]
-#[ignore] // Requires time to download Bazel dependencies on first run
 fn test_bazel_cache_integration() {
     // Get the fabrik binary path
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
@@ -33,6 +32,29 @@ fn test_bazel_cache_integration() {
         .join("fixtures")
         .join("bazel")
         .join("swift");
+
+    // Kill any existing Bazel server
+    let _ = Command::new("bazel")
+        .arg("shutdown")
+        .current_dir(&fixture_path)
+        .output();
+
+    // Pre-fetch all dependencies (Swift rules, etc.) to avoid timeout
+    println!("=== Fetching Bazel dependencies ===");
+    let fetch_output = Command::new("bazel")
+        .arg("fetch")
+        .arg("//:hello")
+        .current_dir(&fixture_path)
+        .output()
+        .expect("Failed to fetch dependencies");
+
+    if !fetch_output.status.success() {
+        println!("Fetch stdout: {}", String::from_utf8_lossy(&fetch_output.stdout));
+        println!("Fetch stderr: {}", String::from_utf8_lossy(&fetch_output.stderr));
+        panic!("Failed to fetch dependencies");
+    }
+
+    println!("Dependencies fetched successfully\n");
 
     // First build: should miss cache and populate it
     println!("=== First build (cache miss) ===");
@@ -89,9 +111,21 @@ fn test_bazel_cache_integration() {
         "Second bazel build should succeed"
     );
 
-    // The second build should be faster due to cache hits
-    // This is a simple sanity check - in a real scenario we'd measure timing
-    println!("\n=== Test completed successfully ===");
+    // Verify cache hits occurred by checking the logs
+    let stdout2 = String::from_utf8_lossy(&output2.stdout);
+    let stderr2 = String::from_utf8_lossy(&output2.stderr);
+
+    // Look for GetActionResult HIT messages in the logs
+    let has_cache_hits = stdout2.contains("Cache HIT") || stderr2.contains("Cache HIT");
+
+    assert!(
+        has_cache_hits,
+        "Second build should have cache hits. Stdout: {}\nStderr: {}",
+        stdout2,
+        stderr2
+    );
+
+    println!("\n=== Test completed successfully - Cache hits verified! ===");
 }
 
 #[test]

@@ -9,6 +9,16 @@ import "google/api/annotations.proto";
 import "google/protobuf/timestamp.proto";
 import "google/rpc/status.proto";
 
+// The Capabilities service allows clients to query server configuration.
+service Capabilities {
+  // GetCapabilities returns the capabilities configuration of the remote endpoint.
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (ServerCapabilities) {
+    option (google.api.http) = {
+      get: "/v2/{instance_name=**}/capabilities"
+    };
+  }
+}
+
 // The action cache API is used to query whether a given action has already been
 // performed and, if so, retrieve its result.
 service ActionCache {
@@ -382,3 +392,122 @@ message Compressor {
     DEFLATE = 2;
   }
 }
+
+// A request message for Capabilities.GetCapabilities.
+message GetCapabilitiesRequest {
+  // The instance of the execution system to operate against.
+  string instance_name = 1;
+}
+
+// The digest function used for converting values into keys for CAS and Action Cache.
+message DigestFunction {
+  enum Value {
+    // Unknown or unspecified digest function.
+    UNKNOWN = 0;
+
+    // SHA-256 digest function.
+    SHA256 = 1;
+
+    // SHA-1 digest function.
+    SHA1 = 2;
+
+    // MD5 digest function.
+    MD5 = 3;
+
+    // VSO hash digest function.
+    VSO = 4;
+
+    // SHA-384 digest function.
+    SHA384 = 5;
+
+    // SHA-512 digest function.
+    SHA512 = 6;
+
+    // Murmur3 hash digest function.
+    MURMUR3 = 7;
+
+    // SHA-256 tree hash.
+    SHA256TREE = 8;
+
+    // BLAKE3 digest function.
+    BLAKE3 = 9;
+  }
+}
+
+// Capabilities of the remote cache system.
+message CacheCapabilities {
+  // Supported digest functions for CAS.
+  repeated DigestFunction.Value digest_functions = 1;
+
+  // Capabilities for updating the action cache.
+  ActionCacheUpdateCapabilities action_cache_update_capabilities = 2;
+
+  // Maximum total size of blobs to be uploaded in a single batch.
+  int64 max_batch_total_size_bytes = 3;
+
+  // Supported compressor types.
+  repeated Compressor.Value supported_compressors = 4;
+
+  // Supported batch update compressor types.
+  repeated Compressor.Value supported_batch_update_compressors = 5;
+}
+
+// Capabilities for updating the action cache.
+message ActionCacheUpdateCapabilities {
+  bool update_enabled = 1;
+}
+
+// Capabilities of the remote execution system.
+message ExecutionCapabilities {
+  // Remote execution may only support a single digest function.
+  DigestFunction.Value digest_function = 1;
+
+  // Whether remote execution is enabled for the particular server/instance.
+  bool exec_enabled = 2;
+
+  // Supported execution priority range.
+  PriorityCapabilities execution_priority_capabilities = 3;
+
+  // Supported node properties.
+  repeated string supported_node_properties = 4;
+
+  // Supported compressor types.
+  repeated Compressor.Value supported_compressors = 5;
+}
+
+// Supported execution priority range.
+message PriorityCapabilities {
+  repeated PriorityRange priorities = 1;
+
+  message PriorityRange {
+    int32 min_priority = 1;
+    int32 max_priority = 2;
+  }
+}
+
+// The full capabilities of the remote execution system.
+message ServerCapabilities {
+  // Capabilities of the remote cache system.
+  CacheCapabilities cache_capabilities = 1;
+
+  // Capabilities of the remote execution system.
+  ExecutionCapabilities execution_capabilities = 2;
+
+  // Earliest supported API version.
+  SemVer deprecated_api_version = 3;
+
+  // Lowest supported API version.
+  SemVer low_api_version = 4;
+
+  // Highest supported API version.
+  SemVer high_api_version = 5;
+}
+
+// Semantic version.
+message SemVer {
+  int32 major = 1;
+  int32 minor = 2;
+  int32 patch = 3;
+  string prerelease = 4;
+}
+

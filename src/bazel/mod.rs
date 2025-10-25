@@ -1,8 +1,12 @@
 mod action_cache;
+mod bytestream;
+mod capabilities;
 mod cas;
 mod rpc_status;
 
 pub use action_cache::BazelActionCacheService;
+pub use bytestream::BazelByteStreamService;
+pub use capabilities::BazelCapabilitiesService;
 pub use cas::BazelCasService;
 
 // Include generated proto code

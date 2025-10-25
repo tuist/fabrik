@@ -1,6 +1,8 @@
+use crate::bazel::proto::bytestream::byte_stream_server::ByteStreamServer;
 use crate::bazel::proto::remote_execution::action_cache_server::ActionCacheServer;
+use crate::bazel::proto::remote_execution::capabilities_server::CapabilitiesServer;
 use crate::bazel::proto::remote_execution::content_addressable_storage_server::ContentAddressableStorageServer;
-use crate::bazel::{BazelActionCacheService, BazelCasService};
+use crate::bazel::{BazelActionCacheService, BazelByteStreamService, BazelCapabilitiesService, BazelCasService};
 use crate::cli::BazelArgs;
 use crate::storage::create_storage;
 use anyhow::{Context, Result};
@@ -30,6 +32,8 @@ pub async fn run_bazel(args: BazelArgs) -> Result<()> {
     // Create services
     let action_cache_service = BazelActionCacheService::new(storage.clone());
     let cas_service = BazelCasService::new(storage.clone());
+    let bytestream_service = BazelByteStreamService::new(storage.clone());
+    let capabilities_service = BazelCapabilitiesService::new();
 
     // We need to bind the server ourselves to get the actual port
     let listener = tokio::net::TcpListener::bind(bind_addr)
@@ -49,6 +53,7 @@ pub async fn run_bazel(args: BazelArgs) -> Result<()> {
         info!("Starting Bazel gRPC server");
 
         Server::builder()
+            .add_service(CapabilitiesServer::new(capabilities_service))
             .add_service(ActionCacheServer::new(action_cache_service))
             .add_service(ContentAddressableStorageServer::new(cas_service))
             .serve_with_incoming_shutdown(incoming, async {

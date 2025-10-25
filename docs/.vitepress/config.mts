@@ -22,6 +22,7 @@ export default defineConfig({
       {
         text: 'Build Systems',
         items: [
+          { text: 'Bazel', link: '/build-systems/bazel' },
           { text: 'Xcode', link: '/build-systems/xcode' }
         ]
       },
