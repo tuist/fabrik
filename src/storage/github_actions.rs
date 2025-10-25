@@ -15,6 +15,7 @@ pub struct GithubActionsStorage {
     cache_url: String,
     token: String,
     cache_version: String,
+    runtime: tokio::runtime::Runtime,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -41,11 +42,18 @@ impl GithubActionsStorage {
         info!("Initializing GitHub Actions storage backend");
         info!("Cache URL: {}", cache_url);
 
+        // Create a dedicated runtime for async HTTP operations
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .expect("Failed to create tokio runtime");
+
         Self {
             client: Arc::new(Client::new()),
             cache_url,
             token,
             cache_version: "v1".to_string(),
+            runtime,
         }
     }
 
@@ -240,15 +248,8 @@ impl Storage for GithubActionsStorage {
             key
         );
 
-        // Run async operation in blocking context
-        let runtime = tokio::runtime::Handle::try_current().or_else(|_| {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map(|rt| rt.handle().clone())
-        })?;
-
-        runtime.block_on(self.save_cache(&key, data))?;
+        // Use the dedicated runtime to execute async operation
+        self.runtime.block_on(self.save_cache(&key, data))?;
         Ok(())
     }
 
@@ -256,15 +257,8 @@ impl Storage for GithubActionsStorage {
         let key = self.cache_key(id);
         debug!("Getting from GitHub Actions cache (key: {})", key);
 
-        // Run async operation in blocking context
-        let runtime = tokio::runtime::Handle::try_current().or_else(|_| {
-            tokio::runtime::Builder::new_current_thread()
-                .enable_all()
-                .build()
-                .map(|rt| rt.handle().clone())
-        })?;
-
-        runtime.block_on(self.get_cache(&key))
+        // Use the dedicated runtime to execute async operation
+        self.runtime.block_on(self.get_cache(&key))
     }
 
     fn exists(&self, id: &[u8]) -> Result<bool> {
