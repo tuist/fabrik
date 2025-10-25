@@ -115,8 +115,8 @@ jobs:
       - name: Install mise
         uses: jdx/mise-action@v2
 
-      - name: Install tools via mise (including protoc)
-        run: mise install
+      - name: Install protoc via mise (skip rust - using dtolnay/rust-toolchain)
+        run: mise install protoc
 
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
