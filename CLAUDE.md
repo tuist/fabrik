@@ -205,55 +205,40 @@ if response.exists {
 }
 ```
 
-### Auto-Configuration of Build Systems
+### Build System Integration Strategy
 
-**Feature**: `fabrik exec` automatically configures build systems by setting environment variables.
+**Approach: Build-Specific Wrappers**
 
-**How it works:**
-1. `fabrik exec` starts build system adapters on random ports
-2. For each enabled adapter, sets corresponding environment variable
-3. Executes wrapped command with configured environment
+Each build system requires different integration approaches based on how they accept remote cache configuration:
 
-**Environment Variable Mapping:**
+**Bazel**: Uses command-line flags (`--remote_cache`), so Fabrik provides a wrapper command `fabrik bazel` that:
+1. Starts the Bazel gRPC adapter (ContentAddressableStorage + ActionCache)
+2. Automatically injects `--remote_cache=grpc://127.0.0.1:{port}` flag
+3. Passes through all other bazel arguments
+4. Handles graceful shutdown
 
-| Build System | Environment Variable | Value Example |
-|--------------|---------------------|---------------|
-| **Gradle** | `GRADLE_BUILD_CACHE_URL` | `http://127.0.0.1:54321` |
-| **Bazel** | `BAZEL_REMOTE_CACHE` | `grpc://127.0.0.1:54322` |
-| **Nx** | `NX_CACHE_DIRECTORY` | `http://127.0.0.1:54323` |
-| **TurboRepo** | `TURBO_API` | `http://127.0.0.1:54324` |
-| **TurboRepo** | `TURBO_TEAM` | `local` |
-| **sccache** | `SCCACHE_ENDPOINT` | `http://127.0.0.1:54325` |
-| **sccache** | `SCCACHE_BUCKET` | `cache` |
-| **sccache** | `RUSTC_WRAPPER` | `sccache` |
+**Usage:**
+```bash
+# Instead of: bazel build //...
+# Use:
+fabrik bazel build //...
+
+# All bazel flags work as normal:
+fabrik bazel build //... --config=release --jobs=8
+```
 
 **Configuration:**
 ```toml
-[build_systems.gradle]
-port = 0              # 0 = random port (default)
-auto_configure = true  # Auto-set env vars (default)
-
 [build_systems.bazel]
-port = 9090           # Fixed port (optional)
-auto_configure = false # Manual configuration (optional)
-```
-
-**CLI override:**
-```bash
-# Disable auto-configuration
-fabrik exec --no-auto-configure -- ./gradlew build
-
-# Show what would be configured (dry-run)
-fabrik exec --dry-run -- ./gradlew build
-# Output:
-#   Would set: GRADLE_BUILD_CACHE_URL=http://127.0.0.1:54321
-#   Would execute: ./gradlew build
+port = 0              # 0 = random port (default)
+bind = "127.0.0.1"    # Listen only on localhost
 ```
 
 **Benefits:**
-- ✅ **Zero configuration**: Build systems work out-of-the-box
-- ✅ **Flexible**: Can disable and configure manually if needed
-- ✅ **Portable**: Same config works across different build systems
+- ✅ **Zero configuration**: Bazel cache works automatically
+- ✅ **Transparent**: Drop-in replacement for `bazel` command
+- ✅ **Compatible**: All bazel flags pass through unchanged
+- ✅ **Safe**: Adapter stops when bazel process exits
 
 ### Multi-Instance Configuration
 
@@ -870,10 +855,11 @@ for instance in fabrik_instances:
 
 ### CLI Commands
 
-**`fabrik exec`** - Wrap command with ephemeral cache (Layer 1 for CI/local builds)
+**`fabrik bazel`** - Wrapper for Bazel with automatic cache configuration
 ```bash
-fabrik exec [OPTIONS] -- <COMMAND> [ARGS...]
+fabrik bazel <BAZEL_ARGS>...
 ```
+Starts Bazel gRPC adapter and injects `--remote_cache` flag automatically.
 
 **`fabrik daemon`** - Run long-lived local cache daemon (Layer 1 for development)
 ```bash
@@ -1011,12 +997,12 @@ on: [push]
 
 jobs:
   build:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
       # Fabrik automatically detects GitHub Actions and uses cache API
-      - run: fabrik xcodebuild -- xcodebuild build
+      - run: fabrik bazel build //...
         env:
           TUIST_TOKEN: ${{ secrets.TUIST_TOKEN }}  # Optional: for upstream cache
 ```
@@ -1031,7 +1017,7 @@ jobs:
 ```yaml
 build:
   script:
-    - fabrik xcodebuild -- xcodebuild build
+    - fabrik bazel build //...
   variables:
     TUIST_TOKEN: $CI_TUIST_TOKEN
 ```
@@ -1042,7 +1028,7 @@ build:
 export TUIST_TOKEN=xxx
 
 # Just run - uses filesystem automatically
-fabrik xcodebuild -- xcodebuild build
+fabrik bazel build //...
 ```
 
 #### Logging
@@ -1065,27 +1051,7 @@ INFO fabrik::storage - Cache directory: /tmp/fabrik-cache
 
 ### Example Configurations by Layer
 
-**Layer 1 (CI with mounted volume - Gradle only):**
-```toml
-# .fabrik.toml in repository (optimized for Gradle)
-[cache]
-dir = "/mnt/build-cache"
-max_size = "20GB"
-
-[[upstream]]
-url = "grpc://cache-us-east.tuist.io:7070"  # Fabrik protocol
-timeout = "30s"
-
-[build_systems]
-enabled = ["gradle"]  # Only run Gradle adapter
-```
-
-```bash
-# CI command (auto-configures GRADLE_BUILD_CACHE_URL):
-fabrik exec --config .fabrik.toml --config-jwt-token $TUIST_TOKEN -- ./gradlew build
-```
-
-**Layer 1 (CI with mounted volume - Bazel only):**
+**Layer 1 (CI with mounted volume - Bazel):**
 ```toml
 # .fabrik.toml in repository (optimized for Bazel)
 [cache]
@@ -1096,16 +1062,16 @@ max_size = "20GB"
 url = "grpc://cache-us-east.tuist.io:7070"  # Fabrik protocol
 timeout = "30s"
 
-[build_systems]
-enabled = ["bazel"]  # Only run Bazel adapter
+[build_systems.bazel]
+port = 0  # Random port (default)
 ```
 
 ```bash
-# CI command (auto-configures BAZEL_REMOTE_CACHE):
-fabrik exec --config .fabrik.toml --config-jwt-token $TUIST_TOKEN -- bazel build //...
+# CI command (wrapper automatically injects --remote_cache):
+fabrik bazel build //...
 ```
 
-**Layer 1 (Local development - mixed build systems):**
+**Layer 1 (Local development):**
 ```toml
 # .fabrik.toml in repository
 [cache]
@@ -1116,15 +1082,15 @@ max_size = "5GB"
 url = "grpc://cache.tuist.io:7070"  # Fabrik protocol
 timeout = "30s"
 
-[build_systems]
-enabled = ["gradle", "bazel", "nx", "turborepo", "sccache"]  # All build systems
+[build_systems.bazel]
+port = 0
 ```
 
 ```bash
-# Commands work for any build system (auto-configured):
-fabrik exec --config .fabrik.toml -- npm run build
-fabrik exec --config .fabrik.toml -- cargo build --release
-fabrik exec --config .fabrik.toml -- ./gradlew build
+# Drop-in replacement for bazel:
+fabrik bazel build //...
+fabrik bazel test //...
+fabrik bazel build //... --config=release
 ```
 
 **Layer 2 (Regional server with S3 upstream):**
@@ -1212,21 +1178,17 @@ Fabrik checks both `FABRIK_CONFIG_*` and standard environment variables:
 
 ### Complete Flow Examples
 
-**Scenario: CI build (Layer 1 -> Layer 2 -> S3)**
+**Scenario: CI build with Bazel (Layer 1 -> Layer 2 -> S3)**
 
 1. **CI runner** runs:
    ```bash
-   fabrik exec \
-     --config-cache-dir /mnt/build-cache \
-     --config-max-cache-size 20GB \
-     --config-upstream https://cache-us-east.tuist.io \
-     --config-jwt-token $TUIST_TOKEN \
-     -- ./gradlew build
+   fabrik bazel build //...
    ```
 
 2. On cache miss:
-   - Layer 1 (CI) checks local RocksDB → MISS
-   - Layer 1 queries Layer 2 (regional server) → ...
+   - Bazel requests artifact from local Fabrik adapter (gRPC)
+   - Layer 1 adapter checks local RocksDB → MISS
+   - Layer 1 queries Layer 2 (regional server via Fabrik protocol) → ...
 
 3. **Layer 2 (regional server)** receives request:
    - Layer 2 checks local RocksDB → MISS
@@ -1234,12 +1196,14 @@ Fabrik checks both `FABRIK_CONFIG_*` and standard environment variables:
    - Layer 2 downloads from S3, caches locally
    - Layer 2 returns artifact to Layer 1
 
-4. Layer 1 receives artifact, caches locally, serves to build
+4. Layer 1 receives artifact, caches locally in RocksDB
+5. Layer 1 returns to Bazel via gRPC
+6. Bazel receives cached artifact and continues build
 
 **Generating config files:**
 ```bash
-# Generate example exec config
-fabrik config generate --template exec > .fabrik.toml
+# Generate example Layer 1 config
+fabrik config generate --template layer1 > .fabrik.toml
 
 # Generate example server config
 fabrik config generate --template server > /etc/fabrik/config.toml
@@ -1355,3 +1319,4 @@ This document will evolve as the project matures. Update both CLAUDE.md and PLAN
 - Implementation phases are completed
 
 **Workflow**: As you complete tasks in PLAN.md, update the "Current Phase" and mark tasks as done. If architectural decisions change, update both CLAUDE.md and the "Notes & Decisions" section in PLAN.md.
+- Keep the documentation up to date whenever you change something adding or removing pages, or adjusting the content on existing ones. Make sure the navigation of the site is well designed such that's easy to navigate.

@@ -1,0 +1,97 @@
+syntax = "proto3";
+
+package google.bytestream;
+
+import "google/api/annotations.proto";
+
+option java_multiple_files = true;
+option java_outer_classname = "ByteStreamProto";
+option java_package = "com.google.bytestream";
+
+// ByteStream API for reading and writing large blobs.
+// Based on https://github.com/googleapis/googleapis/blob/master/google/bytestream/bytestream.proto
+service ByteStream {
+  // Read returns the contents of a resource.
+  rpc Read(ReadRequest) returns (stream ReadResponse) {
+    option (google.api.http) = {
+      get: "/v1/{resource_name=**}"
+    };
+  }
+
+  // Write uploads a resource.
+  rpc Write(stream WriteRequest) returns (WriteResponse) {
+    option (google.api.http) = {
+      post: "/v1/{resource_name=**}"
+      body: "*"
+    };
+  }
+
+  // QueryWriteStatus determines the committed size of a resource that is being
+  // written, which can then be used as a `write_offset` for the next `Write()`
+  // call.
+  rpc QueryWriteStatus(QueryWriteStatusRequest)
+      returns (QueryWriteStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/{resource_name=**}"
+    };
+  }
+}
+
+// Request object for ByteStream.Read.
+message ReadRequest {
+  // The name of the resource to read.
+  string resource_name = 1;
+
+  // The offset for the first byte to return in the read, relative to the start
+  // of the resource.
+  int64 read_offset = 2;
+
+  // The maximum number of bytes to return in the read. A value of zero
+  // indicates that all bytes from `read_offset` should be read.
+  int64 read_limit = 3;
+}
+
+// Response object for ByteStream.Read.
+message ReadResponse {
+  // A portion of the data for the resource.
+  bytes data = 10;
+}
+
+// Request object for ByteStream.Write.
+message WriteRequest {
+  // The name of the resource to write.
+  string resource_name = 1;
+
+  // The offset from the beginning of the resource at which the data should be
+  // written.
+  int64 write_offset = 2;
+
+  // If `true`, this indicates that the write is complete.
+  bool finish_write = 3;
+
+  // A portion of the data for the resource.
+  bytes data = 10;
+}
+
+// Response object for ByteStream.Write.
+message WriteResponse {
+  // The number of bytes that have been processed for the given resource.
+  int64 committed_size = 1;
+}
+
+// Request object for ByteStream.QueryWriteStatus.
+message QueryWriteStatusRequest {
+  // The name of the resource whose write status is being requested.
+  string resource_name = 1;
+}
+
+// Response object for ByteStream.QueryWriteStatus.
+message QueryWriteStatusResponse {
+  // The number of bytes that have been processed for the given resource.
+  int64 committed_size = 1;
+
+  // `complete` is `true` only if the client has sent a `WriteRequest` with
+  // `finish_write` set to true, and the server has successfully committed the
+  // resource.
+  bool complete = 2;
+}

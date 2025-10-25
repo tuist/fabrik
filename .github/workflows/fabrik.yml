@@ -6,6 +6,9 @@ on:
       - main
   pull_request:
 
+env:
+  FNOX_AGE_KEY: ${{ secrets.FNOX_AGE_KEY }}
+
 jobs:
   fmt:
     name: Format Check

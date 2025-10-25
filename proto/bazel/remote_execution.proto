@@ -1,0 +1,384 @@
+syntax = "proto3";
+
+package build.bazel.remote.execution.v2;
+
+// Based on: https://github.com/bazelbuild/remote-apis/blob/main/build/bazel/remote/execution/v2/remote_execution.proto
+// Simplified version containing only the ActionCache and CAS services needed for remote caching
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+import "google/rpc/status.proto";
+
+// The action cache API is used to query whether a given action has already been
+// performed and, if so, retrieve its result.
+service ActionCache {
+  // Retrieve a cached execution result.
+  rpc GetActionResult(GetActionResultRequest) returns (ActionResult) {
+    option (google.api.http) = {
+      get: "/v2/{instance_name=**}/actionResults/{action_digest.hash}/{action_digest.size_bytes}"
+    };
+  }
+
+  // Upload a new execution result.
+  rpc UpdateActionResult(UpdateActionResultRequest) returns (ActionResult) {
+    option (google.api.http) = {
+      put: "/v2/{instance_name=**}/actionResults/{action_digest.hash}/{action_digest.size_bytes}"
+      body: "action_result"
+    };
+  }
+}
+
+// The CAS (content-addressable storage) is used to store the inputs and
+// outputs of actions. Each piece of content is addressed by the digest of its
+// binary data.
+service ContentAddressableStorage {
+  // Determine if blobs are present in the CAS.
+  rpc FindMissingBlobs(FindMissingBlobsRequest)
+      returns (FindMissingBlobsResponse) {
+    option (google.api.http) = {
+      post: "/v2/{instance_name=**}/blobs:findMissing"
+      body: "*"
+    };
+  }
+
+  // Upload many blobs at once.
+  rpc BatchUpdateBlobs(BatchUpdateBlobsRequest)
+      returns (BatchUpdateBlobsResponse) {
+    option (google.api.http) = {
+      post: "/v2/{instance_name=**}/blobs:batchUpdate"
+      body: "*"
+    };
+  }
+
+  // Download many blobs at once.
+  rpc BatchReadBlobs(BatchReadBlobsRequest) returns (BatchReadBlobsResponse) {
+    option (google.api.http) = {
+      post: "/v2/{instance_name=**}/blobs:batchRead"
+      body: "*"
+    };
+  }
+
+  // Fetch the entire directory tree rooted at a node.
+  rpc GetTree(GetTreeRequest) returns (stream GetTreeResponse) {
+    option (google.api.http) = {
+      get: "/v2/{instance_name=**}/blobs/{root_digest.hash}/{root_digest.size_bytes}:getTree"
+    };
+  }
+}
+
+// A content digest. A digest for a given blob consists of the size of the blob
+// and its hash.
+message Digest {
+  // The hash, in lowercase hexadecimal.
+  string hash = 1;
+
+  // The size of the blob, in bytes.
+  int64 size_bytes = 2;
+}
+
+// An ActionResult represents the result of an Action being run.
+message ActionResult {
+  // The output files of the action.
+  repeated OutputFile output_files = 2;
+
+  // The output directories of the action.
+  repeated OutputDirectory output_directories = 3;
+
+  // The exit code of the command.
+  int32 exit_code = 4;
+
+  // The standard output buffer of the action.
+  bytes stdout_raw = 5;
+
+  // The digest for a blob containing the standard output.
+  Digest stdout_digest = 6;
+
+  // The standard error buffer of the action.
+  bytes stderr_raw = 7;
+
+  // The digest for a blob containing the standard error.
+  Digest stderr_digest = 8;
+
+  // The details of the execution that produced this result.
+  ExecutedActionMetadata execution_metadata = 9;
+}
+
+// An OutputFile is similar to a FileNode, but it is used as an output in an ActionResult.
+message OutputFile {
+  // The path of this file relative to the working directory.
+  string path = 1;
+
+  // The digest of the file's content.
+  Digest digest = 2;
+
+  // True if file is executable, false otherwise.
+  bool is_executable = 4;
+
+  // The contents of the file if inlining was requested.
+  bytes contents = 5;
+
+  // Supported node properties of the OutputFile.
+  NodeProperties node_properties = 7;
+}
+
+// An OutputDirectory is the output in an ActionResult corresponding to a directory.
+message OutputDirectory {
+  // The path of the directory relative to the working directory.
+  string path = 1;
+
+  // The digest of the encoded Tree proto containing the directory's contents.
+  Digest tree_digest = 3;
+}
+
+// Contains information about how a blob was stored in CAS.
+message NodeProperties {
+  // An arbitrary serializable set of node properties.
+  repeated NodeProperty properties = 1;
+
+  // A list of string-based NodeProperties.
+  message NodeProperty {
+    // The property name.
+    string name = 1;
+
+    // The property value.
+    string value = 2;
+  }
+}
+
+// ExecutedActionMetadata contains details about a completed execution.
+message ExecutedActionMetadata {
+  // The name of the worker which ran the execution.
+  string worker = 1;
+
+  // When was the action added to the queue.
+  google.protobuf.Timestamp queued_timestamp = 2;
+
+  // When the worker received the action.
+  google.protobuf.Timestamp worker_start_timestamp = 3;
+
+  // When the worker completed the action.
+  google.protobuf.Timestamp worker_completed_timestamp = 4;
+
+  // When the worker started fetching action inputs.
+  google.protobuf.Timestamp input_fetch_start_timestamp = 5;
+
+  // When the worker finished fetching action inputs.
+  google.protobuf.Timestamp input_fetch_completed_timestamp = 6;
+
+  // When the worker started executing the action command.
+  google.protobuf.Timestamp execution_start_timestamp = 7;
+
+  // When the worker completed executing the action command.
+  google.protobuf.Timestamp execution_completed_timestamp = 8;
+
+  // When the worker started uploading action outputs.
+  google.protobuf.Timestamp output_upload_start_timestamp = 9;
+
+  // When the worker finished uploading action outputs.
+  google.protobuf.Timestamp output_upload_completed_timestamp = 10;
+}
+
+// A request message for ActionCache.GetActionResult.
+message GetActionResultRequest {
+  // The instance of the execution system to operate against.
+  string instance_name = 1;
+
+  // The digest of the Action whose result is requested.
+  Digest action_digest = 2;
+
+  // A hint to the server to inline the contents of the listed output files.
+  bool inline_stdout = 3;
+
+  // A hint to the server to inline the stderr.
+  bool inline_stderr = 4;
+
+  // A hint to the server to inline the contents of the listed output files.
+  repeated string inline_output_files = 5;
+}
+
+// A request message for ActionCache.UpdateActionResult.
+message UpdateActionResultRequest {
+  // The instance of the execution system to operate against.
+  string instance_name = 1;
+
+  // The digest of the Action whose result is being uploaded.
+  Digest action_digest = 2;
+
+  // The action result to store in the cache.
+  ActionResult action_result = 3;
+
+  // The priority (relative importance) of this content in the overall cache.
+  int32 results_cache_policy_priority = 4;
+}
+
+// A request message for ContentAddressableStorage.FindMissingBlobs.
+message FindMissingBlobsRequest {
+  // The instance of the execution system to operate against.
+  string instance_name = 1;
+
+  // A list of the blobs to check.
+  repeated Digest blob_digests = 2;
+}
+
+// A response message for ContentAddressableStorage.FindMissingBlobs.
+message FindMissingBlobsResponse {
+  // A list of the blobs requested *not* present in the storage.
+  repeated Digest missing_blob_digests = 2;
+}
+
+// A request message for ContentAddressableStorage.BatchUpdateBlobs.
+message BatchUpdateBlobsRequest {
+  // The instance of the execution system to operate against.
+  string instance_name = 1;
+
+  // The individual upload requests.
+  repeated Request requests = 2;
+
+  message Request {
+    // The digest of the blob.
+    Digest digest = 1;
+
+    // The raw binary data.
+    bytes data = 2;
+
+    // The format of the data.
+    Compressor.Value compressor = 3;
+  }
+}
+
+// A response message for ContentAddressableStorage.BatchUpdateBlobs.
+message BatchUpdateBlobsResponse {
+  // The responses to the requests.
+  repeated Response responses = 1;
+
+  // A response corresponding to a single blob that the client tried to upload.
+  message Response {
+    // The digest to which this response corresponds.
+    Digest digest = 1;
+
+    // The result of attempting to upload that blob.
+    google.rpc.Status status = 2;
+  }
+}
+
+// A request message for ContentAddressableStorage.BatchReadBlobs.
+message BatchReadBlobsRequest {
+  // The instance of the execution system to operate against.
+  string instance_name = 1;
+
+  // The individual blob requests.
+  repeated Digest digests = 2;
+
+  // The acceptable compressors for the returned data.
+  repeated Compressor.Value acceptable_compressors = 3;
+}
+
+// A response message for ContentAddressableStorage.BatchReadBlobs.
+message BatchReadBlobsResponse {
+  // The responses to the requests.
+  repeated Response responses = 1;
+
+  // A response corresponding to a single blob that the client tried to download.
+  message Response {
+    // The digest to which this response corresponds.
+    Digest digest = 1;
+
+    // The raw binary data.
+    bytes data = 2;
+
+    // The format of the data.
+    Compressor.Value compressor = 3;
+
+    // The result of attempting to download that blob.
+    google.rpc.Status status = 4;
+  }
+}
+
+// A request message for ContentAddressableStorage.GetTree.
+message GetTreeRequest {
+  // The instance of the execution system to operate against.
+  string instance_name = 1;
+
+  // The digest of the root Directory message.
+  Digest root_digest = 2;
+
+  // A maximum page size to request.
+  int32 page_size = 3;
+
+  // A page token to request the next page.
+  string page_token = 4;
+}
+
+// A response message for ContentAddressableStorage.GetTree.
+message GetTreeResponse {
+  // The directories descended from the requested root.
+  repeated Directory directories = 1;
+
+  // If present, signifies that there are more results to retrieve.
+  string next_page_token = 2;
+}
+
+// A Directory represents a directory node in a file tree.
+message Directory {
+  // The files in the directory.
+  repeated FileNode files = 1;
+
+  // The subdirectories in the directory.
+  repeated DirectoryNode directories = 2;
+
+  // The symlinks in the directory.
+  repeated SymlinkNode symlinks = 3;
+
+  // Supported node properties of the Directory.
+  NodeProperties node_properties = 5;
+}
+
+// A FileNode represents a single file.
+message FileNode {
+  // The name of the file.
+  string name = 1;
+
+  // The digest of the file's content.
+  Digest digest = 2;
+
+  // True if file is executable, false otherwise.
+  bool is_executable = 4;
+
+  // Supported node properties of the FileNode.
+  NodeProperties node_properties = 6;
+}
+
+// A DirectoryNode represents a child of a Directory which is itself a Directory.
+message DirectoryNode {
+  // The name of the directory.
+  string name = 1;
+
+  // The digest of the Directory object.
+  Digest digest = 2;
+}
+
+// A SymlinkNode represents a symbolic link.
+message SymlinkNode {
+  // The name of the symlink.
+  string name = 1;
+
+  // The target path of the symlink.
+  string target = 2;
+
+  // Supported node properties of the SymlinkNode.
+  NodeProperties node_properties = 4;
+}
+
+// The format of the data being sent or received.
+message Compressor {
+  enum Value {
+    // No compression.
+    IDENTITY = 0;
+
+    // Zstandard compression.
+    ZSTD = 1;
+
+    // Deflate compression.
+    DEFLATE = 2;
+  }
+}

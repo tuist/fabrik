@@ -15,6 +15,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  FNOX_AGE_KEY: ${{ secrets.FNOX_AGE_KEY }}
+
 jobs:
   check-release:
     name: Check if release is needed

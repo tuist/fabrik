@@ -7,11 +7,32 @@ Fabrik is the core infrastructure for build system caching and remote execution.
 
 ## 🎯 Overview
 
-High-performance caching for build systems (Gradle, Bazel, Nx, TurboRepo, sccache) with transparent multi-layer fallback:
+High-performance caching for build systems (Gradle, Bazel, Nx, TurboRepo, sccache) with transparent multi-layer fallback strategy:
 
-- **Layer 1**: Local cache (CI/dev environments)
-- **Layer 2**: Regional cache (tenant-dedicated instances)
-- **Layer 3**: S3-backed permanent storage
+### Three-Layer Caching Hierarchy
+
+**🔥 Hot Layer (Layer 1): Local Cache**
+- Bound to build process lifecycle
+- Deployed automatically in CI environments
+- RocksDB for in-memory + disk caching
+- Closest to the build, lowest latency (<5ms)
+- Uses mounted volumes for persistence
+
+**🌡️ Warm Layer (Layer 2): Regional Cache**
+- Dedicated Fabrik instance per customer/project
+- Deployed in customer's preferred region by Tuist
+- RocksDB with mounted volumes
+- Shared across team's machines
+- Medium latency (~20ms)
+
+**❄️ Cold Layer (Layer 3): Tuist Server**
+- S3-backed permanent storage
+- Always available, managed by Tuist
+- No eviction policy (permanent retention)
+- Multi-tenant with object key prefixes
+- Higher latency (~100ms) but unlimited capacity
+
+**Transparent Fallback**: Cache misses automatically fall back to the next layer. Writes propagate through all configured layers.
 
 ## ✨ Features
 
@@ -46,8 +67,8 @@ cargo build --release
 ## 📘 Usage
 
 ```bash
-# Ephemeral local cache
-fabrik exec -- gradle build
+# Bazel with automatic cache
+fabrik bazel build //...
 
 # Long-running daemon
 fabrik daemon
