@@ -36,11 +36,15 @@
 //! );
 //! ```
 
-use tracing_subscriber::{fmt::{self, format::Writer}, prelude::*, EnvFilter};
 use std::{fmt as std_fmt, io};
 use tracing::{Event, Subscriber};
 use tracing_subscriber::fmt::{FmtContext, FormatEvent, FormatFields};
 use tracing_subscriber::registry::LookupSpan;
+use tracing_subscriber::{
+    fmt::{self, format::Writer},
+    prelude::*,
+    EnvFilter,
+};
 
 /// Custom formatter that shows "fabrik" instead of full module path
 struct FabrikFormatter {
@@ -61,7 +65,11 @@ where
         let meta = event.metadata();
 
         // Write timestamp
-        write!(writer, "{} ", chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%.6fZ"))?;
+        write!(
+            writer,
+            "{} ",
+            chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%.6fZ")
+        )?;
 
         // Write level with fabrik in parentheses and color if ansi enabled
         if self.with_ansi {
@@ -184,6 +192,7 @@ pub fn init() {
 }
 
 /// Standard field names for consistent logging
+#[allow(dead_code)]
 pub mod fields {
     /// Service name (e.g., "xcode.cas", "bazel.cas")
     pub const SERVICE: &str = "service";
@@ -210,6 +219,7 @@ pub mod fields {
 }
 
 /// Service names for consistent logging
+#[allow(dead_code)]
 pub mod services {
     pub const XCODE_CAS: &str = "xcode.cas";
     pub const XCODE_KEYVALUE: &str = "xcode.keyvalue";
@@ -219,6 +229,7 @@ pub mod services {
 }
 
 /// Operation names for consistent logging
+#[allow(dead_code)]
 pub mod operations {
     pub const GET: &str = "get";
     pub const PUT: &str = "put";
@@ -230,6 +241,7 @@ pub mod operations {
 }
 
 /// Status values for consistent logging
+#[allow(dead_code)]
 pub mod status {
     pub const SUCCESS: &str = "success";
     pub const MISS: &str = "miss";

@@ -79,9 +79,10 @@ fn test_bazel_cache_integration() {
     );
 
     // Verify Fabrik cache was queried by checking for GetActionResult calls
-    let stdout2 = String::from_utf8_lossy(&output2.stdout);
+    // Logs are now in stderr with new structured logging format
+    let stderr2 = String::from_utf8_lossy(&output2.stderr);
 
-    let cache_queried = stdout2.contains("GetActionResult");
+    let cache_queried = stderr2.contains("GetActionResult");
 
     assert!(
         cache_queried,
