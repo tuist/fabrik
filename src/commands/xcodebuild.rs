@@ -112,23 +112,29 @@ pub async fn run(args: XcodebuildArgs) -> Result<()> {
         socket_path.display()
     );
 
-    // Execute command
-    let status = cmd
+    // Execute command and ensure cleanup happens no matter what
+    let result = cmd
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit())
         .status()
-        .context("Failed to execute xcodebuild")?;
+        .context("Failed to execute xcodebuild");
 
-    info!("xcodebuild completed with status: {}", status);
-
-    // Shutdown server
+    // ALWAYS cleanup server and socket, regardless of success/failure
+    info!("Shutting down cache server");
     server_handle.abort();
 
     // Clean up socket
     if socket_path.exists() {
-        std::fs::remove_file(&socket_path)?;
+        if let Err(e) = std::fs::remove_file(&socket_path) {
+            // Log but don't fail on socket cleanup error
+            tracing::warn!("Failed to remove socket: {}", e);
+        }
     }
+
+    // Now check the result and propagate errors
+    let status = result?;
+    info!("xcodebuild completed with status: {}", status);
 
     if !status.success() {
         anyhow::bail!(
