@@ -103,7 +103,3 @@ cargo test
 cargo fmt
 cargo clippy
 ```
-
-## 📝 License
-
-MIT
