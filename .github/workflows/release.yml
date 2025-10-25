@@ -11,6 +11,10 @@ permissions:
   pull-requests: write
   packages: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check-release:
     name: Check if release is needed
