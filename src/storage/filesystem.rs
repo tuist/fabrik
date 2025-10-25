@@ -29,6 +29,7 @@ const CF_INDEX_ACCESS_COUNT: &str = "index_access_count";
 /// - created_at: i64 (8 bytes)
 /// - accessed_at: i64 (8 bytes)
 /// - access_count: u64 (8 bytes)
+///
 /// Total: 32 bytes per object
 #[derive(Debug, Clone)]
 struct ObjectMetadata {
