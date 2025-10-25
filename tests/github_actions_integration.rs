@@ -1,7 +1,17 @@
 /// Integration test for GitHub Actions Cache storage backend
 ///
-/// This test only runs when ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN
-/// environment variables are present (i.e., in GitHub Actions CI)
+/// IMPORTANT FINDING: GitHub Actions does NOT expose ACTIONS_CACHE_URL and
+/// ACTIONS_RUNTIME_TOKEN to workflow steps, even when using actions/cache.
+/// These variables are internal to the Actions runner and only accessible
+/// to the cache action itself (written in TypeScript with runner access).
+///
+/// This means the GitHub Actions storage backend can only be used in:
+/// 1. Custom GitHub Actions (not workflow steps)
+/// 2. Direct runner integrations
+///
+/// For regular CI usage, the filesystem backend is the correct choice.
+///
+/// This test documents the limitation and will skip in all environments.
 
 use std::env;
 

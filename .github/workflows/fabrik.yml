@@ -150,8 +150,9 @@ jobs:
       - name: Install protobuf compiler
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
 
-      # This is the KEY step - using actions/cache sets ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN
-      - name: Enable GitHub Actions Cache (sets env vars)
+      # Attempt to trigger ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN
+      # FINDING: These variables are NOT exposed to workflow steps!
+      - name: Use actions/cache (attempt to enable env vars)
         uses: actions/cache@v4
         with:
           path: |
@@ -162,19 +163,20 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-gha-test-
 
-      - name: Verify cache environment variables are set
+      - name: Verify cache environment (expected to be NOT SET)
         run: |
-          echo "=== GitHub Actions Cache Environment ==="
+          echo "=== GitHub Actions Cache Environment Check ==="
           echo "ACTIONS_CACHE_URL: ${ACTIONS_CACHE_URL:-NOT SET}"
-          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<present>}"
-          echo "========================================"
-          if [ -z "$ACTIONS_CACHE_URL" ]; then
-            echo "ERROR: ACTIONS_CACHE_URL is not set!"
-            echo "The actions/cache step should have set this."
-            exit 1
-          fi
+          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<present (empty if not set)>}"
+          echo ""
+          echo "FINDING: These variables are NOT exposed to workflow steps."
+          echo "They are internal to the GitHub Actions runner and only"
+          echo "accessible to custom actions with runner integration."
+          echo ""
+          echo "For regular CI usage, filesystem backend is the correct choice."
+          echo "=================================================="
 
-      - name: Run GitHub Actions cache integration test
+      - name: Run integration test (will skip - no env vars)
         run: cargo test --test github_actions_integration -- --nocapture
         env:
           RUST_LOG: info
