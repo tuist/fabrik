@@ -3,8 +3,12 @@
 gradle.settingsEvaluated {
     buildCache {
         remote<HttpBuildCache> {
-            // URL is set via -Dorg.gradle.caching.buildCache.remote.url
-            isPush = System.getProperty("org.gradle.caching.buildCache.remote.push")?.toBoolean() ?: true
+            // Read URL from system property set by fabrik wrapper
+            val cacheUrl = System.getProperty("org.gradle.caching.buildCache.remote.url")
+            if (cacheUrl != null) {
+                url = uri(cacheUrl)
+                isPush = System.getProperty("org.gradle.caching.buildCache.remote.push")?.toBoolean() ?: true
+            }
         }
     }
 }
