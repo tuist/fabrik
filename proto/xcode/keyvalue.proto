@@ -44,6 +44,6 @@ message PutValueRequest {
   Value value = 2;
 }
 
-message PutValueResponse { optional ResponseError error = 1; }
+message PutValueResponse { ResponseError error = 1; }
 
 message ResponseError { string description = 1; }
