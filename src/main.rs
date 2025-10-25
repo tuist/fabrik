@@ -3,6 +3,7 @@ mod bazel;
 mod cli;
 mod commands;
 mod config;
+mod gradle;
 mod logging;
 mod merger;
 mod storage;
@@ -25,6 +26,7 @@ async fn main() -> Result<()> {
     match cli.command {
         Commands::Exec(args) => commands::exec::run(args),
         Commands::Bazel(args) => commands::bazel::run_bazel(args).await,
+        Commands::Gradle(args) => commands::gradle::run_gradle(args).await,
         #[cfg(unix)]
         Commands::Xcodebuild(args) => commands::xcodebuild::run(args).await,
         Commands::Daemon(args) => commands::daemon::run(args),
