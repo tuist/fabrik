@@ -16,6 +16,10 @@ age = "latest"
 java = "21"
 "npm:wrangler" = "latest"
 
+[tools."ubi:tipi-build/cli"]
+version = "latest"
+exe = "tipi"
+
 [tasks."docs:deploy-with-secrets"]
 description = "Deploy docs with secrets loaded from fnox"
 run = "fnox run -- mise run docs:deploy"

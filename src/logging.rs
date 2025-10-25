@@ -13,9 +13,11 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```rust,no_run
 //! use tracing::info;
 //!
+//! # let id = vec![0u8; 32];
+//! # let data = vec![0u8; 1024];
 //! // Cache hit
 //! info!(
 //!     service = "xcode.cas",
