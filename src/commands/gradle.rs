@@ -59,8 +59,12 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
     info!("Gradle Remote Cache running at: {}", cache_url);
 
     // Build gradle command
+    // On Windows, use gradlew.bat (no ./ prefix needed)
+    // On Unix, use ./gradlew
     let mut gradle_cmd = if cfg!(target_os = "windows") {
-        Command::new("gradlew.bat")
+        let mut cmd = Command::new("cmd");
+        cmd.arg("/C").arg("gradlew.bat");
+        cmd
     } else {
         Command::new("./gradlew")
     };
@@ -84,8 +88,15 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
+    let gradle_exe = if cfg!(target_os = "windows") {
+        "gradlew.bat"
+    } else {
+        "./gradlew"
+    };
+
     info!(
-        "Executing: ./gradlew {} -Dorg.gradle.caching.buildCache.remote.url={}",
+        "Executing: {} {} -Dorg.gradle.caching.buildCache.remote.url={}",
+        gradle_exe,
         args.gradle_args.join(" "),
         cache_url
     );
