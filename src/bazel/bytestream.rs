@@ -69,6 +69,7 @@ impl<S: Storage + 'static> byte_stream_server::ByteStream for BazelByteStreamSer
 
         // Create streaming response
         let (tx, rx) = tokio::sync::mpsc::channel(4);
+        let data_len = data.len();
 
         tokio::spawn(async move {
             let chunk_size = 1024 * 1024; // 1MB chunks
@@ -98,9 +99,11 @@ impl<S: Storage + 'static> byte_stream_server::ByteStream for BazelByteStreamSer
             }
         });
 
-        info!("<== ByteStream Read - streaming {} bytes", data.len());
+        info!("<== ByteStream Read - streaming {} bytes", data_len);
 
-        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(rx)))
+        Ok(Response::new(tokio_stream::wrappers::ReceiverStream::new(
+            rx,
+        )))
     }
 
     async fn write(
@@ -119,7 +122,9 @@ impl<S: Storage + 'static> byte_stream_server::ByteStream for BazelByteStreamSer
             // First message should have resource_name
             if resource_name.is_none() {
                 if req.resource_name.is_empty() {
-                    return Err(Status::invalid_argument("Missing resource_name in first WriteRequest"));
+                    return Err(Status::invalid_argument(
+                        "Missing resource_name in first WriteRequest",
+                    ));
                 }
                 resource_name = Some(req.resource_name.clone());
                 debug!("  Resource: {}", req.resource_name);
@@ -175,7 +180,9 @@ impl<S: Storage + 'static> byte_stream_server::ByteStream for BazelByteStreamSer
         }
 
         // If we get here, finish_write was never set
-        Err(Status::invalid_argument("Stream ended without finish_write"))
+        Err(Status::invalid_argument(
+            "Stream ended without finish_write",
+        ))
     }
 
     async fn query_write_status(

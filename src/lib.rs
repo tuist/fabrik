@@ -5,4 +5,4 @@ pub mod bazel;
 pub mod storage;
 
 // Re-export commonly used types
-pub use storage::{create_storage, FilesystemStorage, Storage};
+pub use storage::{create_storage, default_cache_dir, FilesystemStorage, Storage};

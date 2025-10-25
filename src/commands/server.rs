@@ -10,7 +10,6 @@ use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
 use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
 use crate::xcode::{CasService, KeyValueService};
 
-#[tokio::main]
 pub async fn run(args: ServerArgs) -> Result<()> {
     // Load config file if specified
     let file_config = if let Some(config_path) = &args.config {

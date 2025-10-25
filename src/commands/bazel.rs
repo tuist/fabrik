@@ -2,15 +2,16 @@ use crate::bazel::proto::bytestream::byte_stream_server::ByteStreamServer;
 use crate::bazel::proto::remote_execution::action_cache_server::ActionCacheServer;
 use crate::bazel::proto::remote_execution::capabilities_server::CapabilitiesServer;
 use crate::bazel::proto::remote_execution::content_addressable_storage_server::ContentAddressableStorageServer;
-use crate::bazel::{BazelActionCacheService, BazelByteStreamService, BazelCapabilitiesService, BazelCasService};
+use crate::bazel::{
+    BazelActionCacheService, BazelByteStreamService, BazelCapabilitiesService, BazelCasService,
+};
 use crate::cli::BazelArgs;
-use crate::storage::create_storage;
+use crate::storage::{create_storage, default_cache_dir};
 use anyhow::{Context, Result};
 use std::net::SocketAddr;
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::Command;
-use tokio_stream::wrappers::TcpListenerStream;
 use tonic::transport::Server;
 use tracing::{debug, info};
 
@@ -18,11 +19,11 @@ use tracing::{debug, info};
 pub async fn run_bazel(args: BazelArgs) -> Result<()> {
     info!("Starting Fabrik Bazel wrapper");
 
-    // Create storage backend
+    // Create storage backend using XDG-compliant default directory
     let cache_dir = args
         .common
         .config_cache_dir
-        .unwrap_or_else(|| "/tmp/fabrik-bazel-cache".to_string());
+        .unwrap_or_else(|| default_cache_dir().display().to_string());
     let storage = Arc::new(create_storage(&cache_dir)?);
 
     // Determine port (0 = random)
@@ -40,7 +41,9 @@ pub async fn run_bazel(args: BazelArgs) -> Result<()> {
         .await
         .context("Failed to bind TCP listener")?;
 
-    let actual_addr = listener.local_addr().context("Failed to get local address")?;
+    let actual_addr = listener
+        .local_addr()
+        .context("Failed to get local address")?;
     let cache_url = format!("grpc://{}", actual_addr);
 
     info!("Bazel Remote Cache bound to: {}", cache_url);
@@ -56,6 +59,7 @@ pub async fn run_bazel(args: BazelArgs) -> Result<()> {
             .add_service(CapabilitiesServer::new(capabilities_service))
             .add_service(ActionCacheServer::new(action_cache_service))
             .add_service(ContentAddressableStorageServer::new(cas_service))
+            .add_service(ByteStreamServer::new(bytestream_service))
             .serve_with_incoming_shutdown(incoming, async {
                 shutdown_rx.await.ok();
                 debug!("Graceful shutdown initiated");
@@ -85,7 +89,11 @@ pub async fn run_bazel(args: BazelArgs) -> Result<()> {
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    info!("Executing: bazel {} --remote_cache={}", args.bazel_args.join(" "), cache_url);
+    info!(
+        "Executing: bazel {} --remote_cache={}",
+        args.bazel_args.join(" "),
+        cache_url
+    );
 
     // Run bazel and wait for completion
     let status = bazel_cmd
@@ -98,10 +106,7 @@ pub async fn run_bazel(args: BazelArgs) -> Result<()> {
     let _ = shutdown_tx.send(());
 
     // Wait for server to shut down with timeout
-    match tokio::time::timeout(
-        tokio::time::Duration::from_secs(5),
-        server_handle
-    ).await {
+    match tokio::time::timeout(tokio::time::Duration::from_secs(5), server_handle).await {
         Ok(server_result) => {
             if let Err(e) = server_result {
                 debug!("gRPC server task error: {:?}", e);

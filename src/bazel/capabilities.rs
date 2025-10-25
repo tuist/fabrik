@@ -3,6 +3,7 @@ use tonic::{Request, Response, Status};
 use tracing::{debug, info};
 
 /// Bazel Capabilities service implementation
+#[derive(Default)]
 pub struct BazelCapabilitiesService;
 
 impl BazelCapabilitiesService {

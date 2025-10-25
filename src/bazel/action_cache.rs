@@ -17,10 +17,15 @@ impl<S: Storage> BazelActionCacheService<S> {
 
     /// Generate cache key from action digest and instance name
     fn action_cache_key(instance_name: &str, digest: &Digest) -> Vec<u8> {
-        format!("action_cache:{}:{}:{}", instance_name, digest.hash, digest.size_bytes).into_bytes()
+        format!(
+            "action_cache:{}:{}:{}",
+            instance_name, digest.hash, digest.size_bytes
+        )
+        .into_bytes()
     }
 
     /// Serialize ActionResult to bytes
+    #[allow(clippy::result_large_err)]
     fn serialize_result(result: &ActionResult) -> Result<Vec<u8>, Status> {
         let mut buf = Vec::new();
         result
@@ -30,6 +35,7 @@ impl<S: Storage> BazelActionCacheService<S> {
     }
 
     /// Deserialize bytes to ActionResult
+    #[allow(clippy::result_large_err)]
     fn deserialize_result(data: &[u8]) -> Result<ActionResult, Status> {
         ActionResult::decode(data)
             .map_err(|e| Status::internal(format!("Failed to deserialize ActionResult: {}", e)))
@@ -47,7 +53,10 @@ impl<S: Storage + 'static> action_cache_server::ActionCache for BazelActionCache
         debug!(
             "==> GetActionResult - instance: {}, digest: {}",
             req.instance_name,
-            req.action_digest.as_ref().map(|d| &d.hash).unwrap_or(&String::new())
+            req.action_digest
+                .as_ref()
+                .map(|d| &d.hash)
+                .unwrap_or(&String::new())
         );
 
         let digest = req
@@ -61,15 +70,15 @@ impl<S: Storage + 'static> action_cache_server::ActionCache for BazelActionCache
             Ok(Some(data)) => {
                 let result = Self::deserialize_result(&data)?;
 
-                info!(
-                    "<== GetActionResult - Cache HIT for action {}",
-                    digest.hash
-                );
+                info!("<== GetActionResult - Cache HIT for action {}", digest.hash);
 
                 Ok(Response::new(result))
             }
             Ok(None) | Err(_) => {
-                debug!("<== GetActionResult - Cache MISS for action {}", digest.hash);
+                debug!(
+                    "<== GetActionResult - Cache MISS for action {}",
+                    digest.hash
+                );
                 Err(Status::not_found("ActionResult not found in cache"))
             }
         }
@@ -84,7 +93,10 @@ impl<S: Storage + 'static> action_cache_server::ActionCache for BazelActionCache
         debug!(
             "==> UpdateActionResult - instance: {}, digest: {}",
             req.instance_name,
-            req.action_digest.as_ref().map(|d| &d.hash).unwrap_or(&String::new())
+            req.action_digest
+                .as_ref()
+                .map(|d| &d.hash)
+                .unwrap_or(&String::new())
         );
 
         let digest = req

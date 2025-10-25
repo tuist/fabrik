@@ -43,12 +43,19 @@ impl<S: Storage + 'static> content_addressable_storage_server::ContentAddressabl
         for digest in req.blob_digests {
             let key = Self::cas_blob_key(&digest);
 
+            debug!(
+                "  Checking blob: hash={}, size={}",
+                digest.hash, digest.size_bytes
+            );
+
             // Check if blob exists in storage
             match self.storage.get(&key) {
                 Ok(None) | Err(_) => {
+                    debug!("    MISS - blob not found");
                     missing.push(digest);
                 }
                 Ok(Some(_)) => {
+                    debug!("    HIT - blob found");
                     // Blob exists, don't add to missing
                 }
             }
@@ -184,7 +191,10 @@ impl<S: Storage + 'static> content_addressable_storage_server::ContentAddressabl
 
         info!(
             "<== BatchReadBlobs - Retrieved {} blobs successfully",
-            responses.iter().filter(|r| r.status.as_ref().map(|s| s.code == 0).unwrap_or(false)).count()
+            responses
+                .iter()
+                .filter(|r| r.status.as_ref().map(|s| s.code == 0).unwrap_or(false))
+                .count()
         );
 
         Ok(Response::new(BatchReadBlobsResponse { responses }))

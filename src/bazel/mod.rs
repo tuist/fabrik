@@ -12,6 +12,7 @@ pub use cas::BazelCasService;
 // Include generated proto code
 pub mod proto {
     pub mod remote_execution {
+        #![allow(dead_code)] // Allow unused structs in generated code
         tonic::include_proto!("build.bazel.remote.execution.v2");
     }
 

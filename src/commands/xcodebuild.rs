@@ -3,9 +3,9 @@
 use anyhow::{Context, Result};
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
-use std::process::{Command as ProcessCommand, Stdio};
 use std::sync::Arc;
 use tokio::net::UnixListener;
+use tokio::process::Command;
 use tracing::info;
 
 use crate::cli::XcodebuildArgs;
@@ -36,7 +36,6 @@ impl MergedXcodebuildConfig {
     }
 }
 
-#[tokio::main]
 pub async fn run(args: XcodebuildArgs) -> Result<()> {
     // Load config file if specified
     let file_config = if let Some(config_path) = &args.common.config {
@@ -95,7 +94,7 @@ pub async fn run(args: XcodebuildArgs) -> Result<()> {
     info!("Executing xcodebuild with cache enabled");
 
     // Prepare xcodebuild command
-    let mut cmd = ProcessCommand::new("xcodebuild");
+    let mut cmd = Command::new("xcodebuild");
     cmd.args(&args.xcodebuild_args);
 
     // Append cache build settings at the end
@@ -114,10 +113,9 @@ pub async fn run(args: XcodebuildArgs) -> Result<()> {
 
     // Execute command and ensure cleanup happens no matter what
     let result = cmd
-        .stdin(Stdio::inherit())
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
+        .kill_on_drop(true)
         .status()
+        .await
         .context("Failed to execute xcodebuild");
 
     // ALWAYS cleanup server and socket, regardless of success/failure

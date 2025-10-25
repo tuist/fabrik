@@ -30,9 +30,9 @@ async fn main() -> Result<()> {
         Commands::Exec(args) => commands::exec::run(args),
         Commands::Bazel(args) => commands::bazel::run_bazel(args).await,
         #[cfg(unix)]
-        Commands::Xcodebuild(args) => commands::xcodebuild::run(args),
+        Commands::Xcodebuild(args) => commands::xcodebuild::run(args).await,
         Commands::Daemon(args) => commands::daemon::run(args),
-        Commands::Server(args) => commands::server::run(*args),
+        Commands::Server(args) => commands::server::run(*args).await,
         Commands::Config(args) => commands::config::run(args.command),
         Commands::Health(args) => commands::health::run(args),
     }

@@ -1,5 +1,7 @@
+pub mod cache_dir;
 pub mod filesystem;
 
+pub use cache_dir::default_cache_dir;
 pub use filesystem::FilesystemStorage;
 
 use anyhow::Result;
