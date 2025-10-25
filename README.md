@@ -46,6 +46,13 @@ Fabrik implements a three-tier caching strategy:
 
 **Transparent Fallback**: Cache misses automatically fall back to the next configured layer. Writes propagate through all configured layers.
 
+> [!IMPORTANT]
+> **Infrastructure Challenge**
+>
+> To maximize performance, warm caches need to be deployed as close as possible to where builds happen. For example, you might have CI builds running in `us-east-1` while your developers are distributed across `eu-west-1`. Managing this multi-region infrastructure—provisioning instances, handling authentication, monitoring performance, and ensuring high availability—is complex.
+>
+> This is where services like [Tuist](https://tuist.dev) come in. Just as Supabase manages Postgres infrastructure, Tuist can manage Fabrik infrastructure for you, automatically deploying warm cache instances in the right regions and handling all the operational complexity.
+
 ## 🚀 Installation
 
 ### Using Mise
