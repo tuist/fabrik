@@ -59,10 +59,10 @@ fn test_gradle_cache_integration() {
         .arg("--")
         .arg("--init-script")
         .arg(fixture_path.join("init.gradle.kts"))
-        .arg(":app:build")  // Build the app subproject
-        .arg("--no-daemon")  // Avoid daemon for cleaner tests
+        .arg(":app:build") // Build the app subproject
+        .arg("--no-daemon") // Avoid daemon for cleaner tests
         .arg("--console=plain")
-        .arg("--build-cache")  // Explicitly enable build cache
+        .arg("--build-cache") // Explicitly enable build cache
         .current_dir(&fixture_path)
         .env("GRADLE_USER_HOME", &gradle_home)
         .env("FABRIK_CONFIG_LOG_LEVEL", "info")
@@ -118,10 +118,10 @@ fn test_gradle_cache_integration() {
         .arg("--")
         .arg("--init-script")
         .arg(fixture_path.join("init.gradle.kts"))
-        .arg(":app:build")  // Build the app subproject
+        .arg(":app:build") // Build the app subproject
         .arg("--no-daemon")
         .arg("--console=plain")
-        .arg("--build-cache")  // Explicitly enable build cache
+        .arg("--build-cache") // Explicitly enable build cache
         .current_dir(&fixture_path)
         .env("GRADLE_USER_HOME", &gradle_home)
         .env("FABRIK_CONFIG_LOG_LEVEL", "info")

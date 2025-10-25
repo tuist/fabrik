@@ -72,7 +72,10 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
 
     // Inject build cache configuration via system properties
     // This sets the remote cache URL dynamically
-    gradle_cmd.arg(format!("-Dorg.gradle.caching.buildCache.remote.url={}", cache_url));
+    gradle_cmd.arg(format!(
+        "-Dorg.gradle.caching.buildCache.remote.url={}",
+        cache_url
+    ));
     gradle_cmd.arg("-Dorg.gradle.caching.buildCache.remote.push=true");
 
     // Set up stdio

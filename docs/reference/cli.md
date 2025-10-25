@@ -67,6 +67,74 @@ The `fabrik bazel` command:
 
 See the [Bazel integration guide](/build-systems/bazel) for more details.
 
+## `fabrik gradle`
+
+Wrapper for Gradle with automatic remote cache configuration.
+
+### Usage
+
+```bash
+fabrik gradle [OPTIONS] -- <GRADLE_ARGS>...
+```
+
+### Options
+
+| Option | Environment Variable | Description |
+|--------|---------------------|-------------|
+| `--config <PATH>` | - | Path to configuration file |
+| `--config-cache-dir <DIR>` | `TUIST_CONFIG_CACHE_DIR` | Cache directory path |
+| `--config-cache-max-size <SIZE>` | `TUIST_CONFIG_CACHE_MAX_SIZE` | Maximum cache size (e.g., "10GB") |
+| `--config-upstream <URL>` | `TUIST_CONFIG_UPSTREAM_0_URL` | Upstream cache URL |
+| `--config-jwt-token <TOKEN>` | `TUIST_CONFIG_AUTH_TOKEN` or `TUIST_TOKEN` | JWT authentication token |
+| `--config-gradle-port <PORT>` | `FABRIK_CONFIG_GRADLE_PORT` | Gradle HTTP server port (0 = random) |
+
+### Examples
+
+```bash
+# Basic usage (local cache only)
+fabrik gradle -- build
+
+# Build specific project
+fabrik gradle -- :app:build
+
+# Run tests
+fabrik gradle -- test
+
+# Clean and build
+fabrik gradle -- clean build
+
+# Build with configuration cache
+fabrik gradle -- build --configuration-cache
+
+# With upstream cache
+fabrik gradle --config-upstream http://cache.example.com:8080 -- build
+
+# With authentication
+fabrik gradle \
+  --config-upstream http://cache.example.com:8080 \
+  --config-jwt-token $TUIST_TOKEN \
+  -- build
+
+# Using configuration file
+fabrik gradle --config .fabrik.toml -- build
+
+# Custom cache directory and port
+fabrik gradle \
+  --config-cache-dir /tmp/gradle-cache \
+  --config-gradle-port 8080 \
+  -- :app:assemble
+```
+
+### How It Works
+
+The `fabrik gradle` command:
+1. Starts a local HTTP server implementing the Gradle Build Cache HTTP API
+2. Automatically injects cache URL via Gradle system properties
+3. Passes through all other Gradle arguments unchanged
+4. Handles graceful shutdown when Gradle exits
+
+See the [Gradle integration guide](/build-systems/gradle) for more details.
+
 ## `fabrik exec`
 
 Wrap a command with ephemeral cache (hot cache for CI/local builds).
