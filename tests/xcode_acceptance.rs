@@ -1,3 +1,6 @@
+// This entire test module is macOS-only since it requires Xcode and xcodebuild
+#![cfg(target_os = "macos")]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use tempfile::TempDir;
@@ -51,7 +54,6 @@ fn count_fabrik_cache_objects(cache_dir: &Path) -> usize {
 /// Full end-to-end test of the Xcode cache server workflow
 /// This test is only compiled and run on macOS since it requires Xcode and xcodebuild
 #[test]
-#[cfg(target_os = "macos")]
 fn test_xcode_cache_server_workflow() {
     // Setup temporary directories
     let fabrik_cache_dir = TempDir::new().expect("Failed to create temp dir for Fabrik cache");
