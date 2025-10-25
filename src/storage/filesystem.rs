@@ -1,59 +1,65 @@
 use super::{Storage, StorageStats};
 use anyhow::{Context, Result};
 use crossbeam_channel::{bounded, Sender};
-use r2d2::Pool;
-use r2d2_sqlite::SqliteConnectionManager;
-use rusqlite::{params, Connection};
-use rusqlite_migration::{Migrations, M};
+use rocksdb::{Options, DB};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::debug;
 
-/// Database migrations for the cache metadata
+/// RocksDB column families for metadata storage
 ///
-/// Migrations are run automatically on storage initialization.
-/// The migration version is tracked using SQLite's `user_version` pragma.
+/// Column families provide logical partitioning of data within RocksDB.
+/// We use separate column families for different types of metadata:
+/// - "default": Object metadata (size, timestamps, access count)
+/// - "index_accessed": Secondary index for accessed_at (for LRU eviction)
+/// - "index_access_count": Secondary index for access_count (for LFU eviction)
+const CF_DEFAULT: &str = "default";
+const CF_INDEX_ACCESSED: &str = "index_accessed";
+const CF_INDEX_ACCESS_COUNT: &str = "index_access_count";
+
+/// Metadata stored for each cached object in RocksDB
 ///
-/// ## Adding a new migration
-///
-/// To add a new migration, append a new `M::up()` to the vector:
-///
-/// ```ignore
-/// M::up("ALTER TABLE objects ADD COLUMN ttl INTEGER;"),
-/// ```
-///
-/// **Important**: Never modify existing migrations. Always add new ones to the end.
-///
-/// ## Example migration sequence
-///
-/// ```ignore
-/// vec![
-///     M::up("CREATE TABLE objects (...);"),           // Migration 1
-///     M::up("ALTER TABLE objects ADD COLUMN ttl;"),   // Migration 2
-///     M::up("CREATE INDEX idx_ttl ON objects(ttl);"), // Migration 3
-/// ]
-/// ```
-fn migrations() -> Migrations<'static> {
-    Migrations::new(vec![
-        // Migration 1: Initial schema
-        M::up(
-            "CREATE TABLE objects (
-                id BLOB PRIMARY KEY,
-                size INTEGER NOT NULL,
-                created_at INTEGER NOT NULL,
-                accessed_at INTEGER NOT NULL,
-                access_count INTEGER NOT NULL DEFAULT 0
-            );
-            CREATE INDEX idx_accessed_at ON objects(accessed_at);
-            CREATE INDEX idx_access_count ON objects(access_count);",
-        ),
-        // Future migrations go here:
-        // M::up("ALTER TABLE objects ADD COLUMN ttl INTEGER;"),
-    ])
+/// Format (binary encoding):
+/// - size: u64 (8 bytes)
+/// - created_at: i64 (8 bytes)
+/// - accessed_at: i64 (8 bytes)
+/// - access_count: u64 (8 bytes)
+/// Total: 32 bytes per object
+#[derive(Debug, Clone)]
+struct ObjectMetadata {
+    size: u64,
+    created_at: i64,
+    accessed_at: i64,
+    access_count: u64,
+}
+
+impl ObjectMetadata {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = Vec::with_capacity(32);
+        bytes.extend_from_slice(&self.size.to_le_bytes());
+        bytes.extend_from_slice(&self.created_at.to_le_bytes());
+        bytes.extend_from_slice(&self.accessed_at.to_le_bytes());
+        bytes.extend_from_slice(&self.access_count.to_le_bytes());
+        bytes
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<Self> {
+        if bytes.len() != 32 {
+            anyhow::bail!("Invalid metadata size: expected 32 bytes, got {}", bytes.len());
+        }
+
+        Ok(Self {
+            size: u64::from_le_bytes(bytes[0..8].try_into()?),
+            created_at: i64::from_le_bytes(bytes[8..16].try_into()?),
+            accessed_at: i64::from_le_bytes(bytes[16..24].try_into()?),
+            access_count: u64::from_le_bytes(bytes[24..32].try_into()?),
+        })
+    }
 }
 
 /// Message type for batched access tracking updates
@@ -63,74 +69,65 @@ struct TouchMessage {
     timestamp: i64,
 }
 
-/// Filesystem-based storage with SQLite metadata tracking
+/// Filesystem-based storage with RocksDB metadata tracking
 ///
 /// Layout:
 /// - `.fabrik/cache/objects/ab/cd1234...` - Content-addressed blob storage (first 2 chars = subdir)
-/// - `.fabrik/cache/metadata.db` - SQLite database for access tracking and eviction
+/// - `.fabrik/cache/metadata/` - RocksDB database for access tracking and eviction
 ///
 /// Optimizations:
-/// - Connection pool for concurrent database access
+/// - RocksDB provides concurrent reads/writes out of the box
 /// - Async batched access tracking (touch operations)
-/// - WAL mode for better read/write concurrency
+/// - Snappy compression for metadata
+/// - Column families for efficient indexing (LRU/LFU eviction)
 pub struct FilesystemStorage {
     objects_dir: PathBuf,
-    db_pool: Pool<SqliteConnectionManager>,
+    db: Arc<DB>,
     touch_sender: Sender<TouchMessage>,
 }
 
 impl FilesystemStorage {
     /// Create a new filesystem storage at the given cache directory
     ///
-    /// Runs database migrations to ensure the schema is up to date.
+    /// Opens RocksDB database with column families for metadata tracking.
     /// Spawns a background worker for batched access tracking.
     pub fn new<P: AsRef<Path>>(cache_dir: P) -> Result<Self> {
         let cache_dir = cache_dir.as_ref();
         let objects_dir = cache_dir.join("objects");
-        let db_path = cache_dir.join("metadata.db");
+        let db_path = cache_dir.join("metadata");
 
         // Create directories
         fs::create_dir_all(&objects_dir).context("Failed to create objects directory")?;
 
-        // Initialize database for migrations
-        let mut init_db = Connection::open(&db_path).context("Failed to open metadata database")?;
+        // Configure RocksDB options
+        let mut opts = Options::default();
+        opts.create_if_missing(true);
+        opts.create_missing_column_families(true);
 
-        // Enable WAL mode for better concurrency (multiple readers, single writer)
-        init_db
-            .pragma_update(None, "journal_mode", "WAL")
-            .context("Failed to enable WAL mode")?;
+        // Performance tuning
+        opts.set_compression_type(rocksdb::DBCompressionType::Snappy);
+        opts.increase_parallelism(num_cpus::get() as i32);
+        opts.set_max_background_jobs(4);
 
-        // Set busy timeout to 5 seconds to handle lock contention
-        init_db
-            .pragma_update(None, "busy_timeout", "5000")
-            .context("Failed to set busy timeout")?;
+        // Write buffer settings for better write performance
+        opts.set_write_buffer_size(64 * 1024 * 1024); // 64MB
+        opts.set_max_write_buffer_number(3);
 
-        // Run migrations
-        migrations()
-            .to_latest(&mut init_db)
-            .context("Failed to run database migrations")?;
+        // Open database with column families
+        let db = DB::open_cf(
+            &opts,
+            &db_path,
+            vec![CF_DEFAULT, CF_INDEX_ACCESSED, CF_INDEX_ACCESS_COUNT],
+        )
+        .context("Failed to open RocksDB database")?;
 
-        // Drop initial connection before creating pool
-        drop(init_db);
-
-        // Create connection pool (max 16 connections for high concurrency)
-        let manager = SqliteConnectionManager::file(&db_path).with_init(|conn| {
-            // Ensure WAL mode for all connections
-            conn.pragma_update(None, "journal_mode", "WAL")?;
-            conn.pragma_update(None, "busy_timeout", "5000")?;
-            Ok(())
-        });
-
-        let db_pool = Pool::builder()
-            .max_size(16)
-            .build(manager)
-            .context("Failed to create connection pool")?;
+        let db = Arc::new(db);
 
         // Create channel for async touch operations (buffered for batching)
         let (touch_sender, touch_receiver) = bounded::<TouchMessage>(1000);
 
         // Spawn background worker for batched access tracking
-        let pool_clone = db_pool.clone();
+        let db_clone = Arc::clone(&db);
         thread::spawn(move || {
             let mut batch = Vec::with_capacity(100);
             let batch_timeout = Duration::from_millis(100);
@@ -150,7 +147,7 @@ impl FilesystemStorage {
                         }
 
                         // Execute batch update
-                        if let Err(e) = Self::batch_touch(&pool_clone, &batch) {
+                        if let Err(e) = Self::batch_touch(&db_clone, &batch) {
                             debug!("Failed to batch update access tracking: {}", e);
                         }
 
@@ -159,7 +156,7 @@ impl FilesystemStorage {
                     Err(crossbeam_channel::RecvTimeoutError::Timeout) => {
                         // Flush any pending items on timeout
                         if !batch.is_empty() {
-                            if let Err(e) = Self::batch_touch(&pool_clone, &batch) {
+                            if let Err(e) = Self::batch_touch(&db_clone, &batch) {
                                 debug!("Failed to batch update access tracking: {}", e);
                             }
                             batch.clear();
@@ -168,7 +165,7 @@ impl FilesystemStorage {
                     Err(crossbeam_channel::RecvTimeoutError::Disconnected) => {
                         // Channel closed, flush and exit
                         if !batch.is_empty() {
-                            let _ = Self::batch_touch(&pool_clone, &batch);
+                            let _ = Self::batch_touch(&db_clone, &batch);
                         }
                         break;
                     }
@@ -178,31 +175,54 @@ impl FilesystemStorage {
 
         Ok(Self {
             objects_dir,
-            db_pool,
+            db,
             touch_sender,
         })
     }
 
     /// Batch update access tracking for multiple objects
-    fn batch_touch(pool: &Pool<SqliteConnectionManager>, batch: &[TouchMessage]) -> Result<()> {
+    fn batch_touch(db: &Arc<DB>, batch: &[TouchMessage]) -> Result<()> {
         if batch.is_empty() {
             return Ok(());
         }
 
-        let conn = pool.get().context("Failed to get database connection")?;
-
-        // Use a transaction for batched updates
-        let tx = conn.unchecked_transaction()?;
+        // Use RocksDB write batch for atomic updates
+        let mut write_batch = rocksdb::WriteBatch::default();
 
         for msg in batch {
-            tx.execute(
-                "UPDATE objects SET accessed_at = ?1, access_count = access_count + 1 WHERE id = ?2",
-                params![msg.timestamp, msg.id],
-            ).ok(); // Ignore errors for individual updates
+            // Get existing metadata
+            if let Some(existing_bytes) = db.get(&msg.id)? {
+                if let Ok(mut metadata) = ObjectMetadata::from_bytes(&existing_bytes) {
+                    // Update access tracking
+                    metadata.accessed_at = msg.timestamp;
+                    metadata.access_count += 1;
+
+                    // Write updated metadata
+                    write_batch.put(&msg.id, metadata.to_bytes());
+
+                    // Update secondary indexes (for efficient LRU/LFU queries)
+                    let cf_accessed = db
+                        .cf_handle(CF_INDEX_ACCESSED)
+                        .context("Failed to get CF_INDEX_ACCESSED handle")?;
+                    let cf_access_count = db
+                        .cf_handle(CF_INDEX_ACCESS_COUNT)
+                        .context("Failed to get CF_INDEX_ACCESS_COUNT handle")?;
+
+                    // Index key: timestamp + id (for range queries)
+                    let mut accessed_key = msg.timestamp.to_le_bytes().to_vec();
+                    accessed_key.extend_from_slice(&msg.id);
+
+                    let mut access_count_key = metadata.access_count.to_le_bytes().to_vec();
+                    access_count_key.extend_from_slice(&msg.id);
+
+                    write_batch.put_cf(cf_accessed, accessed_key, b"");
+                    write_batch.put_cf(cf_access_count, access_count_key, b"");
+                }
+            }
         }
 
-        tx.commit()
-            .context("Failed to commit batch touch transaction")?;
+        db.write(write_batch)
+            .context("Failed to write batch update")?;
         debug!("Batched {} access tracking updates", batch.len());
 
         Ok(())
@@ -249,20 +269,29 @@ impl Storage for FilesystemStorage {
         file.sync_all().context("Failed to sync file")?;
         fs::rename(&temp_path, &path).context("Failed to rename temp file")?;
 
-        // Update metadata using connection pool
+        // Update metadata in RocksDB
         let now = Self::current_timestamp();
-        let size = data.len() as i64;
-        let conn = self
-            .db_pool
-            .get()
-            .context("Failed to get database connection")?;
+        let size = data.len() as u64;
 
-        conn.execute(
-            "INSERT OR REPLACE INTO objects (id, size, created_at, accessed_at, access_count)
-             VALUES (?1, ?2, ?3, ?3, COALESCE((SELECT access_count FROM objects WHERE id = ?1), 0))",
-            params![id, size, now],
-        )
-        .context("Failed to update metadata")?;
+        // Check if object already exists to preserve access_count
+        let access_count = if let Some(existing_bytes) = self.db.get(id)? {
+            ObjectMetadata::from_bytes(&existing_bytes)
+                .map(|m| m.access_count)
+                .unwrap_or(0)
+        } else {
+            0
+        };
+
+        let metadata = ObjectMetadata {
+            size,
+            created_at: now,
+            accessed_at: now,
+            access_count,
+        };
+
+        self.db
+            .put(id, metadata.to_bytes())
+            .context("Failed to update metadata")?;
 
         Ok(())
     }
@@ -296,28 +325,16 @@ impl Storage for FilesystemStorage {
             fs::remove_file(&path).context("Failed to delete object")?;
         }
 
-        // Delete metadata
-        let conn = self
-            .db_pool
-            .get()
-            .context("Failed to get database connection")?;
-        conn.execute("DELETE FROM objects WHERE id = ?1", params![id])
-            .context("Failed to delete metadata")?;
+        // Delete metadata from RocksDB
+        self.db.delete(id).context("Failed to delete metadata")?;
 
         Ok(())
     }
 
     fn size(&self, id: &[u8]) -> Result<Option<u64>> {
-        let conn = self
-            .db_pool
-            .get()
-            .context("Failed to get database connection")?;
-        let mut stmt = conn.prepare("SELECT size FROM objects WHERE id = ?1")?;
-        let mut rows = stmt.query(params![id])?;
-
-        if let Some(row) = rows.next()? {
-            let size: i64 = row.get(0)?;
-            Ok(Some(size as u64))
+        if let Some(metadata_bytes) = self.db.get(id)? {
+            let metadata = ObjectMetadata::from_bytes(&metadata_bytes)?;
+            Ok(Some(metadata.size))
         } else {
             Ok(None)
         }
@@ -338,48 +355,36 @@ impl Storage for FilesystemStorage {
     }
 
     fn list_ids(&self) -> Result<Vec<Vec<u8>>> {
-        let conn = self
-            .db_pool
-            .get()
-            .context("Failed to get database connection")?;
-        let mut stmt = conn.prepare("SELECT id FROM objects")?;
-        let rows = stmt.query_map([], |row| {
-            let id: Vec<u8> = row.get(0)?;
-            Ok(id)
-        })?;
-
         let mut ids = Vec::new();
-        for id in rows {
-            ids.push(id?);
+        let iter = self.db.iterator(rocksdb::IteratorMode::Start);
+
+        for item in iter {
+            let (key, _) = item?;
+            ids.push(key.to_vec());
         }
 
         Ok(ids)
     }
 
     fn stats(&self) -> Result<StorageStats> {
-        let conn = self
-            .db_pool
-            .get()
-            .context("Failed to get database connection")?;
-        let mut stmt = conn.prepare("SELECT COUNT(*), COALESCE(SUM(size), 0) FROM objects")?;
-        let mut rows = stmt.query([])?;
+        let mut total_objects = 0u64;
+        let mut total_bytes = 0u64;
 
-        if let Some(row) = rows.next()? {
-            let total_objects: i64 = row.get(0)?;
-            let total_bytes: i64 = row.get(1)?;
+        let iter = self.db.iterator(rocksdb::IteratorMode::Start);
 
-            Ok(StorageStats {
-                total_objects: total_objects as u64,
-                total_bytes: total_bytes as u64,
-                cache_dir: self.objects_dir.parent().unwrap().to_path_buf(),
-            })
-        } else {
-            Ok(StorageStats {
-                total_objects: 0,
-                total_bytes: 0,
-                cache_dir: self.objects_dir.parent().unwrap().to_path_buf(),
-            })
+        for item in iter {
+            let (_, value) = item?;
+            if let Ok(metadata) = ObjectMetadata::from_bytes(&value) {
+                total_objects += 1;
+                total_bytes += metadata.size;
+            }
         }
+
+        Ok(StorageStats {
+            total_objects,
+            total_bytes,
+            cache_dir: self.objects_dir.parent().unwrap().to_path_buf(),
+        })
     }
 }
 
