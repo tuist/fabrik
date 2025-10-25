@@ -46,6 +46,9 @@ pub enum Commands {
     /// Wrap bazel with Fabrik cache enabled
     Bazel(BazelArgs),
 
+    /// Wrap gradle with Fabrik cache enabled
+    Gradle(GradleArgs),
+
     /// Wrap xcodebuild with Fabrik cache enabled (Unix only)
     #[cfg(unix)]
     Xcodebuild(XcodebuildArgs),
@@ -156,6 +159,20 @@ pub struct BazelArgs {
     /// Bazel arguments (e.g., build, test, //..., --config=release, etc.)
     #[arg(last = true, required = true)]
     pub bazel_args: Vec<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct GradleArgs {
+    #[command(flatten)]
+    pub common: CommonConfigArgs,
+
+    /// Gradle HTTP server port (0 = random)
+    #[arg(long, env = "FABRIK_CONFIG_GRADLE_PORT", default_value = "0")]
+    pub port: u16,
+
+    /// Gradle arguments (e.g., build, test, clean, --configuration-cache, etc.)
+    #[arg(last = true, required = true)]
+    pub gradle_args: Vec<String>,
 }
 
 #[cfg(unix)]
