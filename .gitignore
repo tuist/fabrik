@@ -21,6 +21,9 @@ bazel-*
 MODULE.bazel.lock
 .bazelrc.user
 
+# Tipi
+.tipi-home/
+
 # Gradle
 .gradle/
 build/

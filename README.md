@@ -39,7 +39,7 @@ Fabrik implements a three-tier caching strategy:
    - Remote Fabrik instances
    - Shared across team's machines
 
-3. **❄️ Cold Storage** - S3-backed permanent storage (~100ms)
+3. **❄️ Cold Cache** - S3-backed permanent storage (~100ms)
    - Always available
    - No eviction policy (permanent retention)
    - Unlimited capacity

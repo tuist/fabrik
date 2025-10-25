@@ -1,0 +1,9 @@
+# Tipi build artifacts
+.tipi-home/
+build/
+.tipi/build/
+
+# Generated binaries
+*.out
+a.out
+main

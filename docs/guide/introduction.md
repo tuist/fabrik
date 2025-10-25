@@ -37,6 +37,6 @@ Fabrik implements a three-tier caching strategy:
 
 1. 🔥 **Hot Cache** - Build-local, ultra-fast, lowest latency
 2. 🌡️ **Warm Cache** - Shared team cache, dedicated instances
-3. ❄️ **Cold Storage** - S3-backed permanent storage
+3. ❄️ **Cold Cache** - S3-backed permanent storage
 
 Cache misses automatically fall back to the next tier, and writes propagate through all configured layers.
