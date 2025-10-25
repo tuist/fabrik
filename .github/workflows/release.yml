@@ -133,10 +133,21 @@ jobs:
             PROTOC_ZIP="protoc-${PROTOC_VERSION}-win64.zip"
           fi
 
+          # Create target directory
+          mkdir -p $HOME/.local
+
+          # Download and extract
           curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}
-          unzip ${PROTOC_ZIP} -d $HOME/.local
+          unzip -q ${PROTOC_ZIP} -d $HOME/.local
+
+          # Add to PATH
           echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+          # Cleanup
           rm ${PROTOC_ZIP}
+
+          # Verify installation
+          ls -la $HOME/.local/bin/protoc*
 
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
