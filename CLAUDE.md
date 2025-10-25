@@ -221,10 +221,13 @@ Each build system requires different integration approaches based on how they ac
 ```bash
 # Instead of: bazel build //...
 # Use:
-fabrik bazel build //...
+fabrik bazel -- build //...
 
 # All bazel flags work as normal:
-fabrik bazel build //... --config=release --jobs=8
+fabrik bazel -- build //... --config=release --jobs=8
+
+# With custom cache directory:
+fabrik bazel --config-cache-dir=/custom/path -- build //...
 ```
 
 **Configuration:**
@@ -1002,7 +1005,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # Fabrik automatically detects GitHub Actions and uses cache API
-      - run: fabrik bazel build //...
+      - run: fabrik bazel -- build //...
         env:
           TUIST_TOKEN: ${{ secrets.TUIST_TOKEN }}  # Optional: for upstream cache
 ```
@@ -1017,7 +1020,7 @@ jobs:
 ```yaml
 build:
   script:
-    - fabrik bazel build //...
+    - fabrik bazel -- build //...
   variables:
     TUIST_TOKEN: $CI_TUIST_TOKEN
 ```
@@ -1028,7 +1031,7 @@ build:
 export TUIST_TOKEN=xxx
 
 # Just run - uses filesystem automatically
-fabrik bazel build //...
+fabrik bazel -- build //...
 ```
 
 #### Logging
@@ -1068,7 +1071,7 @@ port = 0  # Random port (default)
 
 ```bash
 # CI command (wrapper automatically injects --remote_cache):
-fabrik bazel build //...
+fabrik bazel -- build //...
 ```
 
 **Layer 1 (Local development):**
@@ -1088,9 +1091,9 @@ port = 0
 
 ```bash
 # Drop-in replacement for bazel:
-fabrik bazel build //...
-fabrik bazel test //...
-fabrik bazel build //... --config=release
+fabrik bazel -- build //...
+fabrik bazel -- test //...
+fabrik bazel -- build //... --config=release
 ```
 
 **Layer 2 (Regional server with S3 upstream):**
@@ -1182,7 +1185,7 @@ Fabrik checks both `FABRIK_CONFIG_*` and standard environment variables:
 
 1. **CI runner** runs:
    ```bash
-   fabrik bazel build //...
+   fabrik bazel -- build //...
    ```
 
 2. On cache miss:

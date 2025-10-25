@@ -20,6 +20,12 @@ export default defineConfig({
         ]
       },
       {
+        text: 'Build Systems',
+        items: [
+          { text: 'Xcode', link: '/build-systems/xcode' }
+        ]
+      },
+      {
         text: 'Reference',
         items: [
           { text: 'CLI Commands', link: '/reference/cli' },

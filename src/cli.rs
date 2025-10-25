@@ -43,6 +43,9 @@ pub enum Commands {
     /// Wrap a command with ephemeral cache server (Layer 1)
     Exec(ExecArgs),
 
+    /// Wrap bazel with Fabrik cache enabled
+    Bazel(BazelArgs),
+
     /// Wrap xcodebuild with Fabrik cache enabled (Unix only)
     #[cfg(unix)]
     Xcodebuild(XcodebuildArgs),
@@ -139,6 +142,20 @@ pub struct ExecArgs {
     /// Command to execute
     #[arg(last = true, required = true)]
     pub command: Vec<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct BazelArgs {
+    #[command(flatten)]
+    pub common: CommonConfigArgs,
+
+    /// Bazel gRPC server port (0 = random)
+    #[arg(long, env = "FABRIK_CONFIG_BAZEL_PORT", default_value = "0")]
+    pub port: u16,
+
+    /// Bazel arguments (e.g., build, test, //..., --config=release, etc.)
+    #[arg(last = true, required = true)]
+    pub bazel_args: Vec<String>,
 }
 
 #[cfg(unix)]

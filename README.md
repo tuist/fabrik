@@ -1,45 +1,38 @@
 # Fabrik
 
-Fabrik is the core infrastructure for build system caching and remote execution. Think of it as **Postgres to Supabase** - Fabrik provides the caching engine while the service layer manages deployment and multi-tenancy.
-
-> [!NOTE]
-> [Tuist](https://tuist.dev) provides managed hosting of Fabrik as a service, similar to how Supabase hosts Postgres.
+High-performance caching infrastructure for build systems.
 
 ## 🎯 Overview
 
-High-performance caching for build systems (Gradle, Bazel, Nx, TurboRepo, sccache) with transparent multi-layer fallback strategy:
+Fabrik provides transparent multi-layer caching for build systems (Gradle, Bazel, Nx, TurboRepo, sccache) with automatic fallback:
 
-### Three-Layer Caching Hierarchy
+### Multi-Layer Caching Strategy
 
-**🔥 Hot Layer (Layer 1): Local Cache**
-- Bound to build process lifecycle
-- Deployed automatically in CI environments
-- RocksDB for in-memory + disk caching
-- Closest to the build, lowest latency (<5ms)
-- Uses mounted volumes for persistence
+**🔥 Hot Cache**
+- In-process caching bound to the build lifecycle
+- Caches in local or mounted volumes
+- Automatically detects and uses CI caching capabilities (GitHub Actions Cache, etc.)
+- Lowest latency (<5ms)
 
-**🌡️ Warm Layer (Layer 2): Regional Cache**
-- Dedicated Fabrik instance per customer/project
-- Deployed in customer's preferred region by Tuist
-- RocksDB with mounted volumes
+**🌡️ Warm Cache**
+- Remote Fabrik instances
 - Shared across team's machines
 - Medium latency (~20ms)
 
-**❄️ Cold Layer (Layer 3): Tuist Server**
+**❄️ Cold Cache**
 - S3-backed permanent storage
-- Always available, managed by Tuist
+- Always available
 - No eviction policy (permanent retention)
-- Multi-tenant with object key prefixes
 - Higher latency (~100ms) but unlimited capacity
 
-**Transparent Fallback**: Cache misses automatically fall back to the next layer. Writes propagate through all configured layers.
+**Transparent Fallback**: Cache misses automatically fall back to the next configured layer. Writes propagate through all configured layers.
 
 ## ✨ Features
 
 - 🚀 **High Performance**: Sub-10ms p99 latency target
 - 🔒 **Secure**: JWT-based authentication (RS256)
 - 📦 **Multi-Protocol**: HTTP, gRPC, S3 API
-- 🗄️ **Smart Storage**: RocksDB + S3
+- 🗄️ **Smart Storage**: Efficient disk + in-memory caching with S3 backend
 - 📊 **Observable**: Health, Metrics, Cache Query, and Admin APIs
 - ⚙️ **Configurable**: CLI args > env vars > config file
 
@@ -68,12 +61,12 @@ cargo build --release
 
 ```bash
 # Bazel with automatic cache
-fabrik bazel build //...
+fabrik bazel -- build //...
 
 # Long-running daemon
 fabrik daemon
 
-# Regional server
+# Remote cache server
 fabrik server
 
 # Configuration management

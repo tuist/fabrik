@@ -1,5 +1,6 @@
 mod action_cache;
 mod cas;
+mod rpc_status;
 
 pub use action_cache::BazelActionCacheService;
 pub use cas::BazelCasService;
@@ -14,9 +15,10 @@ pub mod proto {
         tonic::include_proto!("google.bytestream");
     }
 
+    // Manual google.rpc module to avoid path issues
     pub mod google {
         pub mod rpc {
-            tonic::include_proto!("google.rpc");
+            pub use crate::bazel::rpc_status::Status;
         }
     }
 }

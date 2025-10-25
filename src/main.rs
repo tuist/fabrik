@@ -1,4 +1,5 @@
 mod api;
+mod bazel;
 mod cli;
 mod commands;
 mod config;
@@ -12,7 +13,8 @@ use tracing_subscriber::{fmt, EnvFilter};
 
 use cli::{Cli, Commands};
 
-fn main() -> Result<()> {
+#[tokio::main]
+async fn main() -> Result<()> {
     // Initialize logging
     let filter = EnvFilter::try_from_default_env()
         .or_else(|_| EnvFilter::try_new("info"))
@@ -26,6 +28,7 @@ fn main() -> Result<()> {
     // Dispatch to appropriate command handler
     match cli.command {
         Commands::Exec(args) => commands::exec::run(args),
+        Commands::Bazel(args) => commands::bazel::run_bazel(args).await,
         #[cfg(unix)]
         Commands::Xcodebuild(args) => commands::xcodebuild::run(args),
         Commands::Daemon(args) => commands::daemon::run(args),

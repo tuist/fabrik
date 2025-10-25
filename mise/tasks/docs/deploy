@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#MISE description="Build and deploy documentation site to Cloudflare Pages"
+
+set -euo pipefail
+
+# Non-interactive mode: Expect environment variables to be set
+# These can be set via:
+# - Direct export: export CLOUDFLARE_ACCOUNT_ID=xxx
+# - mise env: configured in .mise.toml
+# - fnox: mise exec -- fnox run -- mise run docs:deploy
+
+# Ensure required environment variables are set
+if [[ -z "${CLOUDFLARE_API_TOKEN:-}" ]] && [[ -z "${CLOUDFLARE_TOKEN:-}" ]]; then
+  echo "Error: CLOUDFLARE_API_TOKEN or CLOUDFLARE_TOKEN environment variable is not set"
+  echo "Set it with: export CLOUDFLARE_API_TOKEN=your_token"
+  echo "Or use fnox: mise exec -- fnox run -- mise run docs:deploy"
+  exit 1
+fi
+
+if [[ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]]; then
+  echo "Error: CLOUDFLARE_ACCOUNT_ID environment variable is not set"
+  echo "Set it with: export CLOUDFLARE_ACCOUNT_ID=your_account_id"
+  echo "Or use fnox: mise exec -- fnox run -- mise run docs:deploy"
+  exit 1
+fi
+
+echo "Building documentation site..."
+pnpm run docs:build
+
+echo "Deploying to Cloudflare Pages..."
+wrangler pages deploy docs/.vitepress/dist --project-name tuist-fabrik
+
+echo "Documentation deployed successfully!"

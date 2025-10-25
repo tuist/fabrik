@@ -1,6 +1,9 @@
 [settings]
 lockfile = true
 
+[env]
+FNOX_AGE_KEY_FILE = "/Users/pepicrft/.config/fnox/tuist-fabrik-age.txt"
+
 [tools]
 rust = "latest"
 git-cliff = "latest"
@@ -10,3 +13,8 @@ node = "24.10.0"
 pnpm = "latest"
 fnox = "latest"
 age = "latest"
+"npm:wrangler" = "latest"
+
+[tasks."docs:deploy-with-secrets"]
+description = "Deploy docs with secrets loaded from fnox"
+run = "fnox run -- mise run docs:deploy"
