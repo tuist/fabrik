@@ -84,7 +84,19 @@ jobs:
           shared-key: "test-${{ matrix.os }}"
           cache-on-failure: true
 
-      - name: Run tests
+      - name: Check GitHub Actions cache environment
+        shell: bash
+        run: |
+          echo "=== GitHub Actions Cache Environment Check ==="
+          echo "GITHUB_ACTIONS: ${GITHUB_ACTIONS:-not set}"
+          echo "ACTIONS_CACHE_URL: ${ACTIONS_CACHE_URL:-not set}"
+          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<present>}"
+          echo "=============================================="
+
+      - name: Run diagnostic test (show storage backend)
+        run: cargo test --all-features -- --nocapture test_detect_current_environment
+
+      - name: Run all tests
         run: cargo test --all-features
 
   build:

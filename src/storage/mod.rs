@@ -67,10 +67,19 @@ impl StorageBackend {
     where
         F: Fn(&str) -> Option<String>,
     {
+        // Log environment check for debugging
+        let has_cache_url = env_lookup("ACTIONS_CACHE_URL").is_some();
+        let has_runtime_token = env_lookup("ACTIONS_RUNTIME_TOKEN").is_some();
+
+        info!(
+            "Storage backend detection: ACTIONS_CACHE_URL={}, ACTIONS_RUNTIME_TOKEN={}",
+            has_cache_url, has_runtime_token
+        );
+
         // Check for GitHub Actions
         if GithubActionsStorage::is_available_with_env(&env_lookup) {
-            info!("Detected GitHub Actions environment (ACTIONS_CACHE_URL present)");
-            info!("Using storage backend: github-actions");
+            info!("✓ Detected GitHub Actions environment");
+            info!("✓ Using storage backend: github-actions");
 
             let cache_url = env_lookup("ACTIONS_CACHE_URL")
                 .ok_or_else(|| anyhow::anyhow!("ACTIONS_CACHE_URL not found"))?;
@@ -82,9 +91,10 @@ impl StorageBackend {
         }
 
         // Fallback to filesystem
-        info!("No CI environment detected");
-        info!("Using storage backend: filesystem");
-        info!("Cache directory: {}", cache_dir);
+        info!("✓ No CI environment detected (GITHUB_ACTIONS={})",
+              env_lookup("GITHUB_ACTIONS").unwrap_or_else(|| "false".to_string()));
+        info!("✓ Using storage backend: filesystem");
+        info!("✓ Cache directory: {}", cache_dir);
         let storage = FilesystemStorage::new(cache_dir)?;
         Ok(StorageBackend::Filesystem(storage))
     }
@@ -165,6 +175,28 @@ mod tests {
                 .unwrap();
 
         assert!(matches!(backend, StorageBackend::Filesystem(_)));
+    }
+
+    /// Test that prints the actual backend being used in the current environment
+    /// This is useful for verifying what backend is selected on CI
+    #[test]
+    fn test_detect_current_environment() {
+        let temp_dir = TempDir::new().unwrap();
+        let backend = StorageBackend::auto_detect(temp_dir.path().to_str().unwrap()).unwrap();
+
+        match backend {
+            StorageBackend::Filesystem(_) => {
+                println!("✓ Using Filesystem storage backend");
+                println!("  ACTIONS_CACHE_URL: {:?}", std::env::var("ACTIONS_CACHE_URL").ok());
+                println!("  ACTIONS_RUNTIME_TOKEN: {:?}", std::env::var("ACTIONS_RUNTIME_TOKEN").ok().map(|_| "<redacted>"));
+                println!("  GITHUB_ACTIONS: {:?}", std::env::var("GITHUB_ACTIONS").ok());
+            }
+            StorageBackend::GithubActions(_) => {
+                println!("✓ Using GitHub Actions storage backend");
+                println!("  ACTIONS_CACHE_URL: present");
+                println!("  ACTIONS_RUNTIME_TOKEN: present (redacted)");
+            }
+        }
     }
 
     #[test]
