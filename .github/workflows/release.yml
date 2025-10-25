@@ -119,6 +119,7 @@ jobs:
           OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
           if [[ "$OS" == "darwin" ]]; then
+            OS="osx"  # protoc uses 'osx' not 'darwin'
             PROTOC_ARCH=$(uname -m)
             if [[ "$PROTOC_ARCH" == "arm64" ]]; then
               PROTOC_ARCH="aarch_64"
