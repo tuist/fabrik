@@ -112,11 +112,31 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
-      - name: Install mise
-        uses: jdx/mise-action@v2
+      - name: Install protoc 28.3 (matching .mise.toml version)
+        shell: bash
+        run: |
+          PROTOC_VERSION=28.3
+          OS=$(uname -s | tr '[:upper:]' '[:lower:]')
 
-      - name: Install protoc via mise (skip rust - using dtolnay/rust-toolchain)
-        run: mise install protoc
+          if [[ "$OS" == "darwin" ]]; then
+            PROTOC_ARCH=$(uname -m)
+            if [[ "$PROTOC_ARCH" == "arm64" ]]; then
+              PROTOC_ARCH="aarch_64"
+            fi
+          elif [[ "$OS" == "linux" ]]; then
+            PROTOC_ARCH="x86_64"
+          else
+            # Windows
+            PROTOC_ARCH="x86_64"
+            OS="win64"
+          fi
+
+          PROTOC_ZIP="protoc-${PROTOC_VERSION}-${OS}-${PROTOC_ARCH}.zip"
+
+          curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}
+          unzip ${PROTOC_ZIP} -d $HOME/.local
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          rm ${PROTOC_ZIP}
 
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
