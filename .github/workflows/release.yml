@@ -113,6 +113,16 @@ jobs:
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
 
+      - name: Install protobuf compiler (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install protobuf
+
+      - name: Install protobuf compiler (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          choco install protoc
+
       - name: Build binary (Linux cross-compile)
         if: runner.os == 'Linux'
         run: |
