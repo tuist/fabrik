@@ -18,6 +18,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[cfg_attr(target_os = "windows", ignore = "Bazel has directory creation issues on Windows CI")]
 fn test_bazel_cache_integration() {
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
 
