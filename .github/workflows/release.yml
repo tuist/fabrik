@@ -108,20 +108,16 @@ jobs:
         with:
           targets: ${{ matrix.target }}
 
+      - name: Install mise
+        uses: jdx/mise-action@v2
+
+      - name: Install tools via mise (including protoc)
+        run: mise install
+
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
-
-      - name: Install protobuf compiler (macOS)
-        if: runner.os == 'macOS'
-        run: |
-          brew install protobuf
-
-      - name: Install protobuf compiler (Windows)
-        if: runner.os == 'Windows'
-        run: |
-          choco install protoc
 
       - name: Build binary (Linux cross-compile)
         if: runner.os == 'Linux'

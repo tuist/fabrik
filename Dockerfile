@@ -11,8 +11,17 @@ RUN apt-get update && \
     apt-get install -y \
     pkg-config \
     libssl-dev \
-    protobuf-compiler \
+    curl \
+    unzip \
     && rm -rf /var/lib/apt/lists/*
+
+# Install protoc 28.3 (same version as mise config)
+RUN PROTOC_VERSION=28.3 && \
+    PROTOC_ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch_64/') && \
+    curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip && \
+    unzip protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip -d /usr/local && \
+    rm protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip && \
+    chmod +x /usr/local/bin/protoc
 
 # Create a non-root user for building
 RUN useradd -m -u 1000 builder

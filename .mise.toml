@@ -2,3 +2,4 @@
 rust = "latest"
 git-cliff = "latest"
 bazel = "latest"
+protoc = "28.3"  # Protocol Buffers compiler (supports proto3 optional keyword)
