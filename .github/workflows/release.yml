@@ -140,8 +140,14 @@ jobs:
           curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/${PROTOC_ZIP}
           unzip -q ${PROTOC_ZIP} -d $HOME/.local
 
-          # Add to PATH
-          echo "$HOME/.local/bin" >> $GITHUB_PATH
+          # Add to PATH (convert to Windows format on Windows for PowerShell compatibility)
+          if [[ "$OS" == "mingw"* ]] || [[ "$OS" == "msys"* ]] || [[ "$(uname -o 2>/dev/null)" == "Msys" ]]; then
+            # Convert Unix path to Windows path for PowerShell
+            WINDOWS_PATH=$(cygpath -w "$HOME/.local/bin")
+            echo "$WINDOWS_PATH" >> $GITHUB_PATH
+          else
+            echo "$HOME/.local/bin" >> $GITHUB_PATH
+          fi
 
           # Cleanup
           rm ${PROTOC_ZIP}
