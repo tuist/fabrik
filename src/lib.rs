@@ -4,4 +4,4 @@
 pub mod storage;
 
 // Re-export commonly used types
-pub use storage::{Storage, StorageBackend};
+pub use storage::{create_storage, FilesystemStorage, Storage};

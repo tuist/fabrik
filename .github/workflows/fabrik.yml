@@ -84,19 +84,7 @@ jobs:
           shared-key: "test-${{ matrix.os }}"
           cache-on-failure: true
 
-      - name: Check GitHub Actions cache environment
-        shell: bash
-        run: |
-          echo "=== GitHub Actions Cache Environment Check ==="
-          echo "GITHUB_ACTIONS: ${GITHUB_ACTIONS:-not set}"
-          echo "ACTIONS_CACHE_URL: ${ACTIONS_CACHE_URL:-not set}"
-          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<present>}"
-          echo "=============================================="
-
-      - name: Run diagnostic test (show storage backend)
-        run: cargo test --all-features -- --nocapture test_detect_current_environment
-
-      - name: Run all tests
+      - name: Run tests
         run: cargo test --all-features
 
   build:
@@ -137,44 +125,3 @@ jobs:
 
       - name: Build
         run: cargo build --release --all-features
-
-  github-actions-cache-test:
-    name: GitHub Actions Cache Integration Test
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Install protobuf compiler
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
-
-      # Attempt to trigger ACTIONS_CACHE_URL and ACTIONS_RUNTIME_TOKEN
-      # FINDING: These variables are NOT exposed to workflow steps!
-      - name: Use actions/cache (attempt to enable env vars)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-gha-test-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-gha-test-
-
-      - name: Check ALL cache-related environment variables
-        run: |
-          echo "=== GitHub Actions Cache Environment Check ==="
-          echo "ACTIONS_CACHE_URL: ${ACTIONS_CACHE_URL:-NOT SET}"
-          echo "ACTIONS_RESULTS_URL: ${ACTIONS_RESULTS_URL:-NOT SET}"
-          echo "ACTIONS_RUNTIME_TOKEN: ${ACTIONS_RUNTIME_TOKEN:+<PRESENT>}"
-          echo "ACTIONS_RUNTIME_URL: ${ACTIONS_RUNTIME_URL:-NOT SET}"
-          echo "ACTIONS_CACHE_SERVICE_V2: ${ACTIONS_CACHE_SERVICE_V2:-NOT SET}"
-          echo "GITHUB_SERVER_URL: ${GITHUB_SERVER_URL:-NOT SET}"
-          echo "=================================================="
-
-      - name: Run integration test (will skip - no env vars)
-        run: cargo test --test github_actions_integration -- --nocapture
-        env:
-          RUST_LOG: info
