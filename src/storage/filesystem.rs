@@ -6,8 +6,8 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
-use std::thread;
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tracing::debug;
 
@@ -88,6 +88,7 @@ pub struct FilesystemStorage {
     objects_dir: PathBuf,
     db: Arc<DB>,
     touch_sender: Sender<TouchMessage>,
+    worker_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 impl FilesystemStorage {
@@ -135,7 +136,7 @@ impl FilesystemStorage {
 
         // Spawn background worker for batched access tracking
         let db_clone = Arc::clone(&db);
-        thread::spawn(move || {
+        let worker_handle = thread::spawn(move || {
             let mut batch = Vec::with_capacity(100);
             let batch_timeout = Duration::from_millis(100);
 
@@ -184,6 +185,7 @@ impl FilesystemStorage {
             objects_dir,
             db,
             touch_sender,
+            worker_handle: Arc::new(Mutex::new(Some(worker_handle))),
         })
     }
 
@@ -254,15 +256,28 @@ impl FilesystemStorage {
 
 impl Drop for FilesystemStorage {
     fn drop(&mut self) {
-        // Close the touch channel to signal background worker to exit
+        // Step 1: Close the touch channel to signal background worker to exit
         drop(self.touch_sender.clone());
 
-        // Wait a short time for the background worker to finish
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        // Step 2: Join the background worker thread to ensure it exits cleanly
+        if let Ok(mut handle_lock) = self.worker_handle.lock() {
+            if let Some(handle) = handle_lock.take() {
+                // Wait for the worker thread to finish (with timeout)
+                let _ = handle.join();
+            }
+        }
 
-        // Explicitly call cancel_all_background_work to ensure clean shutdown
-        // This prevents pthread lock errors on Linux
+        // Step 3: Flush any pending writes to ensure data consistency
+        if let Err(e) = self.db.flush() {
+            eprintln!("Warning: Failed to flush RocksDB on shutdown: {}", e);
+        }
+
+        // Step 4: Cancel all background work to ensure clean shutdown
+        // This is critical on Linux to avoid pthread lock errors
         self.db.cancel_all_background_work(true);
+
+        // Step 5: Give RocksDB background threads time to fully terminate
+        std::thread::sleep(std::time::Duration::from_millis(200));
     }
 }
 
