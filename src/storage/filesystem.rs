@@ -50,7 +50,10 @@ impl ObjectMetadata {
 
     fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() != 32 {
-            anyhow::bail!("Invalid metadata size: expected 32 bytes, got {}", bytes.len());
+            anyhow::bail!(
+                "Invalid metadata size: expected 32 bytes, got {}",
+                bytes.len()
+            );
         }
 
         Ok(Self {
