@@ -1,0 +1,49 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# GitHub
+.github
+
+# Build artifacts
+target/
+dist/
+*.tar.gz
+*.tar.xz
+*.tar.zst
+*.zip
+*.sha256
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Documentation
+README.md
+PLAN.md
+CLAUDE.md
+CHANGELOG.md
+LICENSE
+*.md
+
+# CI/CD
+.github/
+
+# Test files
+tests/
+tmp/
+
+# Development
+.fabrik/
+*.log
+
+# Configuration examples
+*.example.toml
+config.toml
