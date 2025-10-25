@@ -113,6 +113,9 @@ impl FilesystemStorage {
         opts.increase_parallelism(num_cpus::get() as i32);
         opts.set_max_background_jobs(4);
 
+        // Disable statistics to reduce overhead and potential shutdown issues
+        opts.set_statistics_level(rocksdb::statistics::StatsLevel::DisableAll);
+
         // Write buffer settings for better write performance
         opts.set_write_buffer_size(64 * 1024 * 1024); // 64MB
         opts.set_max_write_buffer_number(3);
@@ -246,6 +249,20 @@ impl FilesystemStorage {
             .duration_since(UNIX_EPOCH)
             .unwrap()
             .as_secs() as i64
+    }
+}
+
+impl Drop for FilesystemStorage {
+    fn drop(&mut self) {
+        // Close the touch channel to signal background worker to exit
+        drop(self.touch_sender.clone());
+
+        // Wait a short time for the background worker to finish
+        std::thread::sleep(std::time::Duration::from_millis(200));
+
+        // Explicitly call cancel_all_background_work to ensure clean shutdown
+        // This prevents pthread lock errors on Linux
+        self.db.cancel_all_background_work(true);
     }
 }
 
