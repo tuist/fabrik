@@ -22,6 +22,7 @@ WORKDIR /build
 # Copy dependency manifests first for better layer caching
 COPY --chown=builder:builder Cargo.toml Cargo.lock ./
 COPY --chown=builder:builder build.rs ./
+COPY --chown=builder:builder proto ./proto
 
 # Create dummy source to cache dependencies
 RUN mkdir -p src && \
@@ -35,7 +36,6 @@ RUN cargo build --release && \
 
 # Copy actual source code
 COPY --chown=builder:builder src ./src
-COPY --chown=builder:builder proto ./proto
 
 # Build the actual binary
 RUN cargo build --release --locked
