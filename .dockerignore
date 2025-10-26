@@ -6,7 +6,7 @@
 # GitHub
 .github
 
-# Build artifacts
+# Build artifacts (but NOT Cargo.lock - we need it!)
 target/
 dist/
 *.tar.gz
@@ -25,18 +25,18 @@ dist/
 # macOS
 .DS_Store
 
-# Documentation
+# Documentation (we don't need these in the image)
 README.md
 PLAN.md
 CLAUDE.md
 CHANGELOG.md
 LICENSE
-*.md
+docs/
 
 # CI/CD
 .github/
 
-# Test files
+# Test files (exclude to speed up context transfer)
 tests/
 tmp/
 
@@ -47,3 +47,8 @@ tmp/
 # Configuration examples
 *.example.toml
 config.toml
+
+# Docker files (don't copy into build context)
+Dockerfile
+.dockerignore
+docker-compose*.yml
