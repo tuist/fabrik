@@ -66,15 +66,7 @@ COPY --from=planner /build/recipe.json recipe.json
 # This is the key optimization - dependencies are cached across builds!
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,target=/build/target,sharing=locked \
-    cargo chef cook --release --recipe-path recipe.json && \
-    cp -r /build/target/release/deps /tmp/deps && \
-    cp -r /build/target/release/build /tmp/build
-
-# Restore cached dependency artifacts
-RUN mkdir -p /build/target/release && \
-    cp -r /tmp/deps /build/target/release/ && \
-    cp -r /tmp/build /build/target/release/
+    cargo chef cook --release --recipe-path recipe.json
 
 # Copy source code
 COPY Cargo.toml Cargo.lock ./
@@ -83,16 +75,13 @@ COPY proto ./proto
 COPY src ./src
 
 # Build the actual binary with all optimizations and cache mounts
-# Use lld linker for faster linking (2-3x faster than default ld)
 ENV CARGO_PROFILE_RELEASE_STRIP=symbols
 ENV CARGO_PROFILE_RELEASE_LTO=thin
-ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
+# Note: lld linker installed but not forced - cargo will use it if beneficial
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
-    --mount=type=cache,target=/build/target,sharing=locked \
-    cargo build --release --locked && \
-    cp /build/target/release/fabrik /tmp/fabrik
+    cargo build --release --locked
 
 # ============================================================================
 # Stage 4: Runtime
@@ -116,7 +105,7 @@ RUN mkdir -p /data/fabrik/cache && \
     chown -R fabrik:fabrik /data/fabrik
 
 # Copy the binary from builder
-COPY --from=builder /tmp/fabrik /usr/local/bin/fabrik
+COPY --from=builder /build/target/release/fabrik /usr/local/bin/fabrik
 
 # Set ownership
 RUN chmod +x /usr/local/bin/fabrik
