@@ -10,8 +10,9 @@ FROM rust:1.83-bookworm AS chef
 
 # Install cargo-chef from pre-built binary (much faster than compiling from source)
 # This saves 15-20 minutes of build time
+# Note: Avoid caching /var/lib/apt/lists to prevent issues with QEMU emulation in multi-platform builds
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y wget && \
     CARGO_CHEF_VERSION=0.1.68 && \
@@ -38,11 +39,11 @@ FROM chef AS planner
 
 # Install protoc 28.3 (needed for build.rs to run during planning)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    PROTOC_VERSION=28.3 && \
-    PROTOC_ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch_64/') && \
+    rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y curl unzip && \
+    PROTOC_VERSION=28.3 && \
+    PROTOC_ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch_64/') && \
     curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip && \
     unzip protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip -d /usr/local && \
     rm protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip && \
@@ -61,7 +62,7 @@ FROM chef AS builder
 
 # Install build dependencies with cache mount
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y \
     pkg-config \
@@ -72,8 +73,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     lld
 
 # Install protoc 28.3
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    PROTOC_VERSION=28.3 && \
+RUN PROTOC_VERSION=28.3 && \
     PROTOC_ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch_64/') && \
     curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip && \
     unzip protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip -d /usr/local && \
@@ -117,7 +117,7 @@ FROM debian:bookworm-slim AS runtime
 
 # Install runtime dependencies
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y \
     ca-certificates \
