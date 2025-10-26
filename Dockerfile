@@ -7,7 +7,28 @@
 # Stage 1: Chef Planner (generates dependency recipe)
 # ============================================================================
 FROM rust:1.83-bookworm AS chef
-RUN cargo install cargo-chef --locked
+
+# Install cargo-chef from pre-built binary (much faster than compiling from source)
+# This saves 15-20 minutes of build time
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y wget && \
+    CARGO_CHEF_VERSION=0.1.68 && \
+    ARCH=$(uname -m) && \
+    if [ "$ARCH" = "x86_64" ]; then \
+        CARGO_CHEF_ARCH="x86_64-unknown-linux-musl"; \
+    elif [ "$ARCH" = "aarch64" ]; then \
+        CARGO_CHEF_ARCH="aarch64-unknown-linux-musl"; \
+    else \
+        echo "Unsupported architecture: $ARCH" && exit 1; \
+    fi && \
+    wget -q "https://github.com/LukeMathWalker/cargo-chef/releases/download/v${CARGO_CHEF_VERSION}/cargo-chef-${CARGO_CHEF_ARCH}.tar.gz" && \
+    tar -xzf "cargo-chef-${CARGO_CHEF_ARCH}.tar.gz" && \
+    mv cargo-chef /usr/local/cargo/bin/ && \
+    rm "cargo-chef-${CARGO_CHEF_ARCH}.tar.gz" && \
+    cargo chef --version
+
 WORKDIR /build
 
 # ============================================================================
