@@ -9,7 +9,7 @@ Fabrik is the foundational infrastructure for build caching, designed to be depl
 
 Just as Supabase deploys and manages Postgres databases for customers, Tuist will deploy and manage Fabrik instances to provide build cache as a service. Fabrik is tenant-agnostic infrastructure; Tuist handles all customer logic, billing, and orchestration.
 
-Fabrik provides a transparent, high-performance caching hierarchy to optimize build performance across different environments, supporting build systems like Gradle, Bazel, Nx, TurboRepo, and compiler caches like sccache (Cargo/Rust), with planned support for Vite+ when available.
+Fabrik provides a transparent, high-performance caching hierarchy to optimize build performance across different environments, supporting any build tool with remote caching capabilities including build systems (Gradle, Bazel, Nx, TurboRepo), compiler caches (sccache for Cargo/Rust), container build tools (BuildKit), and more.
 
 ## Implementation Plan
 
@@ -76,28 +76,29 @@ From the developer's perspective, there are three transparent caching layers:
 **Key Design Decision: Build System Adapters + Unified Fabrik Protocol**
 
 **Two-Protocol Design:**
-1. **Build System Protocols** (Layer 1 only): Gradle HTTP, Bazel gRPC, sccache S3, etc.
+1. **Build Tool Protocols** (Layer 1 only): Gradle HTTP, Bazel gRPC, sccache S3, BuildKit registry, etc.
 2. **Fabrik Protocol** (inter-layer): Unified gRPC-based protocol for Layer 1 ↔ Layer 2 communication
 
 **Architecture Diagram:**
 
 ```
 ┌─────────────────────────────────────────────────────────┐
-│ Build Systems                                           │
+│ Build Tools                                             │
 │  - Gradle (HTTP API)                                    │
 │  - Bazel (gRPC API)                                     │
 │  - Nx/TurboRepo (HTTP API)                             │
 │  - sccache (S3 API)                                     │
+│  - BuildKit (Registry API)                              │
 └──────────────────┬──────────────────────────────────────┘
                    │
                    ▼
 ┌─────────────────────────────────────────────────────────┐
-│ Layer 1: Local Cache (Build System Adapters)           │
+│ Layer 1: Local Cache (Build Tool Adapters)             │
 │                                                         │
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐             │
-│  │ Gradle   │  │ Bazel    │  │ sccache  │             │
+│  │ Gradle   │  │ Bazel    │  │ BuildKit │             │
 │  │ Adapter  │  │ Adapter  │  │ Adapter  │             │
-│  │ (HTTP)   │  │ (gRPC)   │  │ (S3 API) │             │
+│  │ (HTTP)   │  │ (gRPC)   │  │ (Registry)│            │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘             │
 │       └────────────┬┴──────────────┘                   │
 │                    ▼                                    │
@@ -154,16 +155,16 @@ From the developer's perspective, there are three transparent caching layers:
 8. Layer 1 caches locally, returns to Gradle (HTTP)
 
 **Key Insights:**
-- **Layer 1**: Runs build system adapters, speaks Fabrik protocol to upstream
-- **Layer 2**: Only speaks Fabrik protocol (no build system knowledge)
-- **Build system independence**: Layer 2 doesn't care about Gradle vs Bazel
+- **Layer 1**: Runs build tool adapters, speaks Fabrik protocol to upstream
+- **Layer 2**: Only speaks Fabrik protocol (no build tool knowledge)
+- **Build tool independence**: Layer 2 doesn't care about Gradle vs Bazel vs BuildKit
 - **Simplified Layer 2**: Single protocol implementation, multi-tenant by default
 
 **Benefits:**
 - ✅ **Simpler Layer 2**: Only implements Fabrik protocol
-- ✅ **Easier to extend**: Add new build systems by writing Layer 1 adapters
+- ✅ **Easier to extend**: Add new build tools by writing Layer 1 adapters
 - ✅ **Efficient inter-layer**: gRPC for low latency and streaming
-- ✅ **Build system agnostic**: Layer 2 works with any build system
+- ✅ **Build tool agnostic**: Layer 2 works with any build tool
 
 ### Fabrik Protocol Specification
 
@@ -205,11 +206,11 @@ if response.exists {
 }
 ```
 
-### Build System Integration Strategy
+### Build Tool Integration Strategy
 
-**Approach: Build-Specific Wrappers**
+**Approach: Tool-Specific Wrappers**
 
-Each build system requires different integration approaches based on how they accept remote cache configuration:
+Each build tool requires different integration approaches based on how they accept remote cache configuration:
 
 **Bazel**: Uses command-line flags (`--remote_cache`), so Fabrik provides a wrapper command `fabrik bazel` that:
 1. Starts the Bazel gRPC adapter (ContentAddressableStorage + ActionCache)
@@ -446,19 +447,20 @@ Each Layer 2 instance is completely independent - no distributed consensus, no c
 - Local validation (microseconds)
 - Rich metadata in claims
 
-### Build System Authentication Support
+### Build Tool Authentication Support
 
-All target build systems natively support Bearer tokens or S3 credentials:
+All target build tools natively support Bearer tokens or S3 credentials:
 
-| Build System | Protocol | Auth Method | Environment Variable |
-|--------------|----------|-------------|----------------------|
+| Build Tool | Protocol | Auth Method | Environment Variable |
+|------------|----------|-------------|----------------------|
 | **Gradle** | HTTP | `Authorization: Bearer <token>` or Basic Auth | Custom or `ORG_GRADLE_PROJECT_*` |
 | **Bazel** | gRPC | `--remote_header=Authorization=Bearer $TOKEN` | `$TOKEN` (user-defined) |
 | **Nx** | HTTP | `Authorization: Bearer <token>` | `NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN` |
 | **TurboRepo** | HTTP | `Authorization: Bearer <token>` | `TURBO_TOKEN` |
 | **sccache** | S3 API | AWS credentials or custom endpoint | `SCCACHE_BUCKET`, `SCCACHE_ENDPOINT` |
+| **BuildKit** | Registry | `Authorization: Bearer <token>` | Docker registry auth |
 
-Fabrik must support HTTP, gRPC, and S3-compatible protocols to accommodate all build systems.
+Fabrik must support HTTP, gRPC, S3-compatible, and OCI registry protocols to accommodate all build tools.
 
 ## Analytics & Observability
 
@@ -805,7 +807,7 @@ for instance in fabrik_instances:
 - **Metrics**: `prometheus` crate for metrics exposition
 - **S3 client**: `aws-sdk-s3` or `rusoto_s3` for Layer 3 storage
 
-### Supported Build Systems (Initial Focus)
+### Supported Build Tools (Initial Focus)
 
 **Gradle** (HTTP REST API)
 - Protocol: HTTP with Basic Auth or Bearer token
@@ -841,7 +843,7 @@ for instance in fabrik_instances:
 - Expected to support HTTP-based remote cache protocol
 - Website: https://viteplus.dev (Currently in early access)
 
-**Protocol Support:** Fabrik must implement both HTTP and gRPC servers, plus S3-compatible API to support all build systems.
+**Protocol Support:** Fabrik must implement HTTP, gRPC, S3-compatible, and OCI registry APIs to support all build tools.
 
 ## Configuration
 
@@ -920,12 +922,12 @@ public_key_file = "/etc/fabrik/jwt-public-key.pem"
 key_refresh_interval = "5m"
 required = true
 
-# Build system adapters (Layer 1 only)
-[build_systems]
-enabled = ["gradle", "bazel", "nx", "turborepo", "sccache"]
+# Build tool adapters (Layer 1 only)
+[build_tools]
+enabled = ["gradle", "bazel", "nx", "turborepo", "sccache", "buildkit"]
 
 # Optional: Per-adapter configuration
-[build_systems.gradle]
+[build_tools.gradle]
 port = 0  # 0 = random port
 auto_configure = true  # Auto-set GRADLE_BUILD_CACHE_URL
 
@@ -1117,8 +1119,8 @@ public_key_file = "/etc/fabrik/jwt-public-key.pem"
 key_refresh_interval = "5m"
 required = true
 
-# Layer 2 doesn't run build system adapters
-[build_systems]
+# Layer 2 doesn't run build tool adapters
+[build_tools]
 enabled = []  # Empty - Layer 2 only speaks Fabrik protocol
 
 # Instead, run Fabrik protocol server

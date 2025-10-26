@@ -1,25 +1,25 @@
 # Fabrik
 
-Open-source, multi-layer build cache technology for modern build systems.
+Open-source, multi-layer build cache infrastructure for modern build tools.
 
 ## 🎯 What is Fabrik?
 
-Fabrik is a **technology to build** transparent, high-performance caching infrastructure for modern build systems. It can be deployed and customized to optimize build performance across different environments.
+Fabrik is a **technology to build** transparent, high-performance caching infrastructure for any build tool with remote caching capabilities. It can be deployed and customized to optimize build performance across different environments.
 
-**Think of it as:** The narrow waist between build systems and cache infrastructure—a minimal, universal interface that any build system can plug into, and any storage backend can support.
+**Think of it as:** The narrow waist between build tools and cache infrastructure—a minimal, universal interface that any build tool can plug into, and any storage backend can support.
 
 ## 🤔 Why Fabrik?
 
 The landscape of software development is transforming rapidly. With the rise of agentic coding and AI-assisted development, the amount of code we're producing is growing exponentially. As codebases expand, **sharing compile artifacts across environments has become more critical than ever.**
 
-Modern build systems—Gradle, Bazel, Nx, TurboRepo—are being designed with caching capabilities built-in. They understand the value of reusing work across builds, teams, and CI pipelines. But having the capability isn't enough. These build systems need **infrastructure** to unlock their full potential.
+Modern build tools—build systems like Gradle, Bazel, Nx, TurboRepo, compiler caches like sccache, and container build tools like BuildKit—are being designed with remote caching capabilities built-in. They understand the value of reusing work across builds, teams, and CI pipelines. But having the capability isn't enough. These tools need **infrastructure** to unlock their full potential.
 
 **Fabrik is the technology to build that infrastructure.**
 
 ## ✨ Key Features
 
 - 🔥 **Transparent Caching**: Three-tier caching hierarchy (hot, warm, cold) with automatic fallback
-- 🔧 **Multiple Build Systems**: Supports Xcode, Bazel, and Gradle
+- 🔧 **Universal Compatibility**: Supports any build tool with remote caching (Gradle, Bazel, Nx, TurboRepo, sccache, BuildKit, and more)
 - ⚡ **High Performance**: Built in Rust with RocksDB for ultra-low latency (<10ms p99)
 - 🎯 **Zero Configuration**: Automatically detects CI environments and uses their cache capabilities
 - 🌍 **Multi-Region**: Deploy dedicated instances in your preferred regions
