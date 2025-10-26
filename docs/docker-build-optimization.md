@@ -4,37 +4,25 @@ This document explains the optimizations applied to speed up Fabrik's Docker bui
 
 ## Quick Start
 
-### Option 1: Ultra-Fast Build (Recommended)
+### Recommended Build
 Uses BuildKit cache mounts for maximum speed:
 
 ```bash
-DOCKER_BUILDKIT=1 docker build -f Dockerfile.fast -t fabrik:latest .
+DOCKER_BUILDKIT=1 docker build -t fabrik:latest .
 ```
 
-Or use the provided script:
-
-```bash
-./scripts/docker-build.sh
-```
-
-### Option 2: Standard Build
-Works without BuildKit but slower:
-
-```bash
-docker build -t fabrik:latest .
-```
+**Note:** BuildKit is required for optimal performance. It's enabled by default in Docker 23.0+, or set `DOCKER_BUILDKIT=1` for older versions.
 
 ## Performance Comparison
 
 | Method | First Build | Subsequent Builds | Notes |
 |--------|-------------|-------------------|-------|
-| **Original** | ~20+ min | ~15-20 min | Timeout issues |
-| **Standard (cargo-chef)** | ~8-12 min | ~3-5 min | Good caching |
-| **Fast (BuildKit)** | ~8-12 min | ~1-3 min | Best performance |
+| **Before** | ~20+ min | ~15-20 min | Timeout issues |
+| **Optimized** | ~8-12 min | ~1-3 min | With BuildKit cache mounts |
 
 ## Key Optimizations Applied
 
-### 1. Cargo Chef (Both Dockerfiles)
+### 1. Cargo Chef
 
 **Problem:** Rust's incremental compilation doesn't work well in Docker because source code changes invalidate the entire dependency build.
 
@@ -59,7 +47,7 @@ RUN cargo build --release  # <-- Fast because deps are cached
 
 **Impact:** Dependencies are only rebuilt when `Cargo.toml` or `Cargo.lock` changes.
 
-### 2. BuildKit Cache Mounts (Dockerfile.fast only)
+### 2. BuildKit Cache Mounts
 
 **Problem:** Each Docker build downloads dependencies from scratch, even if they haven't changed.
 
@@ -151,7 +139,6 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: Dockerfile.fast
           push: false
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -168,7 +155,7 @@ build:
   variables:
     DOCKER_BUILDKIT: 1
   script:
-    - docker build -f Dockerfile.fast -t fabrik:latest .
+    - docker build -t fabrik:latest .
   cache:
     key: docker-cache
     paths:
@@ -207,7 +194,6 @@ For multi-platform builds:
 ```bash
 docker buildx build \
   --platform linux/amd64,linux/arm64 \
-  -f Dockerfile.fast \
   -t fabrik:latest \
   --push \
   .
@@ -235,7 +221,7 @@ This allows sharing compilation cache across multiple CI runners.
 
 ## Summary
 
-**Use `Dockerfile.fast` for best performance:**
+**The optimized Dockerfile provides:**
 - ✅ 10x faster subsequent builds
 - ✅ Minimal first-build overhead
 - ✅ Works with CI/CD caching

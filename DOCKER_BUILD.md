@@ -3,24 +3,14 @@
 ## TL;DR - Fast Builds
 
 ```bash
-# Fastest method (uses BuildKit cache mounts)
-./scripts/docker-build.sh
-
-# Or manually:
-DOCKER_BUILDKIT=1 docker build -f Dockerfile.fast -t fabrik:latest .
+# Recommended: Use BuildKit for fastest builds
+DOCKER_BUILDKIT=1 docker build -t fabrik:latest .
 ```
 
 **Expected times:**
 - First build: 8-12 minutes
 - Code changes only: 1-3 minutes
 - Dependency changes: 3-5 minutes
-
-## Available Dockerfiles
-
-| File | Use Case | Speed | Notes |
-|------|----------|-------|-------|
-| `Dockerfile.fast` | **Recommended** | ⚡⚡⚡ | Requires BuildKit, best caching |
-| `Dockerfile` | Standard | ⚡⚡ | Works everywhere, good caching |
 
 ## Requirements
 
@@ -57,4 +47,3 @@ See [docs/docker-build-optimization.md](./docs/docker-build-optimization.md) for
 ## Further Reading
 
 - [Complete optimization guide](./docs/docker-build-optimization.md)
-- [Build scripts documentation](./scripts/README.md)
