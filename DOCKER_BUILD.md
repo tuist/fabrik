@@ -22,8 +22,8 @@ DOCKER_BUILDKIT=1 docker build -t fabrik:latest .
 
 1. **cargo-chef**: Separates dependency building from application building
 2. **BuildKit cache mounts**: Shares cargo registry across builds
-3. **lld linker**: 2-3x faster linking than GNU ld
-4. **Thin LTO**: Balanced optimization vs build time
+3. **Disabled LTO**: Prevents build hangs (LTO can cause 30+ min builds)
+4. **Parallel codegen**: 16 codegen units for faster compilation
 5. **Symbol stripping**: Smaller binaries
 
 ## Common Issues

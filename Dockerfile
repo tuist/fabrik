@@ -64,8 +64,11 @@ COPY --from=planner /build/recipe.json recipe.json
 
 # Build dependencies with cache mounts for cargo registry and git repos
 # This is the key optimization - dependencies are cached across builds!
+# Disable LTO and optimize for faster builds (not runtime performance during deps build)
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \
+    CARGO_PROFILE_RELEASE_LTO=off \
+    CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
     cargo chef cook --release --recipe-path recipe.json
 
 # Copy source code
@@ -74,10 +77,13 @@ COPY build.rs ./
 COPY proto ./proto
 COPY src ./src
 
-# Build the actual binary with all optimizations and cache mounts
+# Build the actual binary with optimizations
+# LTO is disabled to prevent build hangs (minimal performance impact for a cache server)
+# Symbol stripping reduces binary size
+# More codegen units = faster compilation (slight runtime tradeoff)
 ENV CARGO_PROFILE_RELEASE_STRIP=symbols
-ENV CARGO_PROFILE_RELEASE_LTO=thin
-# Note: lld linker installed but not forced - cargo will use it if beneficial
+ENV CARGO_PROFILE_RELEASE_LTO=off
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
 
 RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
     --mount=type=cache,target=/usr/local/cargo/git,sharing=locked \

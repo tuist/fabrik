@@ -77,17 +77,20 @@ ENV RUSTFLAGS="-C link-arg=-fuse-ld=lld"
 
 **Impact:** Linking phase drops from ~30s to ~10s.
 
-### 4. Thin LTO
+### 4. Disabled LTO for Fast Builds
 
-**Problem:** Full LTO (Link-Time Optimization) is too slow for Docker builds.
+**Problem:** LTO (Link-Time Optimization) can cause builds to hang or take 30+ minutes in CI.
 
-**Solution:** Use thin LTO for a good speed/optimization balance:
+**Solution:** Disable LTO for faster, more reliable builds:
 
 ```dockerfile
-ENV CARGO_PROFILE_RELEASE_LTO=thin
+ENV CARGO_PROFILE_RELEASE_LTO=off
+ENV CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
 ```
 
-**Impact:** 10-20% faster linking with minimal performance loss.
+**Impact:** Builds complete in 8-12 minutes instead of hanging. Minimal runtime performance impact for a cache server.
+
+**Note:** For a cache server, compilation speed is more important than micro-optimizations. The performance difference is negligible in practice.
 
 ### 5. Symbol Stripping
 
