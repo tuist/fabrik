@@ -256,28 +256,40 @@ impl FilesystemStorage {
 
 impl Drop for FilesystemStorage {
     fn drop(&mut self) {
-        // Step 1: Close the touch channel to signal background worker to exit
-        drop(self.touch_sender.clone());
-
-        // Step 2: Join the background worker thread to ensure it exits cleanly
+        // Step 1: Join the background worker thread to ensure it exits cleanly
+        // Note: The channel will be closed automatically when all senders are dropped,
+        // which happens when this struct is dropped (self.touch_sender is dropped).
+        // We must join the thread BEFORE dropping self.touch_sender to avoid race conditions.
         if let Ok(mut handle_lock) = self.worker_handle.lock() {
             if let Some(handle) = handle_lock.take() {
-                // Wait for the worker thread to finish (with timeout)
+                // Drop the touch_sender before joining to signal the thread to exit
+                // Create a temporary scope to ensure sender is dropped
+                {
+                    // Move touch_sender out and drop it to close the channel
+                    let _sender = std::mem::replace(
+                        &mut self.touch_sender,
+                        bounded(0).0, // Replace with a dummy closed channel
+                    );
+                    // _sender drops here, closing the original channel
+                }
+
+                // Now wait for the worker thread to finish
                 let _ = handle.join();
             }
         }
 
-        // Step 3: Flush any pending writes to ensure data consistency
+        // Step 2: Flush any pending writes to ensure data consistency
         if let Err(e) = self.db.flush() {
             eprintln!("Warning: Failed to flush RocksDB on shutdown: {}", e);
         }
 
-        // Step 4: Cancel all background work to ensure clean shutdown
+        // Step 3: Cancel all background work to ensure clean shutdown
         // This is critical on Linux to avoid pthread lock errors
         self.db.cancel_all_background_work(true);
 
-        // Step 5: Give RocksDB background threads time to fully terminate
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        // Step 4: Give RocksDB background threads time to fully terminate
+        // Reduced to 50ms since we now properly wait for the worker thread
+        std::thread::sleep(std::time::Duration::from_millis(50));
     }
 }
 
