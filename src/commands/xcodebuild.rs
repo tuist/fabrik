@@ -10,7 +10,7 @@ use tracing::info;
 
 use crate::cli::XcodebuildArgs;
 use crate::config::FabrikConfig;
-use crate::storage;
+use crate::storage::{self, default_cache_dir};
 use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
 use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
 use crate::xcode::{CasService, KeyValueService};
@@ -22,16 +22,13 @@ struct MergedXcodebuildConfig {
 }
 
 impl MergedXcodebuildConfig {
-    fn merge(args: &XcodebuildArgs, file_config: Option<FabrikConfig>) -> Self {
-        let default_config = FabrikConfig::default();
-        let config = file_config.unwrap_or(default_config);
-
+    fn merge(args: &XcodebuildArgs, _file_config: Option<FabrikConfig>) -> Self {
         Self {
             cache_dir: args
                 .common
                 .config_cache_dir
                 .clone()
-                .unwrap_or_else(|| config.cache.dir.clone()),
+                .unwrap_or_else(|| default_cache_dir().display().to_string()),
         }
     }
 }
