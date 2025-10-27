@@ -55,6 +55,21 @@ Fabrik implements a three-tier caching strategy:
 
 ## 🚀 Installation
 
+### Docker
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/tuist/fabrik:latest
+
+# Or a specific version
+docker pull ghcr.io/tuist/fabrik:0.1.0
+
+# Run the server
+docker run -p 7070:7070 -p 8888:8888 -p 9091:9091 ghcr.io/tuist/fabrik:latest server
+```
+
+**Docker Registry**: [ghcr.io/tuist/fabrik](https://github.com/tuist/fabrik/pkgs/container/fabrik)
+
 ### Using Mise
 
 ```bash

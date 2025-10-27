@@ -307,6 +307,19 @@ jobs:
           # Keep only the grouped changes
           tail -n +2 RELEASE_NOTES.md > RELEASE_NOTES.tmp && mv RELEASE_NOTES.tmp RELEASE_NOTES.md
 
+          # Add Docker image information to release notes
+          echo "" >> RELEASE_NOTES.md
+          echo "## 🐳 Docker Image" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "Pull the Docker image from GitHub Container Registry:" >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo '```bash' >> RELEASE_NOTES.md
+          echo "docker pull ghcr.io/tuist/fabrik:${VERSION}" >> RELEASE_NOTES.md
+          echo "docker pull ghcr.io/tuist/fabrik:latest" >> RELEASE_NOTES.md
+          echo '```' >> RELEASE_NOTES.md
+          echo "" >> RELEASE_NOTES.md
+          echo "**Registry**: [ghcr.io/tuist/fabrik](https://github.com/tuist/fabrik/pkgs/container/fabrik)" >> RELEASE_NOTES.md
+
       - name: Create SHA256SUMS file
         run: |
           cd artifacts
