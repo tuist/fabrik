@@ -1,11 +1,14 @@
 use anyhow::Result;
+use std::sync::Arc;
 use tracing::info;
 
 use crate::cli::DaemonArgs;
 use crate::config::FabrikConfig;
+use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
+use crate::storage;
 
-pub fn run(args: DaemonArgs) -> Result<()> {
+pub async fn run(args: DaemonArgs) -> Result<()> {
     // Load config file if specified
     let file_config = if let Some(config_path) = &args.config {
         Some(FabrikConfig::from_file(config_path)?)
@@ -43,36 +46,19 @@ pub fn run(args: DaemonArgs) -> Result<()> {
     info!("  Cache directory: {}", config.cache_dir);
     info!("  Max cache size: {}", config.max_cache_size);
     info!("  Upstream: {:?}", config.upstream);
+    info!("  HTTP port: {}", config.http_port);
 
-    // Noop: In real implementation, would:
-    // 1. Check if daemon already running (via pid file)
-    // 2. Start local cache server (RocksDB)
-    // 3. Start HTTP/gRPC/S3 servers
-    // 4. Write PID file if requested
-    // 5. Create Unix socket for IPC if requested
-    // 6. Daemonize if --background flag set
-    // 7. Run until SIGTERM/SIGINT
+    // Initialize storage backend
+    let storage = storage::create_storage(&config.cache_dir)?;
+    let storage = Arc::new(storage);
 
-    println!("\n[NOOP] Would start daemon with:");
-    println!("  - Local cache at: {}", config.cache_dir);
-    println!("  - Max size: {}", config.max_cache_size);
-    println!("  - HTTP port: {}", config.http_port);
-    println!("  - gRPC port: {}", config.grpc_port);
-    println!("  - S3 port: {}", config.s3_port);
+    // Start HTTP server (for Metro, Gradle, Nx, TurboRepo, etc.)
+    let http_server = HttpServer::new(config.http_port, storage.clone());
 
-    if let Some(pid_file) = &args.pid_file {
-        println!("  - PID file: {}", pid_file);
-    }
+    info!("Starting HTTP cache server on port {}", config.http_port);
 
-    if let Some(socket) = &args.socket {
-        println!("  - Unix socket: {}", socket);
-    }
-
-    if args.background {
-        println!("\n[NOOP] Would daemonize process");
-    } else {
-        println!("\n[NOOP] Would run in foreground (press Ctrl+C to stop)");
-    }
+    // Run server (blocks until shutdown signal)
+    http_server.run().await?;
 
     Ok(())
 }

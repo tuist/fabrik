@@ -84,6 +84,7 @@ struct TouchMessage {
 /// - Async batched access tracking (touch operations)
 /// - Snappy compression for metadata
 /// - Column families for efficient indexing (LRU/LFU eviction)
+#[derive(Clone)]
 pub struct FilesystemStorage {
     objects_dir: PathBuf,
     db: Arc<DB>,

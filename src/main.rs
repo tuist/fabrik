@@ -4,6 +4,7 @@ mod cli;
 mod commands;
 mod config;
 mod gradle;
+mod http;
 mod logging;
 mod merger;
 mod storage;
@@ -29,7 +30,7 @@ async fn main() -> Result<()> {
         Commands::Gradle(args) => commands::gradle::run_gradle(args).await,
         #[cfg(unix)]
         Commands::Xcodebuild(args) => commands::xcodebuild::run(args).await,
-        Commands::Daemon(args) => commands::daemon::run(args),
+        Commands::Daemon(args) => commands::daemon::run(args).await,
         Commands::Server(args) => commands::server::run(*args).await,
         Commands::Config(args) => commands::config::run(args.command),
         Commands::Health(args) => commands::health::run(args),
