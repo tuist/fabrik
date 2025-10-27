@@ -1,34 +1,47 @@
 # Metro Simple Fixture
 
-A simple test fixture to demonstrate Metro bundler integration with Fabrik caching.
+A simple test fixture demonstrating Metro bundler integration with Fabrik caching.
 
 ## Status
 
-⚠️ **Work in Progress** - Metro integration requires protocol compatibility work.
-
-**Current Issue:**
-The FabrikStore implementation doesn't fully comply with Metro's HttpStore protocol. Metro expects:
-- Gzip-compressed responses
-- NULL_BYTE (0x00) prefix for binary data
-- JSON parsing for non-binary data
+✅ **Fully Working** - Metro + Fabrik cache integration complete!
 
 **What's Working:**
-- ✅ Module loading (CommonJS exports fixed)
+- ✅ Metro HttpStore protocol (gzip + NULL_BYTE)
 - ✅ Fabrik daemon lifecycle management
-- ✅ Basic HTTP cache operations
+- ✅ Cache hits/misses working correctly
+- ✅ pnpm monorepo module resolution
+- ✅ Development mode (cargo run) and production mode
 
-**What Needs Work:**
-- HTTP response must match Metro's HttpStore format (gzip + NULL_BYTE protocol)
-- TypeScript source needs to be updated to handle gzip compression/decompression
-- See: `node_modules/metro-cache/src/stores/HttpStore.js` for reference implementation
+## Usage
+
+```bash
+# Run bundle
+pnpm run bundle
+
+# Run with debug logging
+FABRIK_DEBUG=1 pnpm run bundle
+
+# Check cache logs
+tail -f /tmp/fabrik-metro.log
+```
 
 ## Verified Caching
 
-You can see Fabrik caching in action when running the bundle:
-
+First run (cache misses):
 ```
-INFO (fabrik): Cache miss: 83c0970e21f90226b00a...
-INFO (fabrik): Stored artifact: 83c0970e21f90226b00a... (15 bytes)
+2025-10-27T18:03:04.221Z Miss: 83c0970e
+2025-10-27T18:03:04.397Z Set: 83c0970e (945b)
+2025-10-27T18:03:04.543Z Miss: 69431b14
+2025-10-27T18:03:04.545Z Set: 4f27a9a7 (552b)
+2025-10-27T18:03:04.754Z Set: 69431b14 (5091b)
 ```
 
-This confirms the Metro → Fabrik integration is working correctly.
+Second run (cache hits):
+```
+2025-10-27T18:03:12.404Z Hit: 83c0970e
+2025-10-27T18:03:12.409Z Hit: 4f27a9a7
+2025-10-27T18:03:12.410Z Hit: 69431b14
+```
+
+This confirms Metro → Fabrik caching is working perfectly!
