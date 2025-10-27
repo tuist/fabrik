@@ -51,6 +51,22 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  test-metro:
+    name: Test Metro Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: jdx/mise-action@v2
+        with:
+          experimental: true
+
+      - name: Install dependencies
+        run: cd packages/metro && pnpm install
+
+      - name: Run tests
+        run: cd packages/metro && npm test
+
   test:
     name: Test
     runs-on: ${{ matrix.os }}

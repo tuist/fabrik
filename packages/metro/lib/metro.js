@@ -22,8 +22,10 @@ const DEV_MODE = existsSync(join(__dirname, '..', '..', '..', 'Cargo.toml'));
  * @param {boolean} [options.autoStart] - Auto-start daemon (default: true)
  * @param {number} [options.port] - Daemon port (default: 7070)
  * @param {string} [options.logLevel] - Log level (default: info)
+ * @param {Object} [options._inject] - Dependencies for testing (internal)
  */
 function FabrikStore(options = {}) {
+  const { _inject = {} } = options;
   const config = {
     cacheDir: options.cacheDir || process.env.FABRIK_CACHE_DIR || '/tmp/fabrik-cache',
     upstream: options.upstream || process.env.FABRIK_UPSTREAM,
@@ -38,10 +40,17 @@ function FabrikStore(options = {}) {
   let daemon = null;
   let startPromise = null;
 
+  // Dependency injection for testing
+  const fetchFn = _inject.fetch || fetch;
+  const spawnFn = _inject.spawn || spawn;
+  const existsFn = _inject.existsSync || existsSync;
+  const binaryPath = _inject.binaryPath || BINARY_PATH;
+  const devMode = _inject.devMode ?? DEV_MODE;
+
   // Validate binary exists in production mode
-  if (!DEV_MODE && !existsSync(BINARY_PATH)) {
+  if (!devMode && !existsFn(binaryPath)) {
     throw new Error(
-      `Fabrik binary not found at ${BINARY_PATH}. ` +
+      `Fabrik binary not found at ${binaryPath}. ` +
       `Run: npm install @tuist/fabrik --force`
     );
   }
@@ -52,7 +61,7 @@ function FabrikStore(options = {}) {
 
     // Check if already running
     try {
-      const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(1000) });
+      const res = await fetchFn(`${baseUrl}/health`, { signal: AbortSignal.timeout(1000) });
       if (res.ok) return;
     } catch {}
 
@@ -69,15 +78,15 @@ function FabrikStore(options = {}) {
       if (config.upstream) args.push('--config-upstream', config.upstream);
       if (config.token) args.push('--config-jwt-token', config.token);
 
-      if (DEV_MODE) {
+      if (devMode) {
         const repoRoot = join(__dirname, '..', '..', '..');
-        daemon = spawn('cargo', ['run', '--', ...args], {
+        daemon = spawnFn('cargo', ['run', '--', ...args], {
           detached: true,
           stdio: 'inherit',
           cwd: repoRoot,
         });
       } else {
-        daemon = spawn(BINARY_PATH, args, {
+        daemon = spawnFn(binaryPath, args, {
           detached: true,
           stdio: 'ignore',
         });
@@ -88,7 +97,7 @@ function FabrikStore(options = {}) {
       // Wait for ready
       for (let i = 0; i < 20; i++) {
         try {
-          const res = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(500) });
+          const res = await fetchFn(`${baseUrl}/health`, { signal: AbortSignal.timeout(500) });
           if (res.ok) return;
         } catch {}
         await new Promise(r => setTimeout(r, 300));
@@ -102,7 +111,7 @@ function FabrikStore(options = {}) {
     try {
       await ensureDaemon();
       const hash = key.toString('hex');
-      const res = await fetch(`${baseUrl}/api/v1/artifacts/${hash}`);
+      const res = await fetchFn(`${baseUrl}/api/v1/artifacts/${hash}`);
 
       if (!res.ok) {
         if (res.status === 404) {
@@ -133,7 +142,7 @@ function FabrikStore(options = {}) {
         : Buffer.from(JSON.stringify(value));
       const gzipped = await gzip(data, { level: 9 });
 
-      const res = await fetch(`${baseUrl}/api/v1/artifacts/${hash}`, {
+      const res = await fetchFn(`${baseUrl}/api/v1/artifacts/${hash}`, {
         method: 'PUT',
         body: gzipped,
         headers: { 'Content-Type': 'application/octet-stream' },
