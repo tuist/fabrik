@@ -1,9 +1,12 @@
 {
   "name": "@tuist/fabrik",
   "version": "0.1.0",
-  "description": "Metro cache store for Fabrik multi-layer build cache",
+  "description": "Fabrik multi-layer build cache - NPM integrations",
   "main": "lib/index.js",
   "type": "module",
+  "exports": {
+    "./metro": "./lib/metro.js"
+  },
   "scripts": {
     "test": "node --test test/**/*.test.js",
     "postinstall": "node scripts/download-binary.js"

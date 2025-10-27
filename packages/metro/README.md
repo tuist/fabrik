@@ -20,7 +20,7 @@ Configure Metro to use Fabrik as a cache store:
 
 ```javascript
 // metro.config.js
-const { FabrikStore } = require('@tuist/fabrik');
+const { FabrikStore } = require('@tuist/fabrik/metro');
 
 module.exports = {
   cacheStores: [

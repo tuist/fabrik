@@ -1,6 +1,6 @@
 import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
-import { createFabrikStore } from '../lib/index.js';
+import { createFabrikStore } from '../lib/metro.js';
 
 test('FabrikStore - creates store with default options', () => {
   const mockDeps = {

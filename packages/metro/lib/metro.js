@@ -117,6 +117,7 @@ function createFabrikStore(options = {}, deps = {}) {
         '--config-cache-dir', config.cacheDir,
         '--config-max-cache-size', config.maxSize,
         '--config-log-level', config.logLevel,
+        '--config-http-port', String(config.port),
       ];
 
       if (config.upstream) {
@@ -141,6 +142,7 @@ function createFabrikStore(options = {}, deps = {}) {
         '--config-cache-dir', config.cacheDir,
         '--config-max-cache-size', config.maxSize,
         '--config-log-level', config.logLevel,
+        '--config-http-port', String(config.port),
       ];
 
       if (config.upstream) {
