@@ -4,16 +4,23 @@ A simple test fixture to demonstrate Metro bundler integration with Fabrik cachi
 
 ## Status
 
-⚠️ **Work in Progress** - The Metro configuration needs refinement for the monorepo structure.
+⚠️ **Work in Progress** - Metro integration requires protocol compatibility work.
+
+**Current Issue:**
+The FabrikStore implementation doesn't fully comply with Metro's HttpStore protocol. Metro expects:
+- Gzip-compressed responses
+- NULL_BYTE (0x00) prefix for binary data
+- JSON parsing for non-binary data
 
 **What's Working:**
-- ✅ Fabrik cache integration (cache hits/misses logged)
-- ✅ HTTP daemon starts successfully
-- ✅ Cache operations (GET/PUT) working
-- ✅ Development mode using `cargo run`
+- ✅ Module loading (CommonJS exports fixed)
+- ✅ Fabrik daemon lifecycle management
+- ✅ Basic HTTP cache operations
 
 **What Needs Work:**
-- Metro module resolution in monorepo (Metro-specific issue, not Fabrik)
+- HTTP response must match Metro's HttpStore format (gzip + NULL_BYTE protocol)
+- TypeScript source needs to be updated to handle gzip compression/decompression
+- See: `node_modules/metro-cache/src/stores/HttpStore.js` for reference implementation
 
 ## Verified Caching
 
