@@ -65,10 +65,10 @@ jobs:
           cache: 'pnpm'
 
       - name: Install dependencies
-        run: cd packages/metro && pnpm install
+        run: pnpm install
 
-      - name: Run tests
-        run: cd packages/metro && npm test
+      - name: Run Metro tests
+        run: pnpm --filter @tuist/fabrik test
 
   test:
     name: Test
