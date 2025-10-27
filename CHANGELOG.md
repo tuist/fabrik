@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2025-10-27
+
+### 🐛 Bug Fixes
+
+- Use XDG-compliant cache directory for xcodebuild wrapper ([21f10c9](21f10c99b3e55f81c51e731fcb664283f759e79c))
+
+## [0.5.0] - 2025-10-27
+
+### 🚀 Features
+
+- Implement universal daemon with HTTP and gRPC servers ([1be3d12](1be3d122a34054dcbd2b49783b9583ae1b009c3c))
+
 ## [0.4.0] - 2025-10-27
 
 ### 🚀 Features
