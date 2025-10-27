@@ -2,11 +2,18 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gzip, gunzip } from 'node:zlib';
+import { promisify } from 'node:util';
+
+const gzipAsync = promisify(gzip);
+const gunzipAsync = promisify(gunzip);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const BINARY_PATH = join(__dirname, '..', 'bin', process.platform === 'win32' ? 'fabrik.exe' : 'fabrik');
+const NULL_BYTE = 0x00;
+const NULL_BYTE_BUFFER = Buffer.from([NULL_BYTE]);
 
 // Detect development mode: check if we're in a Cargo workspace
 function isDevMode() {
@@ -204,8 +211,27 @@ function createFabrikStore(options = {}, deps = {}) {
         throw new Error(`Failed to get from cache: ${response.statusText}`);
       }
 
+      // Metro stores data as gzipped, Fabrik returns it as-is
       const arrayBuffer = await response.arrayBuffer();
-      return Buffer.from(arrayBuffer);
+      const gzippedBuffer = Buffer.from(arrayBuffer);
+
+      try {
+        // Try to gunzip (Metro's HttpStore sends gzipped data)
+        const buffer = await gunzipAsync(gzippedBuffer);
+
+        // Check for NULL_BYTE prefix (indicates raw buffer vs JSON)
+        if (buffer.length > 0 && buffer[0] === NULL_BYTE) {
+          // Raw buffer - strip NULL_BYTE prefix
+          return buffer.slice(1);
+        } else {
+          // JSON data - parse and return
+          return JSON.parse(buffer.toString('utf8'));
+        }
+      } catch (gunzipError) {
+        // Data is not gzipped (shouldn't happen with Metro, but handle gracefully)
+        // Assume it's raw buffer data
+        return gzippedBuffer;
+      }
     } catch (error) {
       console.warn(`Fabrik cache get failed:`, error?.message);
       return null;
@@ -220,9 +246,23 @@ function createFabrikStore(options = {}, deps = {}) {
       await ensureDaemon();
 
       const hash = key.toString('hex');
+
+      // Prepare data according to Metro's HttpStore protocol
+      let dataToCompress;
+      if (Buffer.isBuffer(value)) {
+        // For buffers: prepend NULL_BYTE, then gzip
+        dataToCompress = Buffer.concat([NULL_BYTE_BUFFER, value]);
+      } else {
+        // For non-buffers (objects): JSON stringify, then gzip
+        dataToCompress = Buffer.from(JSON.stringify(value), 'utf8');
+      }
+
+      // Gzip the data
+      const gzippedData = await gzipAsync(dataToCompress, { level: 9 });
+
       const response = await fetchFn(`${baseUrl}/api/v1/artifacts/${hash}`, {
         method: 'PUT',
-        body: value,
+        body: gzippedData,
         headers: {
           'Content-Type': 'application/octet-stream',
         },
