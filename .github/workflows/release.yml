@@ -274,9 +274,41 @@ jobs:
           build-args: |
             VERSION=${{ needs.check-release.outputs.new_version }}
 
+  npm-publish:
+    name: Publish to NPM
+    needs: [check-release, build]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Update package version
+        run: |
+          cd packages/metro
+          npm version ${{ needs.check-release.outputs.new_version }} --no-git-tag-version
+
+      - name: Publish to NPM
+        run: |
+          cd packages/metro
+          npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
   create-release:
     name: Create GitHub Release
-    needs: [check-release, build, docker]
+    needs: [check-release, build, docker, npm-publish]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
