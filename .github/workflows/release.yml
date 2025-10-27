@@ -292,6 +292,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: artifacts
+          pattern: fabrik-*
           merge-multiple: true
 
       - name: Generate changelog
