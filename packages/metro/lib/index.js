@@ -8,6 +8,15 @@ const __dirname = dirname(__filename);
 
 const BINARY_PATH = join(__dirname, '..', 'bin', process.platform === 'win32' ? 'fabrik.exe' : 'fabrik');
 
+// Detect development mode: check if we're in a Cargo workspace
+function isDevMode() {
+  // Check if Cargo.toml exists in parent directories (we're in the Fabrik repo)
+  const repoRoot = join(__dirname, '..', '..', '..');
+  return existsSync(join(repoRoot, 'Cargo.toml'));
+}
+
+const DEV_MODE = isDevMode();
+
 /**
  * Create a Fabrik cache store for Metro
  *
@@ -41,10 +50,11 @@ function createFabrikStore(options = {}, deps = {}) {
     spawn: spawnFn = spawn,
     existsSync: existsSyncFn = existsSync,
     binaryPath = BINARY_PATH,
+    devMode = DEV_MODE,
   } = deps;
 
-  // Check if binary exists
-  if (!existsSyncFn(binaryPath)) {
+  // Check if binary exists (skip in dev mode, we'll use cargo run)
+  if (!devMode && !existsSyncFn(binaryPath)) {
     throw new Error(
       `Fabrik binary not found at ${binaryPath}.\n` +
       `The postinstall script may have failed. Try reinstalling:\n` +
@@ -52,6 +62,10 @@ function createFabrikStore(options = {}, deps = {}) {
       `Or install Fabrik manually:\n` +
       `  mise use -g ubi:tuist/fabrik`
     );
+  }
+
+  if (devMode) {
+    console.log('[Fabrik Metro] Development mode detected - will use cargo run');
   }
 
   let daemon = null;
@@ -89,25 +103,59 @@ function createFabrikStore(options = {}, deps = {}) {
    * Start the Fabrik daemon
    */
   async function startDaemon() {
-    const args = [
-      'daemon',
-      '--config-cache-dir', config.cacheDir,
-      '--config-max-cache-size', config.maxSize,
-      '--config-log-level', config.logLevel,
-    ];
+    let command;
+    let args;
 
-    if (config.upstream) {
-      args.push('--config-upstream', config.upstream);
+    if (devMode) {
+      // Development mode: use cargo run
+      const repoRoot = join(__dirname, '..', '..', '..');
+      command = 'cargo';
+      args = [
+        'run',
+        '--',
+        'daemon',
+        '--config-cache-dir', config.cacheDir,
+        '--config-max-cache-size', config.maxSize,
+        '--config-log-level', config.logLevel,
+      ];
+
+      if (config.upstream) {
+        args.push('--config-upstream', config.upstream);
+      }
+
+      if (config.token) {
+        args.push('--config-jwt-token', config.token);
+      }
+
+      console.log('[Fabrik Metro] Starting daemon with: cargo run -- daemon ...');
+
+      daemon = spawnFn(command, args, {
+        detached: true,
+        stdio: 'inherit', // Show output in dev mode
+        cwd: repoRoot,
+      });
+    } else {
+      // Production mode: use downloaded binary
+      args = [
+        'daemon',
+        '--config-cache-dir', config.cacheDir,
+        '--config-max-cache-size', config.maxSize,
+        '--config-log-level', config.logLevel,
+      ];
+
+      if (config.upstream) {
+        args.push('--config-upstream', config.upstream);
+      }
+
+      if (config.token) {
+        args.push('--config-jwt-token', config.token);
+      }
+
+      daemon = spawnFn(binaryPath, args, {
+        detached: true,
+        stdio: 'ignore',
+      });
     }
-
-    if (config.token) {
-      args.push('--config-jwt-token', config.token);
-    }
-
-    daemon = spawnFn(binaryPath, args, {
-      detached: true,
-      stdio: 'ignore',
-    });
 
     daemon.unref();
 

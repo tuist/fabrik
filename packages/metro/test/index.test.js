@@ -22,18 +22,19 @@ test('FabrikStore - creates store with default options', () => {
   assert.equal(typeof store.stop, 'function', 'Should have stop method');
 });
 
-test('FabrikStore - throws if binary not found', () => {
+test('FabrikStore - throws if binary not found (production mode)', () => {
   const mockDeps = {
     existsSync: () => false, // Binary doesn't exist
     fetch: mock.fn(),
     spawn: mock.fn(),
     binaryPath: '/fake/path/fabrik',
+    devMode: false, // Force production mode
   };
 
   assert.throws(
     () => createFabrikStore({}, mockDeps),
     /Fabrik binary not found/,
-    'Should throw error when binary not found'
+    'Should throw error when binary not found in production'
   );
 });
 

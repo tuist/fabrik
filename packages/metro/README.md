@@ -91,6 +91,33 @@ new FabrikStore({
 });
 ```
 
+## Development Mode
+
+When developing Fabrik itself, the package automatically detects if it's running in the Fabrik repository and uses `cargo run` instead of the downloaded binary.
+
+**Detection:** Checks for `Cargo.toml` in parent directories
+
+**Behavior in dev mode:**
+- Uses `cargo run -- daemon` instead of binary
+- Shows daemon output (`stdio: 'inherit'`)
+- No binary download required
+- Compiles Rust code on-the-fly
+
+This allows you to:
+1. Make changes to Fabrik's Rust code
+2. Test Metro integration immediately
+3. See daemon logs for debugging
+
+## Testing
+
+Run the test suite:
+
+```bash
+pnpm test
+```
+
+Tests use Node's built-in test runner and dependency injection for mocking.
+
 ## License
 
 MPL-2.0
