@@ -2,12 +2,10 @@
   "name": "@fabrik/metro",
   "version": "0.1.0",
   "description": "Metro cache store for Fabrik multi-layer build cache",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "type": "commonjs",
+  "main": "lib/index.js",
+  "type": "module",
   "scripts": {
-    "build": "tsc",
-    "prepublishOnly": "npm run build",
+    "test": "node --test test/**/*.test.js",
     "postinstall": "node scripts/download-binary.js"
   },
   "keywords": [
@@ -25,14 +23,6 @@
   "license": "MPL-2.0",
   "peerDependencies": {
     "metro-cache": ">=0.80.0"
-  },
-  "dependencies": {
-    "execa": "^9.5.2",
-    "node-fetch": "^3.3.2"
-  },
-  "devDependencies": {
-    "@types/node": "^22.10.2",
-    "typescript": "^5.7.2"
   },
   "engines": {
     "node": ">=18.0.0"

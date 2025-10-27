@@ -1,11 +1,14 @@
 #!/usr/bin/env node
-const { existsSync, mkdirSync, chmodSync } = require('node:fs');
-const { join } = require('node:path');
-const { execSync } = require('node:child_process');
+import { existsSync, mkdirSync, chmodSync, readFileSync } from 'node:fs';
+import { join, dirname } from 'node:path';
+import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const PACKAGE_ROOT = join(__dirname, '..');
 const BIN_DIR = join(PACKAGE_ROOT, 'bin');
-const BINARY_PATH = join(BIN_DIR, 'fabrik');
 
 // Get platform and architecture
 const PLATFORM_MAP = {
@@ -39,7 +42,7 @@ if (existsSync(finalBinaryPath)) {
 
 // Get version from package.json
 const packageJson = JSON.parse(
-  execSync('cat package.json', { cwd: PACKAGE_ROOT, encoding: 'utf-8' })
+  readFileSync(join(PACKAGE_ROOT, 'package.json'), 'utf-8')
 );
 const version = packageJson.version;
 

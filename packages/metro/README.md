@@ -24,7 +24,7 @@ const { FabrikStore } = require('@fabrik/metro');
 
 module.exports = {
   cacheStores: [
-    new FabrikStore({
+    FabrikStore({
       // Optional: Local cache directory
       cacheDir: '.fabrik/cache',
 
