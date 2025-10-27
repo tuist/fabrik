@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0] - 2025-10-27
+
+### 🚀 Features
+
+- Add @fabrik/metro NPM package for Metro bundler integration ([752b03b](752b03b1d342b0967e9d77d19b2cd6d67e16c4e0))
+- Add development mode to @fabrik/metro using cargo run ([0adc976](0adc97610d718ac088ad931fa03ac644c2b8e60a))
+
+### 🚜 Refactor
+
+- Convert @fabrik/metro to vanilla JS with dependency injection ([bc8160f](bc8160fc8ebe646b0b559d3d310f3f5090eb05e4))
+
 ## [0.2.2] - 2025-10-27
 
 ### 📚 Documentation
