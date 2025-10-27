@@ -10,11 +10,11 @@ FROM rust:1.83-bookworm AS chef
 
 # Install cargo-chef from pre-built binary (much faster than compiling from source)
 # This saves 15-20 minutes of build time
-# Note: Avoid caching /var/lib/apt/lists to prevent issues with QEMU emulation in multi-platform builds
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    rm -rf /var/lib/apt/lists/* && \
+# Note: No cache mount here to prevent QEMU emulation issues in multi-platform builds
+RUN rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y wget && \
+    rm -rf /var/lib/apt/lists/* && \
     CARGO_CHEF_VERSION=0.1.68 && \
     ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then \
@@ -38,10 +38,11 @@ WORKDIR /build
 FROM chef AS planner
 
 # Install protoc 28.3 (needed for build.rs to run during planning)
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    rm -rf /var/lib/apt/lists/* && \
+# Note: No cache mount here to prevent QEMU emulation issues in multi-platform builds
+RUN rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y curl unzip && \
+    rm -rf /var/lib/apt/lists/* && \
     PROTOC_VERSION=28.3 && \
     PROTOC_ARCH=$(uname -m | sed 's/x86_64/x86_64/;s/aarch64/aarch_64/') && \
     curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-${PROTOC_ARCH}.zip && \
@@ -60,9 +61,9 @@ RUN cargo chef prepare --recipe-path recipe.json
 # ============================================================================
 FROM chef AS builder
 
-# Install build dependencies with cache mount
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    rm -rf /var/lib/apt/lists/* && \
+# Install build dependencies
+# Note: No cache mount here to prevent QEMU emulation issues in multi-platform builds
+RUN rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y \
     pkg-config \
@@ -70,7 +71,8 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl \
     unzip \
     clang \
-    lld
+    lld && \
+    rm -rf /var/lib/apt/lists/*
 
 # Install protoc 28.3
 RUN PROTOC_VERSION=28.3 && \
@@ -116,13 +118,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 FROM debian:bookworm-slim AS runtime
 
 # Install runtime dependencies
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    rm -rf /var/lib/apt/lists/* && \
+# Note: No cache mount here to prevent QEMU emulation issues in multi-platform builds
+RUN rm -rf /var/lib/apt/lists/* && \
     apt-get update && \
     apt-get install -y \
     ca-certificates \
-    libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+    libssl3 && \
+    rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user for running the application
 RUN useradd -m -u 1000 -s /bin/bash fabrik
