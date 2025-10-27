@@ -24,7 +24,7 @@ const { FabrikStore } = require('@tuist/fabrik/metro');
 
 module.exports = {
   cacheStores: [
-    FabrikStore({
+    new FabrikStore({
       // Optional: Local cache directory
       cacheDir: '.fabrik/cache',
 
@@ -59,28 +59,6 @@ Metro's cache is **shared** with other build tools using Fabrik:
 
 All build tools share the same RocksDB storage, maximizing cache efficiency.
 
-## Example: React Native Project
-
-```javascript
-// metro.config.js
-const { FabrikStore } = require('@tuist/fabrik/metro');
-const { getDefaultConfig } = require('@react-native/metro-config');
-
-module.exports = (async () => {
-  const config = await getDefaultConfig(__dirname);
-
-  return {
-    ...config,
-    cacheStores: [
-      FabrikStore({
-        cacheDir: '.fabrik/cache',
-        maxSize: '2GB',
-      }),
-    ],
-  };
-})();
-```
-
 ## API
 
 The Fabrik daemon exposes an HTTP cache API that Metro uses:
@@ -88,23 +66,3 @@ The Fabrik daemon exposes an HTTP cache API that Metro uses:
 - `GET /api/v1/artifacts/{hash}` - Retrieve cached artifact
 - `PUT /api/v1/artifacts/{hash}` - Store artifact
 - `GET /health` - Health check
-
-## Troubleshooting
-
-### Binary not found
-
-If you see "Fabrik binary not found", try:
-
-```bash
-npm install @tuist/fabrik --force
-```
-
-### Cache not working
-
-Verify the daemon is running:
-
-```bash
-curl http://localhost:7070/health
-```
-
-Should return `OK`.
