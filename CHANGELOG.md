@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2025-10-27
+
+### 🚀 Features
+
+- Implement HTTP cache server for Metro and Gradle ([50d057a](50d057a69d0393b90e298b5056f71c1560a678fd))
+
 ## [0.3.0] - 2025-10-27
 
 ### 🚀 Features
