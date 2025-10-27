@@ -8,7 +8,7 @@
     "dev": "metro serve"
   },
   "dependencies": {
-    "@fabrik/metro": "workspace:*",
+    "@tuist/fabrik": "workspace:*",
     "metro": "^0.81.0",
     "metro-config": "^0.81.0"
   }

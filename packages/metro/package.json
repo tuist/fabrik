@@ -1,5 +1,5 @@
 {
-  "name": "@fabrik/metro",
+  "name": "@tuist/fabrik",
   "version": "0.1.0",
   "description": "Metro cache store for Fabrik multi-layer build cache",
   "main": "lib/index.js",

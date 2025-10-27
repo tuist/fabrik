@@ -16,7 +16,7 @@ const BINARY_PATH = (0, node_path_1.join)(PACKAGE_ROOT, 'bin', process.platform 
  * @example
  * ```javascript
  * // metro.config.js
- * const { FabrikStore } = require('@fabrik/metro');
+ * const { FabrikStore } = require('@tuist/fabrik');
  *
  * module.exports = {
  *   cacheStores: [
@@ -49,7 +49,7 @@ class FabrikStore {
         if (!(0, node_fs_1.existsSync)(BINARY_PATH)) {
             throw new Error(`Fabrik binary not found at ${BINARY_PATH}.\n` +
                 `The postinstall script may have failed. Try reinstalling:\n` +
-                `  npm install @fabrik/metro --force\n` +
+                `  npm install @tuist/fabrik --force\n` +
                 `Or install Fabrik manually:\n` +
                 `  mise use -g ubi:tuist/fabrik`);
         }

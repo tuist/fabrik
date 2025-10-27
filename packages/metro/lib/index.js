@@ -58,7 +58,7 @@ function createFabrikStore(options = {}, deps = {}) {
     throw new Error(
       `Fabrik binary not found at ${binaryPath}.\n` +
       `The postinstall script may have failed. Try reinstalling:\n` +
-      `  npm install @fabrik/metro --force\n` +
+      `  npm install @tuist/fabrik --force\n` +
       `Or install Fabrik manually:\n` +
       `  mise use -g ubi:tuist/fabrik`
     );
