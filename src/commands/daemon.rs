@@ -2,11 +2,19 @@ use anyhow::Result;
 use std::sync::Arc;
 use tracing::info;
 
+use crate::bazel::proto::bytestream::byte_stream_server::ByteStreamServer;
+use crate::bazel::proto::remote_execution::action_cache_server::ActionCacheServer;
+use crate::bazel::proto::remote_execution::capabilities_server::CapabilitiesServer;
+use crate::bazel::proto::remote_execution::content_addressable_storage_server::ContentAddressableStorageServer;
+use crate::bazel::{
+    BazelActionCacheService, BazelByteStreamService, BazelCapabilitiesService, BazelCasService,
+};
 use crate::cli::DaemonArgs;
 use crate::config::FabrikConfig;
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
 use crate::storage;
+use tonic::transport::Server;
 
 pub async fn run(args: DaemonArgs) -> Result<()> {
     // Load config file if specified
@@ -47,18 +55,70 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     info!("  Max cache size: {}", config.max_cache_size);
     info!("  Upstream: {:?}", config.upstream);
     info!("  HTTP port: {}", config.http_port);
+    info!("  gRPC port: {}", config.grpc_port);
+    info!("  S3 port: {}", config.s3_port);
 
-    // Initialize storage backend
+    // Initialize shared storage backend
     let storage = storage::create_storage(&config.cache_dir)?;
     let storage = Arc::new(storage);
 
-    // Start HTTP server (for Metro, Gradle, Nx, TurboRepo, etc.)
-    let http_server = HttpServer::new(config.http_port, storage.clone());
+    // Start all servers in parallel
+    let mut handles = vec![];
 
-    info!("Starting HTTP cache server on port {}", config.http_port);
+    // 1. HTTP server (for Metro, Gradle, Nx, TurboRepo)
+    if config.http_port > 0 {
+        info!("Starting HTTP cache server on port {}", config.http_port);
+        let http_storage = storage.clone();
+        let http_port = config.http_port;
+        handles.push(tokio::spawn(async move {
+            HttpServer::new(http_port, http_storage).run().await
+        }));
+    }
 
-    // Run server (blocks until shutdown signal)
-    http_server.run().await?;
+    // 2. gRPC server (for Bazel, Fabrik protocol)
+    if config.grpc_port > 0 {
+        info!("Starting gRPC cache server on port {}", config.grpc_port);
+        let grpc_storage = storage.clone();
+        let grpc_port = config.grpc_port;
+
+        handles.push(tokio::spawn(async move {
+            let addr = format!("0.0.0.0:{}", grpc_port).parse().unwrap();
+
+            // Create Bazel gRPC services
+            let action_cache = BazelActionCacheService::new(grpc_storage.clone());
+            let cas = BazelCasService::new(grpc_storage.clone());
+            let bytestream = BazelByteStreamService::new(grpc_storage.clone());
+            let capabilities = BazelCapabilitiesService::new();
+
+            info!("gRPC server listening on {}", addr);
+
+            Server::builder()
+                .add_service(CapabilitiesServer::new(capabilities))
+                .add_service(ActionCacheServer::new(action_cache))
+                .add_service(ContentAddressableStorageServer::new(cas))
+                .add_service(ByteStreamServer::new(bytestream))
+                .serve(addr)
+                .await
+                .map_err(|e| anyhow::anyhow!("gRPC server error: {}", e))
+        }));
+    }
+
+    // 3. S3-compatible server (for sccache, BuildKit) - TODO: implement
+    // if config.s3_port > 0 {
+    //     info!("Starting S3-compatible server on port {}", config.s3_port);
+    //     // TODO: Implement S3 protocol server
+    // }
+
+    // 4. Gradle-specific HTTP server (different endpoints than generic HTTP)
+    // Gradle uses /cache/ prefix, so we might need a separate router
+    // For now, Gradle can use the generic HTTP server
+
+    info!("Daemon started - press Ctrl+C to stop");
+
+    // Wait for all servers (runs until ctrl-c or error)
+    for handle in handles {
+        handle.await??;
+    }
 
     Ok(())
 }
