@@ -2,17 +2,10 @@
   "name": "@tuist/fabrik",
   "version": "0.1.0",
   "description": "Fabrik multi-layer build cache - NPM integrations",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "lib/metro.js",
   "exports": {
-    ".": {
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./metro": {
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    }
+    ".": "./lib/metro.js",
+    "./metro": "./lib/metro.js"
   },
   "scripts": {
     "test": "node --test test/**/*.test.js",
