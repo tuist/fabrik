@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.1] - 2025-10-27
+
+### 📚 Documentation
+
+- Add Docker registry links to README and release notes ([49386bc](49386bc80e9900d144047a295a400382b98840f8))
+
 ## [0.2.0] - 2025-10-27
 
 ### ⚡ Performance
