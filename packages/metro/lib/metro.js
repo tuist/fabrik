@@ -1,5 +1,5 @@
 const { spawn } = require('node:child_process');
-const { existsSync, appendFileSync } = require('node:fs');
+const { existsSync } = require('node:fs');
 const { join } = require('node:path');
 const { promisify } = require('node:util');
 const { gzip: gzipCb, gunzip: gunzipCb } = require('node:zlib');
@@ -10,14 +10,6 @@ const gunzip = promisify(gunzipCb);
 const BINARY_PATH = join(__dirname, '..', 'bin', process.platform === 'win32' ? 'fabrik.exe' : 'fabrik');
 const NULL_BYTE_BUFFER = Buffer.from([0x00]);
 const DEV_MODE = existsSync(join(__dirname, '..', '..', '..', 'Cargo.toml'));
-
-function log(message) {
-  if (process.env.FABRIK_DEBUG) {
-    try {
-      appendFileSync('/tmp/fabrik-metro.log', `${new Date().toISOString()} ${message}\n`);
-    } catch {}
-  }
-}
 
 /**
  * Create a Fabrik cache store for Metro
@@ -114,13 +106,10 @@ function FabrikStore(options = {}) {
 
       if (!res.ok) {
         if (res.status === 404) {
-          log(`Miss: ${hash.slice(0, 8)}`);
           return null;
         }
         throw new Error(`Get failed: ${res.statusText}`);
       }
-
-      log(`Hit: ${hash.slice(0, 8)}`);
 
       // Gunzip and decode Metro's HttpStore protocol
       const gzipped = Buffer.from(await res.arrayBuffer());
@@ -129,7 +118,6 @@ function FabrikStore(options = {}) {
       // NULL_BYTE prefix = raw buffer, otherwise JSON
       return buffer[0] === 0x00 ? buffer.slice(1) : JSON.parse(buffer.toString());
     } catch (err) {
-      log(`Get error: ${err.message}`);
       return null; // Graceful degradation
     }
   }
@@ -152,9 +140,8 @@ function FabrikStore(options = {}) {
       });
 
       if (!res.ok) throw new Error(`Set failed: ${res.statusText}`);
-      log(`Set: ${hash.slice(0, 8)} (${gzipped.length}b)`);
     } catch (err) {
-      log(`Set error: ${err.message}`);
+      // Silent failure - don't break builds
     }
   }
 
