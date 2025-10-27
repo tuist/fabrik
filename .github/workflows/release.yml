@@ -288,14 +288,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Update package version
-        run: |
-          cd packages/metro
-          npm version ${{ needs.check-release.outputs.new_version }} --no-git-tag-version
-
       - name: Publish to NPM
         run: |
           cd packages/metro
+          npm version ${{ needs.check-release.outputs.new_version }} --no-git-tag-version
           npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
