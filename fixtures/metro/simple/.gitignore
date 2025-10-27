@@ -1,0 +1,5 @@
+node_modules/
+.fabrik/
+bundle.js
+bundle.js.map
+*.log

@@ -1,0 +1,15 @@
+{
+  "name": "metro-simple-fixture",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simple Metro bundler fixture to test Fabrik caching",
+  "scripts": {
+    "bundle": "metro build src/index.js --out bundle.js --platform web",
+    "dev": "metro serve"
+  },
+  "dependencies": {
+    "@fabrik/metro": "workspace:*",
+    "metro": "^0.81.0",
+    "metro-config": "^0.81.0"
+  }
+}
