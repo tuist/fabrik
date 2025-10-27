@@ -50,15 +50,6 @@ The `FabrikStore` integrates Metro with Fabrik's multi-layer caching:
 3. **Transparent Caching** - Metro cache operations flow through Fabrik's HTTP API
 4. **Multi-Layer Fallback** - Local cache → Regional cache → S3 (configured via `upstream`)
 
-## Shared Cache
-
-Metro's cache is **shared** with other build tools using Fabrik:
-- Bazel (via gRPC)
-- Gradle (via HTTP)
-- Nx, TurboRepo (via HTTP)
-
-All build tools share the same RocksDB storage, maximizing cache efficiency.
-
 ## API
 
 The Fabrik daemon exposes an HTTP cache API that Metro uses:
