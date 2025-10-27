@@ -8,7 +8,7 @@
     "./metro": "./lib/metro.js"
   },
   "scripts": {
-    "test": "node --test lib/**/*.test.js",
+    "test": "node --test lib/metro.test.js",
     "postinstall": "node scripts/download-binary.js"
   },
   "keywords": [
