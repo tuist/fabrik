@@ -4,9 +4,16 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gzip, gunzip } from 'node:zlib';
 import { promisify } from 'node:util';
+import { appendFileSync } from 'node:fs';
 
 const gzipAsync = promisify(gzip);
 const gunzipAsync = promisify(gunzip);
+
+function log(message) {
+  try {
+    appendFileSync('/tmp/fabrik-metro.log', `${new Date().toISOString()} ${message}\n`);
+  } catch {}
+}
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -206,10 +213,13 @@ function createFabrikStore(options = {}, deps = {}) {
 
       if (!response.ok) {
         if (response.status === 404) {
+          log(`Cache miss: ${hash.substring(0, 12)}...`);
           return null; // Cache miss
         }
         throw new Error(`Failed to get from cache: ${response.statusText}`);
       }
+
+      log(`Cache HIT: ${hash.substring(0, 12)}...`);
 
       // Metro stores data as gzipped, Fabrik returns it as-is
       const arrayBuffer = await response.arrayBuffer();
@@ -271,8 +281,10 @@ function createFabrikStore(options = {}, deps = {}) {
       if (!response.ok) {
         throw new Error(`Failed to set cache: ${response.statusText}`);
       }
+
+      log(`Cached: ${hash.substring(0, 12)}... (${gzippedData.length} bytes)`);
     } catch (error) {
-      console.warn(`Fabrik cache set failed:`, error?.message);
+      console.warn(`[Fabrik] Cache set failed:`, error?.message);
     }
   }
 
