@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.2.2] - 2025-10-27
+
+### 📚 Documentation
+
+- Add build system logos to sidebar ([f401674](f401674a67656c23082854d41e915bc729aa60ae))
+- Use image files for build system logos with fixed spacing ([46dc1e1](46dc1e1b08b4fb06f65933688d8c39d9cb6ac558))
+
 ## [0.2.1] - 2025-10-27
 
 ### 📚 Documentation
