@@ -1,0 +1,15 @@
+{
+  "name": "demo",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/demo/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "echo 'Building demo app...' && mkdir -p dist && echo 'Build complete!' > dist/output.txt"
+      },
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}

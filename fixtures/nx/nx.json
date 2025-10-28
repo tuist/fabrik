@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "inputs": ["{projectRoot}/**/*"],
+      "outputs": ["{projectRoot}/dist"]
+    }
+  },
+  "tasksRunnerOptions": {
+    "default": {
+      "runner": "nx/tasks-runners/default",
+      "options": {
+        "cacheableOperations": ["build"],
+        "remoteCache": {
+          "url": "http://localhost:9090"
+        }
+      }
+    }
+  }
+}

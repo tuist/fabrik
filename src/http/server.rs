@@ -22,8 +22,10 @@ struct AppState<S: Storage + Clone> {
 /// HTTP cache server for Metro, Gradle, Nx, TurboRepo, etc.
 ///
 /// Implements a simple HTTP API:
-/// - GET /api/v1/artifacts/{hash} - Retrieve artifact
-/// - PUT /api/v1/artifacts/{hash} - Store artifact
+/// - GET /api/v1/artifacts/{hash} - Retrieve artifact (Metro, Gradle)
+/// - PUT /api/v1/artifacts/{hash} - Store artifact (Metro, Gradle)
+/// - GET /v1/cache/{hash} - Retrieve artifact (Nx, TurboRepo)
+/// - PUT /v1/cache/{hash} - Store artifact (Nx, TurboRepo)
 /// - GET /health - Health check
 pub struct HttpServer<S: Storage + Clone> {
     port: u16,
@@ -43,8 +45,12 @@ impl<S: Storage + Clone + 'static> HttpServer<S> {
 
         let app = Router::new()
             .route("/health", get(health_handler))
+            // Metro, Gradle routes
             .route("/api/v1/artifacts/:hash", get(get_artifact))
             .route("/api/v1/artifacts/:hash", put(put_artifact))
+            // Nx, TurboRepo routes (same handlers, different paths)
+            .route("/v1/cache/:hash", get(get_artifact))
+            .route("/v1/cache/:hash", put(put_artifact))
             .layer(TraceLayer::new_for_http())
             .with_state(state);
 
