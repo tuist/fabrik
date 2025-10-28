@@ -110,6 +110,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Update Cargo.toml version
+        shell: bash
+        run: |
+          VERSION="${{ needs.check-release.outputs.new_version }}"
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          rm Cargo.toml.bak 2>/dev/null || true
+          echo "Updated Cargo.toml to version $VERSION"
+          grep "^version = " Cargo.toml
+
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
