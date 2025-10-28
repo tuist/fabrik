@@ -17,33 +17,6 @@ age = "latest"
 java = "21"
 "npm:wrangler" = "latest"
 
-# Tipi build system - installs cmake-re
-# Note: The archive contains both 'tipi' and 'cmake-re' binaries
-# The postinstall hook automatically copies the tipi binary alongside cmake-re
-[tools."ubi:tipi-build/cli"]
-version = "latest"
-exe = "cmake-re"
-postinstall = "mise run tipi:install-all"
-
-[tasks."tipi:install-all"]
-description = "Install both tipi and cmake-re executables from the same archive"
-run = """
-#!/usr/bin/env bash
-set -e
-VERSION=$(mise current ubi:tipi-build/cli)
-INSTALL_DIR="$HOME/.local/share/mise/installs/ubi-tipi-build-cli/$VERSION"
-DOWNLOAD_URL="https://github.com/tipi-build/cli/releases/download/v$VERSION/tipi-v$VERSION-$(uname -s | tr '[:upper:]' '[:lower:]' | sed 's/darwin/macOS/').zip"
-
-echo "Installing tipi binary alongside cmake-re..."
-cd /tmp
-curl -sL "$DOWNLOAD_URL" -o tipi-temp.zip
-unzip -q -o tipi-temp.zip
-cp bin/tipi "$INSTALL_DIR/"
-chmod +x "$INSTALL_DIR/tipi"
-rm -rf tipi-temp.zip bin
-echo "✓ Both tipi and cmake-re are now installed in $INSTALL_DIR"
-"""
-
 [tasks."docs:deploy-with-secrets"]
 description = "Deploy docs with secrets loaded from fnox"
 run = "fnox run -- mise run docs:deploy"

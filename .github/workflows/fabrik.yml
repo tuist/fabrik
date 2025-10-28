@@ -51,6 +51,25 @@ jobs:
       - name: Run clippy
         run: cargo clippy --all-targets --all-features -- -D warnings
 
+  test-metro:
+    name: Test Metro Package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Run Metro tests
+        run: pnpm --filter @tuist/fabrik test
+
   test:
     name: Test
     runs-on: ${{ matrix.os }}

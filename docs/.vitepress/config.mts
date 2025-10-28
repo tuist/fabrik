@@ -31,6 +31,10 @@ export default defineConfig({
             link: '/build-systems/gradle'
           },
           {
+            text: '<span class="sidebar-icon-text"><img src="/images/metro.svg" class="sidebar-icon" alt="Metro">Metro</span>',
+            link: '/build-systems/metro'
+          },
+          {
             text: '<span class="sidebar-icon-text"><img src="/images/xcode.png" class="sidebar-icon" alt="Xcode">Xcode</span>',
             link: '/build-systems/xcode'
           }

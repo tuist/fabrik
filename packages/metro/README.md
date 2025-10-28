@@ -1,15 +1,15 @@
-# @fabrik/metro
+# @tuist/fabrik
 
 Metro cache store for Fabrik multi-layer build cache.
 
 ## Installation
 
 ```bash
-npm install @fabrik/metro
+npm install @tuist/fabrik
 # or
-pnpm add @fabrik/metro
+pnpm add @tuist/fabrik
 # or
-yarn add @fabrik/metro
+yarn add @tuist/fabrik
 ```
 
 The Fabrik binary will be automatically downloaded during installation based on your platform.
@@ -20,7 +20,7 @@ Configure Metro to use Fabrik as a cache store:
 
 ```javascript
 // metro.config.js
-const { FabrikStore } = require('@fabrik/metro');
+const { FabrikStore } = require('@tuist/fabrik/metro');
 
 module.exports = {
   cacheStores: [
