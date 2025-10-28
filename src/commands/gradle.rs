@@ -1,5 +1,5 @@
 use crate::cli::GradleArgs;
-use crate::gradle::GradleHttpServer;
+use crate::http::HttpServer;
 use crate::storage::{create_storage, default_cache_dir};
 use anyhow::{Context, Result};
 use std::net::SocketAddr;
@@ -23,10 +23,6 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
     let port = args.port;
     let bind_addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
 
-    // Create Gradle HTTP server
-    let gradle_server = GradleHttpServer::new(storage.clone());
-    let app = gradle_server.router();
-
     // Bind the HTTP server ourselves to get the actual port
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
@@ -38,6 +34,10 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
     let cache_url = format!("http://{}/cache/", actual_addr);
 
     info!("Gradle Remote Cache bound to: {}", cache_url);
+
+    // Create shared HTTP server router (supports /cache/{hash} for Gradle)
+    let http_server = HttpServer::new(actual_addr.port(), storage);
+    let app = http_server.router();
 
     // Start HTTP server with the bound listener
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();

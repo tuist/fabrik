@@ -3,11 +3,9 @@ mod bazel;
 mod cli;
 mod commands;
 mod config;
-mod gradle;
 mod http;
 mod logging;
 mod merger;
-mod nx;
 mod storage;
 mod xcode;
 

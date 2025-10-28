@@ -1,5 +1,5 @@
 use crate::cli::NxArgs;
-use crate::nx::NxHttpServer;
+use crate::http::HttpServer;
 use crate::storage::{create_storage, default_cache_dir};
 use anyhow::{Context, Result};
 use std::net::SocketAddr;
@@ -23,11 +23,7 @@ pub async fn run_nx(args: NxArgs) -> Result<()> {
     let port = args.port;
     let bind_addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
 
-    // Create Nx HTTP server
-    let nx_server = NxHttpServer::new(storage.clone());
-    let app = nx_server.router();
-
-    // Bind the HTTP server ourselves to get the actual port
+    // Bind TCP listener to get actual port
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .context("Failed to bind TCP listener")?;
@@ -38,6 +34,10 @@ pub async fn run_nx(args: NxArgs) -> Result<()> {
     let cache_url = format!("http://{}", actual_addr);
 
     info!("Nx Remote Cache bound to: {}", cache_url);
+
+    // Create shared HTTP server router (supports /v1/cache/{hash} for Nx)
+    let http_server = HttpServer::new(actual_addr.port(), storage);
+    let app = http_server.router();
 
     // Start HTTP server with the bound listener
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();

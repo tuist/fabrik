@@ -3,7 +3,6 @@
 
 pub mod bazel;
 pub mod logging;
-pub mod nx;
 pub mod storage;
 
 // Re-export commonly used types

@@ -46,7 +46,9 @@ async fn test_nx_get_missing_artifact() {
 
     let hash = hex::decode("abcd1234567890ef").expect("Invalid hex");
 
-    let result = storage.get(&hash).expect("Storage operation should succeed");
+    let result = storage
+        .get(&hash)
+        .expect("Storage operation should succeed");
 
     assert!(result.is_none(), "Artifact should not exist");
 }
@@ -67,16 +69,12 @@ async fn test_nx_multiple_artifacts() {
     ];
 
     for (hash, data) in &artifacts {
-        storage
-            .put(hash, data)
-            .expect("Failed to put artifact");
+        storage.put(hash, data).expect("Failed to put artifact");
     }
 
     // Retrieve and verify all artifacts
     for (hash, expected_data) in &artifacts {
-        let retrieved = storage
-            .get(hash)
-            .expect("Failed to get artifact");
+        let retrieved = storage.get(hash).expect("Failed to get artifact");
 
         assert!(retrieved.is_some());
         assert_eq!(retrieved.unwrap(), *expected_data);
