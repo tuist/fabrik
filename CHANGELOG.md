@@ -2,6 +2,43 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.0] - 2025-10-28
+
+### 🐛 Bug Fixes
+
+- Add nodeModulesPaths to Metro config and document fixture status ([6e05308](6e053083c7f94ac3780088ee31089c92557811c7))
+- Update Metro integration to use CommonJS and document protocol issue ([2a93d9c](2a93d9c4d909819dbf51a36e62f36252ae9b48c4))
+- Implement Metro HttpStore protocol (gzip + NULL_BYTE) ([eac1cfe](eac1cfe815f85a9d0053b425a8f3eddfcde5c9df))
+- Resolve Metro module resolution with extraNodeModules ([752dba0](752dba037898ca9c17458163c3b3a29c2bddef45))
+- Use pnpm-action instead of mise for Metro tests ([175727a](175727a5019e16e486b37b29bd1b52198399e4a5))
+- Remove broken tipi installation from mise config ([4cbe8bb](4cbe8bbbe7055710661b36b74127c430522d2bd5))
+- Remove pnpm version from action to use packageManager field ([6dc2675](6dc2675bad9d8363f6ade5b558cf1268c2b64d91))
+- Run Metro tests from workspace root ([8f2f8a6](8f2f8a660ff1c0882f4f3f7fa25f2531c9f5e9b6))
+- Use explicit test file path instead of glob ([1c13c5a](1c13c5aa8a9dfa183ac554d6c453d18a2e0d9e09))
+- Configure NPM authentication properly in release workflow ([fd55a8c](fd55a8c68db27e2f9f9609bf72bc7e70393f4206))
+
+### 📚 Documentation
+
+- Add Metro documentation and NPM publishing to releases ([dea36f9](dea36f9618012364012d0e4a3b62f3ba8ea71774))
+- Update fixture README to reflect fully working status ([9a1d637](9a1d637644f1ecc3ef168ce9cfc505040404503a))
+- Remove troubleshooting and React Native example from Metro docs ([5828873](58288732aec720d0a15acc78bd03714c3a99cfa4))
+
+### 🚀 Features
+
+- Add cache activity logging to FabrikStore ([7afa86d](7afa86defef98ec3fcb18ac193dfda6ad3ab61df))
+
+### 🚜 Refactor
+
+- Rename package to @tuist/fabrik and update references ([883f456](883f4568e82e7116d3e82ae8bab55d36ebd8967f))
+- Restructure package as @tuist/fabrik with /metro subpath ([3575c47](3575c473229394e42f7e3c49a13b3cffa142817a))
+- Simplify Metro fixture by removing workspace dependency ([fa91582](fa91582317de7e1cd89bfbebcd1c2a60176fab70))
+- Simplify Metro integration to minimal working implementation ([40f8cea](40f8cea40a20280d478c98a77ec8a82fa6a91352))
+- Remove debug logging and remaining TypeScript artifacts ([767eb6a](767eb6a59b44ebe86431d49bdb8e32796d09fdeb))
+
+### 🧪 Testing
+
+- Add comprehensive Metro package tests with dependency injection ([5f6f843](5f6f8432ed6360ff762aae3782cfa0cc95799245))
+
 ## [0.5.1] - 2025-10-27
 
 ### 🐛 Bug Fixes
