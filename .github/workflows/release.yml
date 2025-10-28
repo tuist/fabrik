@@ -330,6 +330,16 @@ jobs:
           pattern: fabrik-*
           merge-multiple: true
 
+      - name: Update Cargo.toml version
+        run: |
+          VERSION="${{ needs.check-release.outputs.new_version }}"
+          # Remove 'v' prefix if present
+          VERSION="${VERSION#v}"
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          rm Cargo.toml.bak 2>/dev/null || true
+          echo "Updated Cargo.toml to version $VERSION"
+          grep "^version = " Cargo.toml
+
       - name: Generate changelog
         run: |
           VERSION="${{ needs.check-release.outputs.new_version }}"
@@ -381,12 +391,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Commit CHANGELOG.md
+      - name: Commit version bumps
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add CHANGELOG.md
-          git commit -m "chore(release): update CHANGELOG for ${{ needs.check-release.outputs.new_version }}"
+          git add Cargo.toml CHANGELOG.md
+          git commit -m "chore(release): bump version to ${{ needs.check-release.outputs.new_version }}"
           git push
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
