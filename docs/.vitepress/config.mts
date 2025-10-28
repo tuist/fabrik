@@ -35,6 +35,10 @@ export default defineConfig({
             link: '/build-systems/metro'
           },
           {
+            text: '<span class="sidebar-icon-text"><img src="/images/nx.svg" class="sidebar-icon" alt="Nx">Nx</span>',
+            link: '/build-systems/nx'
+          },
+          {
             text: '<span class="sidebar-icon-text"><img src="/images/xcode.png" class="sidebar-icon" alt="Xcode">Xcode</span>',
             link: '/build-systems/xcode'
           }
