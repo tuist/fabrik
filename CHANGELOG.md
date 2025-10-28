@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.6.1] - 2025-10-28
+
+### 🐛 Bug Fixes
+
+- Update Cargo.toml version during release build ([6118ff2](6118ff2c340de311883d723cf6dc8cdf657c26ee))
+- Commit Cargo.toml version changes to upstream ([b8217d4](b8217d4d5041796a78346bfc7a455607c1e2ce21))
+
 ## [0.6.0] - 2025-10-28
 
 ### 🐛 Bug Fixes
