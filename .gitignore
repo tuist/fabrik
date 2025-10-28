@@ -30,6 +30,11 @@ build/
 !gradle/wrapper/gradle-wrapper.jar
 *.iml
 
+# Nx
+.nx/
+**/dist/
+*.tsbuildinfo
+
 # Created by https://www.toptal.com/developers/gitignore/api/xcode
 # Edit at https://www.toptal.com/developers/gitignore?templates=xcode
 
@@ -55,3 +60,4 @@ xcuserdata/
 docs/.vitepress/dist/
 docs/.vitepress/cache/
 node_modules/
+package-lock.json
