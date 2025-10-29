@@ -80,8 +80,9 @@ fn test_nx_cache_integration() {
         .arg("--")
         .arg("build")
         .arg("demo")
+        .arg("--skip-nx-cache") // Force remote cache only, disable local cache
         .current_dir(&fixture_path)
-        .env("NX_CACHE_DIRECTORY", &nx_cache)
+        .env("NX_CACHE_DIRECTORY", &nx_cache) // Scope local cache to test temp dir
         .env("NX_DAEMON", "false")
         .env("FABRIK_CONFIG_LOG_LEVEL", "info")
         .output()
@@ -143,8 +144,9 @@ fn test_nx_cache_integration() {
         .arg("--")
         .arg("build")
         .arg("demo")
+        .arg("--skip-nx-cache") // Force remote cache only, disable local cache
         .current_dir(&fixture_path)
-        .env("NX_CACHE_DIRECTORY", &nx_cache)
+        .env("NX_CACHE_DIRECTORY", &nx_cache) // Scope local cache to test temp dir
         .env("NX_DAEMON", "false")
         .env("FABRIK_CONFIG_LOG_LEVEL", "info")
         .output()
@@ -176,11 +178,18 @@ fn test_nx_cache_integration() {
         println!("✓ Nx is communicating with Fabrik remote cache");
 
         // Check if we got cache hits
+        // With --skip-nx-cache, Nx should use remote cache for both reads and writes
         let cache_hits = stderr2.matches("Cache HIT").count();
         if cache_hits > 0 {
             println!("✓ Cache hits detected: {}", cache_hits);
         } else {
-            println!("ℹ No cache hits (Nx may have used local cache, which is fine)");
+            panic!(
+                "❌ FAILED: No cache hits detected!\\n\\
+                 With --skip-nx-cache and same cache directory, we should see cache hits.\\n\\
+                 Fabrik requests detected: {}\\n\\
+                 Stderr output:\\n{}",
+                fabrik_requests, stderr2
+            );
         }
     } else {
         panic!(
