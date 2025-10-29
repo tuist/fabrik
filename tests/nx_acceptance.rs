@@ -52,6 +52,17 @@ fn test_nx_cache_integration() {
     println!("Nx cache dir: {:?}", nx_cache);
     println!("Fixture path: {:?}", fixture_path);
 
+    // Clean Nx cache BEFORE first build to ensure clean test state
+    println!("\n=== Cleaning Nx cache before test ===");
+    let nx_workspace_dir = fixture_path.join(".nx");
+    if nx_workspace_dir.exists() {
+        std::fs::remove_dir_all(&nx_workspace_dir).expect("Failed to remove .nx dir");
+    }
+    let demo_dist = fixture_path.join("apps/demo/dist");
+    if demo_dist.exists() {
+        std::fs::remove_dir_all(&demo_dist).expect("Failed to remove demo dist");
+    }
+
     // Ensure npm dependencies are installed
     println!("\n=== Installing npm dependencies ===");
     let npm_install = Command::new("npm")
@@ -80,7 +91,6 @@ fn test_nx_cache_integration() {
         .arg("--")
         .arg("build")
         .arg("demo")
-        .arg("--skip-nx-cache") // Force remote cache only, disable local cache
         .current_dir(&fixture_path)
         .env("NX_CACHE_DIRECTORY", &nx_cache) // Scope local cache to test temp dir
         .env("NX_DAEMON", "false")
@@ -144,7 +154,6 @@ fn test_nx_cache_integration() {
         .arg("--")
         .arg("build")
         .arg("demo")
-        .arg("--skip-nx-cache") // Force remote cache only, disable local cache
         .current_dir(&fixture_path)
         .env("NX_CACHE_DIRECTORY", &nx_cache) // Scope local cache to test temp dir
         .env("NX_DAEMON", "false")
@@ -177,18 +186,20 @@ fn test_nx_cache_integration() {
     if fabrik_requests > 0 {
         println!("✓ Nx is communicating with Fabrik remote cache");
 
-        // Check if we got cache hits
+        // Verify cache hits
+        // Both builds use the same RocksDB on disk, so second build should hit cache
         let cache_hits = stderr2.matches("Cache HIT").count();
         if cache_hits > 0 {
             println!("✓ Cache hits detected: {}", cache_hits);
+            println!("✓ Second server successfully read artifacts stored by first server!");
         } else {
-            // This is expected: each build starts a NEW Fabrik server on a DIFFERENT port
-            // Even though they share the same cache directory, Nx queries different endpoints:
-            // - Build 1: http://127.0.0.1:XXXXX
-            // - Build 2: http://127.0.0.1:YYYYY (different port!)
-            // So the second build queries a fresh server with no cache.
-            // This is a test limitation, not a product bug.
-            println!("ℹ No cache hits (each build uses different server port - test limitation)");
+            panic!(
+                "❌ FAILED: No cache hits detected!\\n\\
+                 Both builds use the same cache directory, so we should see cache hits.\\n\\
+                 Fabrik requests: {}\\n\\
+                 Stderr:\\n{}",
+                fabrik_requests, stderr2
+            );
         }
     } else {
         panic!(
