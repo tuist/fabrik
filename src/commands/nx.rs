@@ -74,6 +74,9 @@ pub async fn run_nx(args: NxArgs) -> Result<()> {
         nx_cmd.arg(arg);
     }
 
+    // Set environment variable for Nx self-hosted remote cache
+    // See: https://nx.dev/docs/guides/tasks--caching/self-hosted-caching
+    nx_cmd.env("NX_SELF_HOSTED_REMOTE_CACHE_SERVER", &cache_url);
 
     // Set up stdio
     nx_cmd
@@ -82,7 +85,7 @@ pub async fn run_nx(args: NxArgs) -> Result<()> {
         .stderr(Stdio::inherit());
 
     info!(
-        "Executing: {} nx {} (via nx.json remote cache={})",
+        "Executing: {} nx {} (NX_SELF_HOSTED_REMOTE_CACHE_SERVER={})",
         nx_command,
         args.nx_args.join(" "),
         cache_url
