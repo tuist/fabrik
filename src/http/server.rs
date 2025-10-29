@@ -24,8 +24,8 @@ struct AppState<S: Storage + Clone> {
 /// Implements a simple HTTP API:
 /// - GET /api/v1/artifacts/{hash} - Retrieve artifact (Metro) - hex-encoded
 /// - PUT /api/v1/artifacts/{hash} - Store artifact (Metro) - hex-encoded
-/// - GET /v1/cache/{hash} - Retrieve artifact (Nx, TurboRepo) - hex-encoded
-/// - PUT /v1/cache/{hash} - Store artifact (Nx, TurboRepo) - hex-encoded
+/// - GET /v1/cache/{hash} - Retrieve artifact (Nx, TurboRepo) - raw string
+/// - PUT /v1/cache/{hash} - Store artifact (Nx, TurboRepo) - raw string
 /// - GET /cache/{hash} - Retrieve artifact (Gradle) - raw string
 /// - PUT /cache/{hash} - Store artifact (Gradle) - raw string
 /// - GET /health - Health check
@@ -50,7 +50,7 @@ impl<S: Storage + Clone + 'static> HttpServer<S> {
             // Metro routes (hex-encoded)
             .route("/api/v1/artifacts/:hash", get(get_metro_artifact))
             .route("/api/v1/artifacts/:hash", put(put_metro_artifact))
-            // Nx, TurboRepo routes (hex-encoded)
+            // Nx, TurboRepo routes (raw string - numeric hashes)
             .route("/v1/cache/:hash", get(get_nx_artifact))
             .route("/v1/cache/:hash", put(put_nx_artifact))
             // Gradle routes (raw string)
@@ -142,55 +142,45 @@ async fn put_metro_artifact<S: Storage + Clone>(
 }
 
 /// Get artifact handler for Nx/TurboRepo
-/// Nx/TurboRepo use hex-encoded hashes via /v1/cache/{hash}
+/// Nx/TurboRepo use raw string hashes (numeric) via /v1/cache/{hash}
 async fn get_nx_artifact<S: Storage + Clone>(
     Path(hash): Path<String>,
     State(state): State<AppState<S>>,
 ) -> Response {
-    // Decode hex hash to bytes
-    let hash_bytes = match hex::decode(&hash) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            warn!(build_system = "nx", hash = %hash, error = %e, "Invalid hash format");
-            return (StatusCode::BAD_REQUEST, "Invalid hash format").into_response();
-        }
-    };
+    // Use hash string directly as bytes (no hex decoding)
+    // Nx sends numeric hashes like "3928369906857521520"
+    let hash_bytes = hash.as_bytes();
 
     // Get from storage
-    match state.storage.get(&hash_bytes) {
+    match state.storage.get(hash_bytes) {
         Ok(Some(data)) => {
             info!(build_system = "nx", hash = %hash, size = data.len(), "Cache HIT");
             (StatusCode::OK, data).into_response()
         }
         Ok(None) => {
             info!(build_system = "nx", hash = %hash, "Cache MISS");
-            (StatusCode::NOT_FOUND, "Not found").into_response()
+            (StatusCode::NOT_FOUND, Vec::new()).into_response()
         }
         Err(e) => {
             warn!(build_system = "nx", hash = %hash, error = %e, "Storage error");
-            (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, Vec::new()).into_response()
         }
     }
 }
 
 /// Put artifact handler for Nx/TurboRepo
-/// Nx/TurboRepo use hex-encoded hashes via /v1/cache/{hash}
+/// Nx/TurboRepo use raw string hashes (numeric) via /v1/cache/{hash}
 async fn put_nx_artifact<S: Storage + Clone>(
     Path(hash): Path<String>,
     State(state): State<AppState<S>>,
     body: Bytes,
 ) -> Response {
-    // Decode hex hash to bytes
-    let hash_bytes = match hex::decode(&hash) {
-        Ok(bytes) => bytes,
-        Err(e) => {
-            warn!(build_system = "nx", hash = %hash, error = %e, "Invalid hash format");
-            return (StatusCode::BAD_REQUEST, "Invalid hash format").into_response();
-        }
-    };
+    // Use hash string directly as bytes (no hex decoding)
+    // Nx sends numeric hashes like "3928369906857521520"
+    let hash_bytes = hash.as_bytes();
 
     // Store in cache
-    match state.storage.put(&hash_bytes, &body) {
+    match state.storage.put(hash_bytes, &body) {
         Ok(()) => {
             info!(build_system = "nx", hash = %hash, size = body.len(), "Artifact stored");
             (StatusCode::OK, "Stored").into_response()

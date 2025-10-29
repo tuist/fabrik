@@ -2,11 +2,7 @@
   "name": "nx-fixture",
   "version": "1.0.0",
   "private": true,
-  "scripts": {
-    "test": "nx run-many --target=build --all"
-  },
   "devDependencies": {
     "nx": "^20.8.0"
-  },
-  "packageManager": "pnpm@9.15.0"
+  }
 }
