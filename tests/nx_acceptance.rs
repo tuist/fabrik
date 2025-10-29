@@ -160,14 +160,20 @@ fn test_nx_cache_integration() {
     println!("Second build completed successfully");
 
     // Check for cache hits in logs
-    let cache_hits = stderr2.matches("Nx cache HIT").count();
+    // Our structured logs now show: build_system="nx" ... "Cache HIT"
+    let cache_hits = stderr2.matches("Cache HIT").count();
     println!("\nCache hits detected: {}", cache_hits);
 
     if cache_hits > 0 {
         println!("✓ Cache hits confirmed - Nx queried Fabrik cache");
     } else {
-        println!("⚠ No cache hits detected in logs");
-        println!("Note: Small projects may not generate cacheable tasks");
+        panic!(
+            "❌ FAILED: No cache hits detected in Fabrik logs!\n\
+             Expected to see 'Cache HIT' messages in stderr.\n\
+             This indicates the cache is not working correctly.\n\
+             Stderr output:\n{}",
+            stderr2
+        );
     }
 
     println!("\n=== Test completed successfully ===");
