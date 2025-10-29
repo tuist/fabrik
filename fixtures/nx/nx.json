@@ -11,7 +11,10 @@
     "default": {
       "runner": "nx/tasks-runners/default",
       "options": {
-        "cacheableOperations": ["build"]
+        "cacheableOperations": ["build"],
+        "remoteCache": {
+          "url": "http://localhost:9090"
+        }
       }
     }
   }

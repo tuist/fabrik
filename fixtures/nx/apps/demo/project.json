@@ -7,7 +7,7 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "echo 'Building demo app...' && mkdir -p dist && echo 'Build complete!' > dist/output.txt"
+        "command": "mkdir -p {projectRoot}/dist && echo 'Build complete!' > {projectRoot}/dist/output.txt"
       },
       "outputs": ["{projectRoot}/dist"]
     }

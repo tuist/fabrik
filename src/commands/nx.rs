@@ -74,9 +74,6 @@ pub async fn run_nx(args: NxArgs) -> Result<()> {
         nx_cmd.arg(arg);
     }
 
-    // Set environment variable for Nx remote cache URL
-    // Nx reads from NX_CLOUD_API environment variable or nx.json config
-    nx_cmd.env("NX_CLOUD_API", &cache_url);
 
     // Set up stdio
     nx_cmd
@@ -85,7 +82,7 @@ pub async fn run_nx(args: NxArgs) -> Result<()> {
         .stderr(Stdio::inherit());
 
     info!(
-        "Executing: {} nx {} (NX_CLOUD_API={})",
+        "Executing: {} nx {} (via nx.json remote cache={})",
         nx_command,
         args.nx_args.join(" "),
         cache_url

@@ -1,1 +1,1 @@
-console.log('Hello from Nx demo app!');
+console.log('Demo app');
