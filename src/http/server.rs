@@ -48,14 +48,14 @@ impl<S: Storage + Clone + 'static> HttpServer<S> {
         Router::new()
             .route("/health", get(health_handler))
             // Metro routes (hex-encoded)
-            .route("/api/v1/artifacts/:hash", get(get_artifact))
-            .route("/api/v1/artifacts/:hash", put(put_artifact))
+            .route("/api/v1/artifacts/:hash", get(get_metro_artifact))
+            .route("/api/v1/artifacts/:hash", put(put_metro_artifact))
             // Nx, TurboRepo routes (hex-encoded)
-            .route("/v1/cache/:hash", get(get_artifact))
-            .route("/v1/cache/:hash", put(put_artifact))
+            .route("/v1/cache/:hash", get(get_nx_artifact))
+            .route("/v1/cache/:hash", put(put_nx_artifact))
             // Gradle routes (raw string)
-            .route("/cache/:hash", get(get_artifact_raw))
-            .route("/cache/:hash", put(put_artifact_raw))
+            .route("/cache/:hash", get(get_gradle_artifact))
+            .route("/cache/:hash", put(put_gradle_artifact))
             .layer(TraceLayer::new_for_http())
             .with_state(state)
     }
@@ -80,8 +80,9 @@ async fn health_handler() -> impl IntoResponse {
     (StatusCode::OK, "OK")
 }
 
-/// Get artifact handler
-async fn get_artifact<S: Storage + Clone>(
+/// Get artifact handler for Metro
+/// Metro uses hex-encoded hashes via /api/v1/artifacts/{hash}
+async fn get_metro_artifact<S: Storage + Clone>(
     Path(hash): Path<String>,
     State(state): State<AppState<S>>,
 ) -> Response {
@@ -89,7 +90,7 @@ async fn get_artifact<S: Storage + Clone>(
     let hash_bytes = match hex::decode(&hash) {
         Ok(bytes) => bytes,
         Err(e) => {
-            warn!("Invalid hash format: {}", e);
+            warn!(build_system = "metro", hash = %hash, error = %e, "Invalid hash format");
             return (StatusCode::BAD_REQUEST, "Invalid hash format").into_response();
         }
     };
@@ -97,22 +98,23 @@ async fn get_artifact<S: Storage + Clone>(
     // Get from storage
     match state.storage.get(&hash_bytes) {
         Ok(Some(data)) => {
-            info!("Cache hit: {}", hash);
+            info!(build_system = "metro", hash = %hash, size = data.len(), "Cache HIT");
             (StatusCode::OK, data).into_response()
         }
         Ok(None) => {
-            info!("Cache miss: {}", hash);
+            info!(build_system = "metro", hash = %hash, "Cache MISS");
             (StatusCode::NOT_FOUND, "Not found").into_response()
         }
         Err(e) => {
-            warn!("Storage error: {}", e);
+            warn!(build_system = "metro", hash = %hash, error = %e, "Storage error");
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
         }
     }
 }
 
-/// Put artifact handler
-async fn put_artifact<S: Storage + Clone>(
+/// Put artifact handler for Metro
+/// Metro uses hex-encoded hashes via /api/v1/artifacts/{hash}
+async fn put_metro_artifact<S: Storage + Clone>(
     Path(hash): Path<String>,
     State(state): State<AppState<S>>,
     body: Bytes,
@@ -121,7 +123,7 @@ async fn put_artifact<S: Storage + Clone>(
     let hash_bytes = match hex::decode(&hash) {
         Ok(bytes) => bytes,
         Err(e) => {
-            warn!("Invalid hash format: {}", e);
+            warn!(build_system = "metro", hash = %hash, error = %e, "Invalid hash format");
             return (StatusCode::BAD_REQUEST, "Invalid hash format").into_response();
         }
     };
@@ -129,19 +131,80 @@ async fn put_artifact<S: Storage + Clone>(
     // Store in cache
     match state.storage.put(&hash_bytes, &body) {
         Ok(()) => {
-            info!("Stored artifact: {} ({} bytes)", hash, body.len());
+            info!(build_system = "metro", hash = %hash, size = body.len(), "Artifact stored");
             (StatusCode::OK, "Stored").into_response()
         }
         Err(e) => {
-            warn!("Storage error: {}", e);
+            warn!(build_system = "metro", hash = %hash, error = %e, "Storage error");
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
         }
     }
 }
 
-/// Get artifact handler (raw string, no hex decoding)
-/// Used by Gradle which sends hashes as plain strings
-async fn get_artifact_raw<S: Storage + Clone>(
+/// Get artifact handler for Nx/TurboRepo
+/// Nx/TurboRepo use hex-encoded hashes via /v1/cache/{hash}
+async fn get_nx_artifact<S: Storage + Clone>(
+    Path(hash): Path<String>,
+    State(state): State<AppState<S>>,
+) -> Response {
+    // Decode hex hash to bytes
+    let hash_bytes = match hex::decode(&hash) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            warn!(build_system = "nx", hash = %hash, error = %e, "Invalid hash format");
+            return (StatusCode::BAD_REQUEST, "Invalid hash format").into_response();
+        }
+    };
+
+    // Get from storage
+    match state.storage.get(&hash_bytes) {
+        Ok(Some(data)) => {
+            info!(build_system = "nx", hash = %hash, size = data.len(), "Cache HIT");
+            (StatusCode::OK, data).into_response()
+        }
+        Ok(None) => {
+            info!(build_system = "nx", hash = %hash, "Cache MISS");
+            (StatusCode::NOT_FOUND, "Not found").into_response()
+        }
+        Err(e) => {
+            warn!(build_system = "nx", hash = %hash, error = %e, "Storage error");
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
+        }
+    }
+}
+
+/// Put artifact handler for Nx/TurboRepo
+/// Nx/TurboRepo use hex-encoded hashes via /v1/cache/{hash}
+async fn put_nx_artifact<S: Storage + Clone>(
+    Path(hash): Path<String>,
+    State(state): State<AppState<S>>,
+    body: Bytes,
+) -> Response {
+    // Decode hex hash to bytes
+    let hash_bytes = match hex::decode(&hash) {
+        Ok(bytes) => bytes,
+        Err(e) => {
+            warn!(build_system = "nx", hash = %hash, error = %e, "Invalid hash format");
+            return (StatusCode::BAD_REQUEST, "Invalid hash format").into_response();
+        }
+    };
+
+    // Store in cache
+    match state.storage.put(&hash_bytes, &body) {
+        Ok(()) => {
+            info!(build_system = "nx", hash = %hash, size = body.len(), "Artifact stored");
+            (StatusCode::OK, "Stored").into_response()
+        }
+        Err(e) => {
+            warn!(build_system = "nx", hash = %hash, error = %e, "Storage error");
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
+        }
+    }
+}
+
+/// Get artifact handler for Gradle
+/// Gradle uses raw string hashes (no hex encoding) via /cache/{hash}
+async fn get_gradle_artifact<S: Storage + Clone>(
     Path(hash): Path<String>,
     State(state): State<AppState<S>>,
 ) -> Response {
@@ -151,23 +214,23 @@ async fn get_artifact_raw<S: Storage + Clone>(
     // Get from storage
     match state.storage.get(hash_bytes) {
         Ok(Some(data)) => {
-            info!("Gradle cache hit: {}", hash);
+            info!(build_system = "gradle", hash = %hash, size = data.len(), "Cache HIT");
             (StatusCode::OK, data).into_response()
         }
         Ok(None) => {
-            info!("Gradle cache miss: {}", hash);
+            info!(build_system = "gradle", hash = %hash, "Cache MISS");
             (StatusCode::NOT_FOUND, Vec::new()).into_response()
         }
         Err(e) => {
-            warn!("Gradle storage error: {}", e);
+            warn!(build_system = "gradle", hash = %hash, error = %e, "Storage error");
             (StatusCode::INTERNAL_SERVER_ERROR, Vec::new()).into_response()
         }
     }
 }
 
-/// Put artifact handler (raw string, no hex decoding)
-/// Used by Gradle which sends hashes as plain strings
-async fn put_artifact_raw<S: Storage + Clone>(
+/// Put artifact handler for Gradle
+/// Gradle uses raw string hashes (no hex encoding) via /cache/{hash}
+async fn put_gradle_artifact<S: Storage + Clone>(
     Path(hash): Path<String>,
     State(state): State<AppState<S>>,
     body: Bytes,
@@ -178,11 +241,11 @@ async fn put_artifact_raw<S: Storage + Clone>(
     // Store in cache
     match state.storage.put(hash_bytes, &body) {
         Ok(()) => {
-            info!("Gradle stored artifact: {} ({} bytes)", hash, body.len());
+            info!(build_system = "gradle", hash = %hash, size = body.len(), "Artifact stored");
             (StatusCode::OK, "Stored").into_response()
         }
         Err(e) => {
-            warn!("Gradle storage error: {}", e);
+            warn!(build_system = "gradle", hash = %hash, error = %e, "Storage error");
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
         }
     }
