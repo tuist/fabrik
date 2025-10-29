@@ -155,7 +155,12 @@ async fn get_nx_artifact<S: Storage + Clone>(
     match state.storage.get(hash_bytes) {
         Ok(Some(data)) => {
             info!(build_system = "nx", hash = %hash, size = data.len(), "Cache HIT");
-            (StatusCode::OK, data).into_response()
+            (
+                StatusCode::OK,
+                [("Content-Type", "application/octet-stream")],
+                data,
+            )
+                .into_response()
         }
         Ok(None) => {
             info!(build_system = "nx", hash = %hash, "Cache MISS");

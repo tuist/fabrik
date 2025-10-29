@@ -75,8 +75,9 @@ pub async fn run_nx(args: NxArgs) -> Result<()> {
     }
 
     // Set environment variable for Nx self-hosted remote cache
-    // See: https://nx.dev/docs/guides/tasks--caching/self-hosted-caching
+    // See: https://nx.dev/recipes/running-tasks/self-hosted-caching
     nx_cmd.env("NX_SELF_HOSTED_REMOTE_CACHE_SERVER", &cache_url);
+    nx_cmd.env("NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN", "");
 
     // Set up stdio
     nx_cmd
