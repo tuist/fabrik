@@ -17,9 +17,9 @@ Fabrik is a technology to build transparent, high-performance caching infrastruc
 ## Key Features
 
 - 🔥 **Transparent Caching**: Three-tier caching hierarchy (hot, warm, cold) with automatic fallback
-- 🔧 **Universal Support**: Works with Gradle, Bazel, Nx, TurboRepo, sccache, and more
+- 🔧 **Universal Support**: Works with Gradle, Bazel, Nx, Metro, Xcode, and more
 - ⚡ **High Performance**: Built in Rust with RocksDB for ultra-low latency (<10ms p99)
-- 🎯 **Zero Configuration**: Automatically detects if CI environments support cache capabilities (e.g., mounted volumes) and uses them
+- 🎯 **Shell Activation**: Mise-inspired workflow - activate once, works everywhere
 - 🌍 **Multi-Region**: Deploy dedicated instances in your preferred regions
 - 🔒 **Secure**: JWT-based authentication with zero-latency validation
 - 💎 **Open Source**: MPL-2.0 licensed for transparency and customization
@@ -28,8 +28,9 @@ Fabrik is a technology to build transparent, high-performance caching infrastruc
 
 Fabrik provides a transparent, high-performance caching hierarchy to optimize build performance across different environments, supporting:
 
-- 🏗️ **Build Systems**: Gradle, Bazel, Nx, TurboRepo
-- 🦀 **Compiler Caches**: sccache (Cargo/Rust)
+- 🏗️ **Build Systems**: Gradle, Bazel, Nx
+- 📦 **JavaScript Bundlers**: Metro (React Native)
+- 🍎 **Apple Development**: Xcode (Unix socket support)
 
 ## Architecture at a Glance
 
