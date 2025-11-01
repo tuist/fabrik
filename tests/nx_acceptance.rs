@@ -18,6 +18,15 @@ use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
+/// Helper to get the npm command for the current platform
+fn npm_command() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "npm.cmd"
+    } else {
+        "npm"
+    }
+}
+
 /// Helper to count objects in Fabrik cache
 fn count_fabrik_cache_objects(cache_dir: &std::path::Path) -> usize {
     let db_path = cache_dir.join("metadata");
@@ -67,7 +76,7 @@ fn test_nx_cache_integration() {
 
     // Ensure npm dependencies are installed
     println!("\n=== Installing npm dependencies ===");
-    let npm_install = Command::new("npm")
+    let npm_install = Command::new(npm_command())
         .arg("install")
         .current_dir(&fixture_path)
         .output()
@@ -231,7 +240,7 @@ fn test_nx_wrapper_starts_server() {
         .join("nx");
 
     // Ensure npm dependencies are installed
-    let npm_install = Command::new("npm")
+    let npm_install = Command::new(npm_command())
         .arg("install")
         .current_dir(&fixture_path)
         .output()
@@ -295,7 +304,7 @@ fn test_nx_cache_passes_through_args() {
         .join("nx");
 
     // Ensure npm dependencies are installed
-    let npm_install = Command::new("npm")
+    let npm_install = Command::new(npm_command())
         .arg("install")
         .current_dir(&fixture_path)
         .output()
