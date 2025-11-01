@@ -1,8 +1,6 @@
 # Nx
 
-> **Note:** Nx support is currently in development. This documentation describes the planned implementation.
-
-Fabrik will provide a wrapper command for Nx that automatically configures remote task caching via the Nx Remote Cache HTTP API.
+Fabrik provides a wrapper command for Nx that automatically configures remote task caching via the Nx Remote Cache HTTP API.
 
 ## Usage
 
@@ -46,9 +44,11 @@ When you run `fabrik nx`, Fabrik:
 4. Handles graceful shutdown when the command completes
 
 The local cache server implements the following endpoints from the Nx Remote Cache HTTP API:
-- **GET /**: Health check endpoint
-- **GET /{hash}**: Retrieve cached task outputs by content hash
-- **PUT /{hash}**: Store task outputs
+- **GET /health**: Health check endpoint
+- **GET /v1/cache/{hash}**: Retrieve cached task outputs by content hash
+- **PUT /v1/cache/{hash}**: Store task outputs
+
+Nx uses numeric string hashes (e.g., `519241863493579149`) and transfers tar archives as binary data with `Content-Type: application/octet-stream`.
 
 ## Configuration
 
@@ -68,7 +68,7 @@ Fabrik automatically configures Nx remote caching. You can optionally create an 
 }
 ```
 
-When using Fabrik, the remote cache URL is automatically configured via the `NX_CLOUD_API` environment variable, so you don't need to manually configure the remote cache endpoint.
+When using Fabrik, the remote cache URL is automatically configured via the `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` environment variable, so you don't need to manually configure the remote cache endpoint in nx.json.
 
 ## Requirements
 
@@ -97,7 +97,7 @@ This approach:
 
 The wrapper will:
 1. Start a local HTTP server implementing the Nx Remote Cache API
-2. Set the `NX_CLOUD_API` environment variable to point to the local cache
+2. Set the `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` environment variable to point to the local cache
 3. Execute `npx nx <your-arguments>`
 4. Wait for nx to complete
 5. Gracefully shut down the cache server

@@ -1,4 +1,4 @@
-use crate::cli::GradleArgs;
+use crate::cli::NxArgs;
 use crate::http::HttpServer;
 use crate::storage::{create_storage, default_cache_dir};
 use anyhow::{Context, Result};
@@ -8,9 +8,9 @@ use std::sync::Arc;
 use tokio::process::Command;
 use tracing::{debug, info};
 
-/// Run gradle with Fabrik cache
-pub async fn run_gradle(args: GradleArgs) -> Result<()> {
-    info!("Starting Fabrik Gradle wrapper");
+/// Run nx with Fabrik cache
+pub async fn run_nx(args: NxArgs) -> Result<()> {
+    info!("Starting Fabrik Nx wrapper");
 
     // Create storage backend using XDG-compliant default directory
     let cache_dir = args
@@ -23,7 +23,7 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
     let port = args.port;
     let bind_addr: SocketAddr = format!("127.0.0.1:{}", port).parse()?;
 
-    // Bind the HTTP server ourselves to get the actual port
+    // Bind TCP listener to get actual port
     let listener = tokio::net::TcpListener::bind(bind_addr)
         .await
         .context("Failed to bind TCP listener")?;
@@ -31,11 +31,11 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
     let actual_addr = listener
         .local_addr()
         .context("Failed to get local address")?;
-    let cache_url = format!("http://{}/cache/", actual_addr);
+    let cache_url = format!("http://{}", actual_addr);
 
-    info!("Gradle Remote Cache bound to: {}", cache_url);
+    info!("Nx Remote Cache bound to: {}", cache_url);
 
-    // Create shared HTTP server router (supports /cache/{hash} for Gradle)
+    // Create shared HTTP server router (supports /v1/cache/{hash} for Nx)
     let http_server = HttpServer::new(actual_addr.port(), storage);
     let app = http_server.router();
 
@@ -43,7 +43,7 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
     let (shutdown_tx, shutdown_rx) = tokio::sync::oneshot::channel::<()>();
 
     let server_handle = tokio::spawn(async move {
-        info!("Starting Gradle HTTP server");
+        info!("Starting Nx HTTP server");
 
         axum::serve(listener, app)
             .with_graceful_shutdown(async {
@@ -56,56 +56,44 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
     // Wait for server to start accepting connections
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
-    info!("Gradle Remote Cache running at: {}", cache_url);
+    info!("Nx Remote Cache running at: {}", cache_url);
 
-    // Build gradle command
-    // On Windows, use gradlew.bat (no ./ prefix needed)
-    // On Unix, use ./gradlew
-    let mut gradle_cmd = if cfg!(target_os = "windows") {
-        let mut cmd = Command::new("cmd");
-        cmd.arg("/C").arg("gradlew.bat");
-        cmd
+    // Build nx command
+    // Nx is typically run via npx or a local nx binary
+    let nx_command = if cfg!(target_os = "windows") {
+        "npx.cmd"
     } else {
-        Command::new("./gradlew")
+        "npx"
     };
 
+    let mut nx_cmd = Command::new(nx_command);
+    nx_cmd.arg("nx");
+
     // Add all user-provided arguments
-    for arg in &args.gradle_args {
-        gradle_cmd.arg(arg);
+    for arg in &args.nx_args {
+        nx_cmd.arg(arg);
     }
 
-    // Inject build cache configuration via system properties
-    // This sets the remote cache URL dynamically
-    gradle_cmd.arg(format!(
-        "-Dorg.gradle.caching.buildCache.remote.url={}",
-        cache_url
-    ));
-    gradle_cmd.arg("-Dorg.gradle.caching.buildCache.remote.push=true");
+    // Set environment variable for Nx self-hosted remote cache
+    // See: https://nx.dev/recipes/running-tasks/self-hosted-caching
+    nx_cmd.env("NX_SELF_HOSTED_REMOTE_CACHE_SERVER", &cache_url);
+    nx_cmd.env("NX_SELF_HOSTED_REMOTE_CACHE_ACCESS_TOKEN", "");
 
     // Set up stdio
-    gradle_cmd
+    nx_cmd
         .stdin(Stdio::inherit())
         .stdout(Stdio::inherit())
         .stderr(Stdio::inherit());
 
-    let gradle_exe = if cfg!(target_os = "windows") {
-        "gradlew.bat"
-    } else {
-        "./gradlew"
-    };
-
     info!(
-        "Executing: {} {} -Dorg.gradle.caching.buildCache.remote.url={}",
-        gradle_exe,
-        args.gradle_args.join(" "),
+        "Executing: {} nx {} (NX_SELF_HOSTED_REMOTE_CACHE_SERVER={})",
+        nx_command,
+        args.nx_args.join(" "),
         cache_url
     );
 
-    // Run gradle and wait for completion
-    let status = gradle_cmd
-        .status()
-        .await
-        .context("Failed to execute gradle")?;
+    // Run nx and wait for completion
+    let status = nx_cmd.status().await.context("Failed to execute nx")?;
 
     // Shutdown server
     debug!("Sending shutdown signal to HTTP server");
@@ -123,9 +111,9 @@ pub async fn run_gradle(args: GradleArgs) -> Result<()> {
         }
     }
 
-    info!("Gradle completed with status: {}", status);
+    info!("Nx completed with status: {}", status);
 
-    // Exit with same code as gradle
+    // Exit with same code as nx
     if !status.success() {
         std::process::exit(status.code().unwrap_or(1));
     }

@@ -49,6 +49,9 @@ pub enum Commands {
     /// Wrap gradle with Fabrik cache enabled
     Gradle(GradleArgs),
 
+    /// Wrap nx with Fabrik cache enabled
+    Nx(NxArgs),
+
     /// Wrap xcodebuild with Fabrik cache enabled (Unix only)
     #[cfg(unix)]
     Xcodebuild(XcodebuildArgs),
@@ -173,6 +176,20 @@ pub struct GradleArgs {
     /// Gradle arguments (e.g., build, test, clean, --configuration-cache, etc.)
     #[arg(last = true, required = true)]
     pub gradle_args: Vec<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct NxArgs {
+    #[command(flatten)]
+    pub common: CommonConfigArgs,
+
+    /// Nx HTTP server port (0 = random)
+    #[arg(long, env = "FABRIK_CONFIG_NX_PORT", default_value = "0")]
+    pub port: u16,
+
+    /// Nx arguments (e.g., build, test, run-many, --parallel, etc.)
+    #[arg(last = true, required = true)]
+    pub nx_args: Vec<String>,
 }
 
 #[cfg(unix)]

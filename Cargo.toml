@@ -33,6 +33,7 @@ bytes = "1"
 
 [dev-dependencies]
 tempfile = "3"
+serial_test = "3"
 
 [build-dependencies]
 tonic-build = "0.12"

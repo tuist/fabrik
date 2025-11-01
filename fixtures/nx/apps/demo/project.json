@@ -1,0 +1,19 @@
+{
+  "name": "demo",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/demo/src",
+  "targets": {
+    "build": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "node -e \"require('fs').mkdirSync('{projectRoot}/dist', { recursive: true })\"",
+          "node -e \"require('fs').writeFileSync('{projectRoot}/dist/output.txt', 'Build complete!\\n')\""
+        ],
+        "parallel": false
+      },
+      "outputs": ["{projectRoot}/dist"]
+    }
+  }
+}
