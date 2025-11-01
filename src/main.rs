@@ -24,13 +24,20 @@ async fn main() -> Result<()> {
 
     // Dispatch to appropriate command handler
     match cli.command {
+        Commands::Activate(args) => {
+            // TODO: Implement activate command
+            println!("fabrik activate - not yet implemented");
+            println!("Args: {:?}", args);
+            Ok(())
+        }
         Commands::Exec(args) => commands::exec::run(args),
-        Commands::Bazel(args) => commands::bazel::run_bazel(args).await,
-        Commands::Gradle(args) => commands::gradle::run_gradle(args).await,
-        Commands::Nx(args) => commands::nx::run_nx(args).await,
-        #[cfg(unix)]
-        Commands::Xcodebuild(args) => commands::xcodebuild::run(args).await,
         Commands::Daemon(args) => commands::daemon::run(args).await,
+        Commands::Deactivate(args) => {
+            // TODO: Implement deactivate command
+            println!("fabrik deactivate - not yet implemented");
+            println!("Args: {:?}", args);
+            Ok(())
+        }
         Commands::Server(args) => commands::server::run(*args).await,
         Commands::Config(args) => commands::config::run(args.command),
         Commands::Health(args) => commands::health::run(args),
