@@ -2,297 +2,354 @@
 
 Complete reference for all Fabrik CLI commands.
 
-## `fabrik bazel`
+## Overview
 
-Wrapper for Bazel with automatic remote cache configuration.
+Fabrik uses an activation-based approach for managing build caches. Instead of wrapping your build commands, Fabrik runs as a background daemon that your build tools connect to automatically.
 
-### Usage
+**Two main workflows:**
 
-```bash
-fabrik bazel [OPTIONS] -- <BAZEL_ARGS>...
-```
+1. **Shell Integration** (`fabrik activate`) - Automatic daemon management for development
+2. **Explicit Execution** (`fabrik exec`) - Manual daemon management for CI/CD
 
-### Options
+See the [Getting Started Guide](/getting-started) for detailed usage examples.
 
-| Option | Environment Variable | Description |
-|--------|---------------------|-------------|
-| `--config <PATH>` | - | Path to configuration file |
-| `--config-cache-dir <DIR>` | `TUIST_CONFIG_CACHE_DIR` | Cache directory path |
-| `--config-cache-max-size <SIZE>` | `TUIST_CONFIG_CACHE_MAX_SIZE` | Maximum cache size (e.g., "10GB") |
-| `--config-upstream <URL>` | `TUIST_CONFIG_UPSTREAM_0_URL` | Upstream cache URL |
-| `--config-jwt-token <TOKEN>` | `TUIST_CONFIG_AUTH_TOKEN` or `TUIST_TOKEN` | JWT authentication token |
-| `--config-bazel-port <PORT>` | `FABRIK_CONFIG_BAZEL_PORT` | Bazel gRPC server port (0 = random) |
+## `fabrik activate`
 
-### Examples
-
-```bash
-# Basic usage (local cache only)
-fabrik bazel -- build //...
-
-# Build specific target
-fabrik bazel -- build //src:myapp
-
-# Run tests
-fabrik bazel -- test //...
-
-# Build with Bazel configuration
-fabrik bazel -- build //... --config=release --jobs=8
-
-# With upstream cache
-fabrik bazel --config-upstream grpc://cache.example.com:7070 -- build //...
-
-# With authentication
-fabrik bazel \
-  --config-upstream grpc://cache.example.com:7070 \
-  --config-jwt-token $TUIST_TOKEN \
-  -- build //...
-
-# Using configuration file
-fabrik bazel --config .fabrik.toml -- build //...
-
-# Custom cache directory and port
-fabrik bazel \
-  --config-cache-dir /tmp/bazel-cache \
-  --config-bazel-port 9090 \
-  -- build //...
-```
-
-### How It Works
-
-The `fabrik bazel` command:
-1. Starts a local gRPC server implementing the Bazel Remote Caching protocol
-2. Automatically injects `--remote_cache=grpc://localhost:{port}` flag
-3. Passes through all other Bazel arguments unchanged
-4. Handles graceful shutdown when Bazel exits
-
-See the [Bazel integration guide](/build-systems/bazel) for more details.
-
-## `fabrik gradle`
-
-Wrapper for Gradle with automatic remote cache configuration.
+Set up shell integration to automatically manage the cache daemon.
 
 ### Usage
 
 ```bash
-fabrik gradle [OPTIONS] -- <GRADLE_ARGS>...
+# Initial setup - outputs shell hook code
+fabrik activate <SHELL>
+
+# Check status and start daemon if needed
+fabrik activate --status
 ```
 
-### Options
+### Shells
 
-| Option | Environment Variable | Description |
-|--------|---------------------|-------------|
-| `--config <PATH>` | - | Path to configuration file |
-| `--config-cache-dir <DIR>` | `TUIST_CONFIG_CACHE_DIR` | Cache directory path |
-| `--config-cache-max-size <SIZE>` | `TUIST_CONFIG_CACHE_MAX_SIZE` | Maximum cache size (e.g., "10GB") |
-| `--config-upstream <URL>` | `TUIST_CONFIG_UPSTREAM_0_URL` | Upstream cache URL |
-| `--config-jwt-token <TOKEN>` | `TUIST_CONFIG_AUTH_TOKEN` or `TUIST_TOKEN` | JWT authentication token |
-| `--config-gradle-port <PORT>` | `FABRIK_CONFIG_GRADLE_PORT` | Gradle HTTP server port (0 = random) |
+- `bash` - Bash shell
+- `zsh` - Zsh shell  
+- `fish` - Fish shell
 
 ### Examples
 
 ```bash
-# Basic usage (local cache only)
-fabrik gradle -- build
+# One-time shell setup (add to .bashrc or .zshrc)
+echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
+source ~/.bashrc
 
-# Build specific project
-fabrik gradle -- :app:build
+# For zsh
+echo 'eval "$(fabrik activate zsh)"' >> ~/.zshrc
 
-# Run tests
-fabrik gradle -- test
+# For fish
+echo 'fabrik activate fish | source' >> ~/.config/fish/config.fish
 
-# Clean and build
-fabrik gradle -- clean build
-
-# Build with configuration cache
-fabrik gradle -- build --configuration-cache
-
-# With upstream cache
-fabrik gradle --config-upstream http://cache.example.com:8080 -- build
-
-# With authentication
-fabrik gradle \
-  --config-upstream http://cache.example.com:8080 \
-  --config-jwt-token $TUIST_TOKEN \
-  -- build
-
-# Using configuration file
-fabrik gradle --config .fabrik.toml -- build
-
-# Custom cache directory and port
-fabrik gradle \
-  --config-cache-dir /tmp/gradle-cache \
-  --config-gradle-port 8080 \
-  -- :app:assemble
+# Manual activation (check/start daemon)
+fabrik activate --status
 ```
 
-### How It Works
+### What It Does
 
-The `fabrik gradle` command:
-1. Starts a local HTTP server implementing the Gradle Build Cache HTTP API
-2. Automatically injects cache URL via Gradle system properties
-3. Passes through all other Gradle arguments unchanged
-4. Handles graceful shutdown when Gradle exits
+When you `cd` into a directory:
 
-See the [Gradle integration guide](/build-systems/gradle) for more details.
+1. **Searches** for `.fabrik.toml` up the directory tree
+2. **Computes** configuration hash to identify unique daemon
+3. **Checks** if daemon with that config is running
+4. **Starts** daemon if not running
+5. **Exports** environment variables for build tools:
+   ```bash
+   FABRIK_HTTP_URL=http://127.0.0.1:58234
+   FABRIK_GRPC_URL=grpc://127.0.0.1:58235
+   GRADLE_BUILD_CACHE_URL=http://127.0.0.1:58234
+   NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:58234
+   XCODE_CACHE_SERVER=http://127.0.0.1:58234
+   ```
+
+### Configuration
+
+Searches for configuration in this order:
+
+1. `$PWD/.fabrik.toml`
+2. `$PWD/../.fabrik.toml` (continues up to root)
+3. `~/.config/fabrik/config.toml` (global fallback)
+
+Different configurations = different daemon instances.
+
+See the [Getting Started Guide](/getting-started#shell-integration-recommended-for-development) for complete setup.
 
 ## `fabrik exec`
 
-Wrap a command with ephemeral cache (hot cache for CI/local builds).
+Execute a command with guaranteed daemon lifecycle.
 
 ### Usage
 
 ```bash
-fabrik exec [OPTIONS] -- <COMMAND> [ARGS...]
+fabrik exec [OPTIONS] <COMMAND> [ARGS...]
 ```
 
 ### Options
 
-| Option | Environment Variable | Description |
-|--------|---------------------|-------------|
-| `--config <PATH>` | - | Path to configuration file |
-| `--config-cache-dir <DIR>` | `TUIST_CONFIG_CACHE_DIR` | Cache directory path |
-| `--config-cache-max-size <SIZE>` | `TUIST_CONFIG_CACHE_MAX_SIZE` | Maximum cache size (e.g., "10GB") |
-| `--config-upstream <URL>` | `TUIST_CONFIG_UPSTREAM_0_URL` | Upstream cache URL |
-| `--config-jwt-token <TOKEN>` | `TUIST_CONFIG_AUTH_TOKEN` or `TUIST_TOKEN` | JWT authentication token |
-| `--no-auto-configure` | - | Disable automatic build system configuration |
-| `--dry-run` | - | Show what would be configured without executing |
+| Option | Description |
+|--------|-------------|
+| `--keep-alive` | Don't stop daemon after command exits (default) |
+| `--kill-after` | Stop daemon when command completes |
+| `--config <PATH>` | Path to configuration file |
 
 ### Examples
 
 ```bash
-# Basic usage
-fabrik exec -- ./gradlew build
+# Basic usage - daemon keeps running after
+fabrik exec bazel build //...
+fabrik exec nx build my-app
+fabrik exec gradle build
 
-# With upstream cache
-fabrik exec --config-upstream grpc://cache.example.com:7070 -- ./gradlew build
+# Keep daemon alive for subsequent commands
+fabrik exec --keep-alive nx build my-app
+nx test my-app  # Reuses the same daemon
+fabrik deactivate  # Clean up when done
 
-# With authentication
-fabrik exec \
-  --config-upstream grpc://cache.example.com:7070 \
-  --config-jwt-token $TUIST_TOKEN \
-  -- ./gradlew build
+# Stop daemon after command
+fabrik exec --kill-after bazel test //...
 
-# Using configuration file
-fabrik exec --config .fabrik.toml -- npm run build
-
-# Dry run to see what would be configured
-fabrik exec --dry-run -- ./gradlew build
+# With custom configuration
+fabrik exec --config .fabrik.toml bazel build //...
 ```
+
+### What It Does
+
+1. **Finds** `.fabrik.toml` in current directory tree
+2. **Starts** daemon if not running (or reuses existing)
+3. **Exports** environment variables (FABRIK_HTTP_URL, etc.)
+4. **Executes** your command with those variables set
+5. **Optionally** stops daemon after completion (if `--kill-after`)
+
+### When to Use
+
+- **CI/CD pipelines** - Ensures consistent cache behavior
+- **One-off builds** - Don't want permanent shell integration
+- **Scripts** - Programmatic daemon management
+
+See the [Getting Started Guide](/getting-started#workflow-2-explicit-execution-ci-friendly) for complete examples.
 
 ## `fabrik daemon`
 
-Run a long-lived local cache daemon (hot cache for development).
+Manually manage cache daemons.
 
-### Usage
+### Commands
 
 ```bash
-fabrik daemon [OPTIONS]
+# Start daemon for current directory's config
+fabrik daemon start [OPTIONS]
+
+# Stop daemon for current config  
+fabrik daemon stop
+
+# List all running daemons
+fabrik daemon list
+
+# Stop all daemons
+fabrik daemon stop --all
+
+# Clean up orphaned daemons
+fabrik daemon clean
 ```
 
-### Options
-
-Same as `fabrik exec`, plus:
+### Options (for `start`)
 
 | Option | Description |
 |--------|-------------|
-| `--bind <ADDRESS>` | Address to bind daemon to (default: "127.0.0.1:7070") |
+| `--config <PATH>` | Path to configuration file |
 
 ### Examples
 
 ```bash
-# Start daemon with default settings
-fabrik daemon
+# Start daemon explicitly
+fabrik daemon start
 
-# Start with custom configuration
-fabrik daemon --config .fabrik.toml
+# Start with custom config
+fabrik daemon start --config .fabrik.toml
 
-# Start on custom address
-fabrik daemon --bind 0.0.0.0:8080
+# Use in multiple terminals
+bazel build //...    # Terminal 1
+nx build demo        # Terminal 2
+gradle build         # Terminal 3
+
+# List running daemons
+fabrik daemon list
+
+# Stop specific daemon (for current directory)
+fabrik daemon stop
+
+# Stop all daemons
+fabrik daemon stop --all
+
+# Clean up orphaned daemons
+fabrik daemon clean
 ```
+
+### Daemon State
+
+Daemons are tracked in `~/.fabrik/daemons/<config-hash>/`:
+
+```
+~/.fabrik/daemons/<config-hash>/
+├── pid              # Process ID
+├── ports.json       # HTTP/gRPC/metrics ports
+├── config_path.txt  # Path to config file
+```
+
+Each unique configuration gets its own daemon instance.
+
+## `fabrik deactivate`
+
+Remove Fabrik environment variables and optionally stop daemons.
+
+### Usage
+
+```bash
+fabrik deactivate [OPTIONS]
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--stop-daemon` | Also stop the daemon for current directory |
+
+### Examples
+
+```bash
+# Unset environment variables only
+fabrik deactivate
+
+# Also stop the daemon
+fabrik deactivate --stop-daemon
+```
+
+### What It Does
+
+Removes Fabrik environment variables from your shell:
+
+- `FABRIK_HTTP_URL`
+- `FABRIK_GRPC_URL`
+- `FABRIK_CONFIG_HASH`
+- `FABRIK_DAEMON_PID`
+- `GRADLE_BUILD_CACHE_URL`
+- `NX_SELF_HOSTED_REMOTE_CACHE_SERVER`
+- `XCODE_CACHE_SERVER`
 
 ## `fabrik server`
 
-Run a regional/cloud cache server (warm/cold cache).
+Run a regional/cloud cache server (Layer 2 cache).
+
+**Note:** This is for running Fabrik as a remote cache server that multiple developers/CI runners connect to. Most users should use `fabrik activate` or `fabrik exec` instead.
 
 ### Usage
 
 ```bash
-fabrik server [OPTIONS]
+fabrik server --config <CONFIG_FILE>
 ```
 
 ### Options
 
-Same as `fabrik exec`, plus:
-
 | Option | Description |
 |--------|-------------|
-| `--config-fabrik-enabled` | Enable Fabrik protocol server |
-| `--config-fabrik-bind <ADDRESS>` | Fabrik protocol bind address |
-| `--config-metrics-bind <ADDRESS>` | Metrics API bind address |
-| `--config-health-bind <ADDRESS>` | Health API bind address |
+| `--config <PATH>` | Path to server configuration file (required) |
 
 ### Examples
 
 ```bash
-# Start server with configuration file
-fabrik server --config /etc/fabrik/config.toml
+# Start Layer 2 server
+fabrik server --config /etc/fabrik/server.toml
 
-# Start with environment variables
-export TUIST_CONFIG_CACHE_DIR=/data/cache
-export TUIST_CONFIG_FABRIK_ENABLED=true
-fabrik server
+# Generate example server config
+fabrik config generate --template server > server.toml
+fabrik server --config server.toml
 ```
+
+### Server Configuration
+
+Server configuration requires more settings than local daemon:
+
+```toml
+[cache]
+dir = "/data/fabrik/cache"
+max_size = "500GB"
+
+[[upstream]]
+url = "s3://my-bucket/cache/"
+region = "us-east-1"
+permanent = true
+
+[auth]
+public_key_file = "/etc/fabrik/jwt-public-key.pem"
+
+[fabrik]
+enabled = true
+bind = "0.0.0.0:7070"  # gRPC server for Fabrik protocol
+
+[observability]
+metrics_bind = "0.0.0.0:9091"
+health_bind = "0.0.0.0:8888"
+```
+
+See [CLAUDE.md](/CLAUDE.md#layer-2-regional-server-with-s3-upstream) for complete server setup.
 
 ## `fabrik config`
 
-Configuration utilities (validate, generate, show).
+Configuration utilities.
 
-### Usage
-
-```bash
-fabrik config <SUBCOMMAND> [OPTIONS]
-```
-
-### Subcommands
-
-#### `validate`
-
-Validate a configuration file.
+### Commands
 
 ```bash
+# Validate configuration file
 fabrik config validate <PATH>
 
-# Example:
-fabrik config validate .fabrik.toml
-```
-
-#### `generate`
-
-Generate example configuration.
-
-```bash
+# Generate example configuration
 fabrik config generate --template <TEMPLATE>
 
-# Templates:
-#   exec   - Configuration for fabrik exec/daemon
-#   server - Configuration for fabrik server
-
-# Examples:
-fabrik config generate --template exec > .fabrik.toml
-fabrik config generate --template server > server.toml
+# Show effective configuration
+fabrik config show
 ```
 
-#### `show`
-
-Show effective configuration (merged from all sources).
+### Examples
 
 ```bash
-fabrik config show [OPTIONS]
+# Validate project config
+fabrik config validate .fabrik.toml
 
-# Examples:
+# Generate project config template
+fabrik config generate --template project > .fabrik.toml
+
+# Generate server config template
+fabrik config generate --template server > server.toml
+
+# Show current effective configuration
 fabrik config show
-fabrik config show --config .fabrik.toml
-fabrik config show --config-upstream grpc://override.example.com
+```
+
+### Templates
+
+- `project` - Local daemon configuration (for `.fabrik.toml`)
+- `server` - Remote server configuration (for Layer 2)
+
+### Project Config Example
+
+```toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "10GB"
+
+# Optional: Connect to remote cache
+[[upstream]]
+url = "grpc://cache.example.com:7070"
+timeout = "30s"
+
+# Optional: Authentication
+[auth]
+token = "${FABRIK_TOKEN}"
 ```
 
 ## `fabrik health`
