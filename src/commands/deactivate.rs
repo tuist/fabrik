@@ -16,7 +16,7 @@ pub fn run(args: DeactivateArgs) -> Result<()> {
 fn output_unset_commands() {
     // Detect shell from SHELL env var, default to bash/zsh syntax
     let shell = std::env::var("SHELL").unwrap_or_default();
-    
+
     if shell.contains("fish") {
         println!("set -e FABRIK_HTTP_URL 2>/dev/null");
         println!("set -e FABRIK_GRPC_URL 2>/dev/null");

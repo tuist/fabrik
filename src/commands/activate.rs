@@ -30,7 +30,8 @@ pub fn run(args: ActivateArgs) -> Result<()> {
 fn output_shell_hook(shell: &str) -> Result<()> {
     match shell {
         "bash" => {
-            println!(r#"_fabrik_hook() {{
+            println!(
+                r#"_fabrik_hook() {{
   eval "$(fabrik activate --status 2>/dev/null)"
 }}
 
@@ -40,10 +41,12 @@ if [[ -n "${{PROMPT_COMMAND}}" ]]; then
 else
   PROMPT_COMMAND="_fabrik_hook"
 fi
-"#);
+"#
+            );
         }
         "zsh" => {
-            println!(r#"_fabrik_hook() {{
+            println!(
+                r#"_fabrik_hook() {{
   eval "$(fabrik activate --status 2>/dev/null)"
 }}
 
@@ -53,16 +56,19 @@ add-zsh-hook chpwd _fabrik_hook
 
 # Run now
 _fabrik_hook
-"#);
+"#
+            );
         }
         "fish" => {
-            println!(r#"function _fabrik_hook --on-variable PWD
+            println!(
+                r#"function _fabrik_hook --on-variable PWD
   fabrik activate --status 2>/dev/null | source
 end
 
 # Run now
 _fabrik_hook
-"#);
+"#
+            );
         }
         _ => {
             anyhow::bail!("Unsupported shell: {}. Use bash, zsh, or fish", shell);
@@ -99,12 +105,15 @@ fn activate_current_directory() -> Result<()> {
     }
 
     // Need to start daemon
-    println!("# Starting Fabrik daemon for config: {}", config_path.display());
-    
+    println!(
+        "# Starting Fabrik daemon for config: {}",
+        config_path.display()
+    );
+
     // TODO: Actually start the daemon process
     // For now, just indicate it would start
     println!("# TODO: Start daemon with config hash: {}", config_hash);
-    
+
     Ok(())
 }
 
