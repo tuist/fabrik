@@ -1,58 +1,35 @@
 # Nx
 
-Fabrik provides a wrapper command for Nx that automatically configures remote task caching via the Nx Remote Cache HTTP API.
+Fabrik provides transparent remote task caching for Nx via the Nx Remote Cache HTTP API.
 
-## Usage
+## Quick Start
 
-The `fabrik nx` command is a drop-in replacement for the standard `nx` command:
-
-```bash
-# Instead of: nx run-many --target=build
-# Use:
-fabrik nx -- run-many --target=build
-```
-
-All `nx` arguments and flags work as normal:
+### 1. Activate Fabrik (One-Time Setup)
 
 ```bash
-# Build all projects
-fabrik nx -- run-many --target=build --all
-
-# Run tests
-fabrik nx -- run-many --target=test --all
-
-# Build specific project
-fabrik nx -- build my-app
-
-# Run affected tasks
-fabrik nx -- affected --target=build
-
-# Run with parallel execution
-fabrik nx -- run-many --target=build --all --parallel=3
-
-# Show project graph
-fabrik nx -- graph
+# Add to your shell config
+echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
+source ~/.bashrc
 ```
 
-## How It Works
+### 2. Configure Your Project
 
-When you run `fabrik nx`, Fabrik:
+Create `.fabrik.toml` in your project root:
 
-1. Starts a local HTTP server implementing the Nx Remote Cache HTTP API
-2. Automatically configures Nx to use the cache via environment variables
-3. Passes through all your nx arguments unchanged
-4. Handles graceful shutdown when the command completes
+```toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "10GB"
 
-The local cache server implements the following endpoints from the Nx Remote Cache HTTP API:
-- **GET /health**: Health check endpoint
-- **GET /v1/cache/{hash}**: Retrieve cached task outputs by content hash
-- **PUT /v1/cache/{hash}**: Store task outputs
+# Optional: Connect to remote cache
+[[upstream]]
+url = "http://cache.example.com:8080"
+timeout = "30s"
+```
 
-Nx uses numeric string hashes (e.g., `519241863493579149`) and transfers tar archives as binary data with `Content-Type: application/octet-stream`.
+### 3. Enable Nx Remote Caching
 
-## Configuration
-
-Fabrik automatically configures Nx remote caching. You can optionally create an `nx.json` file in your project to customize cache behavior:
+Add to your `nx.json`:
 
 ```json
 {
@@ -61,54 +38,239 @@ Fabrik automatically configures Nx remote caching. You can optionally create an 
       "runner": "nx/tasks-runners/default",
       "options": {
         "cacheableOperations": ["build", "test", "lint"],
-        "parallel": 3
+        "parallel": 3,
+        "remoteCache": {
+          "enabled": true
+        }
       }
     }
   }
 }
 ```
 
-When using Fabrik, the remote cache URL is automatically configured via the `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` environment variable, so you don't need to manually configure the remote cache endpoint in nx.json.
+**Note:** Nx automatically reads the cache URL from the `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` environment variable, so you don't need to configure the URL in `nx.json`.
 
-## Requirements
-
-- Nx must be installed in your project (via npm, yarn, or pnpm)
-- Node.js version matching your project's requirements
-- `npx` must be available (comes with npm 5.2+)
-
-## How Tool Discovery Works
-
-Unlike Bazel (which is typically in your system PATH), Nx is usually installed as a local Node.js dependency in `node_modules/.bin/`. When you run `fabrik nx`, Fabrik will use **npx** to discover and execute Nx:
+### 4. Use Nx Normally
 
 ```bash
-npx nx <your-arguments>
+cd ~/my-nx-workspace
+
+# Daemon starts automatically
+nx build my-app
+nx test my-app
+nx run-many --target=build --all
 ```
 
-This approach:
-- ✅ **Finds local installations** - `npx` automatically resolves to `./node_modules/.bin/nx`
-- ✅ **Works across package managers** - npm, yarn, pnpm all place binaries in `node_modules/.bin/`
-- ✅ **Falls back to global** - If not found locally, tries global installation
-- ✅ **Cross-platform** - Works on Windows, macOS, and Linux
+That's it! Nx automatically uses Fabrik's cache via the `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` environment variable.
 
-**Example resolution order:**
-1. `./node_modules/.bin/nx` (project-local installation) ← Most common
-2. `~/.npm/_npx/*/node_modules/.bin/nx` (npx cache)
-3. Global nx (if installed with `npm install -g nx`)
+## Configuration
 
-The wrapper will:
-1. Start a local HTTP server implementing the Nx Remote Cache API
-2. Set the `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` environment variable to point to the local cache
-3. Execute `npx nx <your-arguments>`
-4. Wait for nx to complete
-5. Gracefully shut down the cache server
+### Shell Activation (Recommended for Development)
 
-**Why npx?** Each build system has different conventions:
-- **Gradle**: Uses wrapper script `./gradlew` (checked into repo)
-- **Bazel**: Global installation in PATH (`bazel`)
-- **Nx**: Local node package in `node_modules/.bin/` → **npx resolves this automatically**
+Shell activation automatically manages the daemon:
+
+```bash
+cd ~/nx-workspace
+# Daemon starts, exports NX_SELF_HOSTED_REMOTE_CACHE_SERVER
+nx build my-app
+
+cd ~/another-workspace
+# New daemon starts if different config
+```
+
+### Explicit Execution (CI/CD)
+
+For CI/CD pipelines, use `fabrik exec`:
+
+```bash
+# In your CI script
+fabrik exec nx build my-app
+fabrik exec nx run-many --target=test --all
+```
+
+## How It Works
+
+When Fabrik is activated:
+
+1. **Daemon starts** with an HTTP server implementing Nx's Remote Cache API
+2. **Environment variable exported**: `NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:{port}`
+3. **Nx connects** to the HTTP server (automatically via the environment variable)
+4. **Cache operations** flow through Fabrik's multi-layer cache
+
+The daemon implements:
+- **GET /health**: Health check
+- **GET /v1/cache/{hash}**: Retrieve cached task outputs (tar archives)
+- **PUT /v1/cache/{hash}**: Store task outputs
+
+Nx uses numeric string hashes (e.g., `519241863493579149`) and transfers tar archives as binary data.
+
+## Examples
+
+### Development Workflow
+
+```bash
+# One-time setup
+echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
+source ~/.bashrc
+
+# Daily usage
+cd ~/my-nx-workspace
+nx build my-app           # First build (cache miss)
+nx build my-app           # Second build (cache hit) - instant!
+nx run-many --target=test --all
+```
+
+### CI/CD Workflow
+
+```yaml
+# GitHub Actions
+steps:
+  - uses: actions/checkout@v4
+  
+  - uses: actions/setup-node@v4
+    with:
+      node-version: '20'
+  
+  - run: npm ci
+  
+  - run: |
+      curl -fsSL https://raw.githubusercontent.com/tuist/fabrik/main/install.sh | sh
+      
+  - run: fabrik exec nx run-many --target=build --all
+  
+  - run: fabrik exec nx run-many --target=test --all
+```
+
+### Monorepo Workflow
+
+```bash
+cd ~/my-monorepo
+
+# Build affected projects only
+nx affected --target=build
+
+# Test everything
+nx run-many --target=test --all
+
+# Lint specific app
+nx lint my-app
+
+# All tasks use the same cache
+```
+
+## Advanced Configuration
+
+### Customize Cacheable Operations
+
+```json
+{
+  "tasksRunnerOptions": {
+    "default": {
+      "runner": "nx/tasks-runners/default",
+      "options": {
+        "cacheableOperations": [
+          "build",
+          "test",
+          "lint",
+          "e2e",
+          "bundle"
+        ],
+        "parallel": 3,
+        "remoteCache": {
+          "enabled": true
+        }
+      }
+    }
+  }
+}
+```
+
+### Per-Project Cache Configuration
+
+```json
+{
+  "name": "my-app",
+  "targets": {
+    "build": {
+      "cache": true,
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "test": {
+      "cache": true
+    }
+  }
+}
+```
+
+## Troubleshooting
+
+### Nx Not Using Remote Cache
+
+Check that environment variable is set:
+
+```bash
+echo $NX_SELF_HOSTED_REMOTE_CACHE_SERVER
+# Should output: http://127.0.0.1:{port}
+```
+
+Check daemon is running:
+
+```bash
+fabrik daemon list
+```
+
+Enable Nx verbose logging:
+
+```bash
+NX_VERBOSE_LOGGING=true nx build my-app
+```
+
+### Cache Misses
+
+Check Nx cache:
+
+```bash
+nx reset  # Clear local cache
+nx build my-app --verbose
+```
+
+Verify task is cacheable in `project.json`:
+
+```json
+{
+  "targets": {
+    "build": {
+      "cache": true
+    }
+  }
+}
+```
+
+### Connection Issues
+
+Restart the daemon:
+
+```bash
+fabrik daemon stop
+fabrik activate --status
+```
+
+Check Nx configuration:
+
+```bash
+nx report
+```
+
+## Performance Tips
+
+1. **Enable parallel execution**: Set `"parallel": 3` in `nx.json`
+2. **Cache all tasks**: Add operations to `cacheableOperations`
+3. **Use affected commands**: `nx affected --target=build` only builds changed projects
+4. **Optimize outputs**: Specify exact output paths in `project.json`
 
 ## See Also
 
-- [CLI Reference](/reference/cli) - Full command-line options
-- [Configuration File](/reference/config-file) - Complete configuration reference
-- [Nx Remote Caching Documentation](https://nx.dev/ci/features/remote-cache) - Official Nx docs
+- [Getting Started](/getting-started) - Complete setup guide
+- [CLI Reference](/reference/cli) - Command-line options
+- [Configuration](/reference/config-file) - Configuration reference
+- [Nx Remote Caching Docs](https://nx.dev/ci/features/remote-cache) - Official Nx documentation
