@@ -2,6 +2,40 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2025-11-01
+
+### 🐛 Bug Fixes
+
+- Make Nx acceptance test fail on missing cache hits ([b6442a0](b6442a0c5456f10392c4040ebde14757aa838926))
+- Repair Nx fixture and configure remote cache properly ([98e6069](98e6069c1413b764cc7178c1352129e30ef045b1))
+- Use correct Nx environment variable for self-hosted cache ([4079624](4079624674ca879dea541c31d91fabe6c51920f8))
+- Nx uses raw string hashes, not hex-encoded ([3dd30a1](3dd30a18f9ea77c5a9d269451e7d2b62ba738a61))
+- Make Nx acceptance test work reliably ([1f0ecfa](1f0ecfae9b644a1c7aa936fa8b22c73d5b6ca51a))
+- Force Nx to use remote cache and validate communication ([c55fa77](c55fa77f526aaced5aecb8479e84a77dc6e7dc48))
+- Update test assertion to match test architecture ([817fed2](817fed22e67b50e71f2d6a2225253f5195b71360))
+- Validate cache hits work across server instances ([4dddc30](4dddc309cc2a6657704cf13ddb4306a83d3c2f86))
+- Resolve CI test failures for Nx integration ([2d30a7c](2d30a7c3392b8a582918c47816a15b8236271af7))
+- Use npm.cmd on Windows for Nx tests ([9216f43](9216f43b4bd5ecad6f8e1988310ae94b04b87b0f))
+- Use cross-platform Node.js commands in Nx fixture for Windows compatibility ([8afc0f5](8afc0f529c3e0585ed4f458d71964d56c4e491fb))
+
+### 📚 Documentation
+
+- Add Nx build system documentation ([1f214a2](1f214a2c6af1c93f79507ee28e3c4103a1395859))
+- Add Nx build system documentation and logo ([3d1b316](3d1b3167392e59e6a845e3eccd5f9d7adaf086a0))
+- Update Nx documentation to reflect implementation ([320350f](320350f803724799d10eafd6d499387828f0003d))
+- Add architecture guide explaining local layer motivations ([c17014c](c17014c04a1c33dd06b085500f71b59bff5e3b0c))
+- Update PLAN.md with comprehensive build system support roadmap ([612c67a](612c67aac34c20c73e183e3d8d4987178fb1c302))
+
+### 🚀 Features
+
+- Add Nx build system support ([24f6453](24f64536f0be794de8caa6a2cbfd86830c6cd204))
+- Implement Nx wrapper command with comprehensive tests ([1deef56](1deef56958a5c1826e51f741ebe3587a2cf3a0a3))
+
+### 🚜 Refactor
+
+- Consolidate HTTP cache servers into shared HttpServer ([14a31c3](14a31c34705326eb60d9749a0b92c07ff9d2a180))
+- Rename handlers to reflect build system binding ([a38c080](a38c08051f8234723606a229fc0ad1129b75c252))
+
 ## [0.6.1] - 2025-10-28
 
 ### 🐛 Bug Fixes
