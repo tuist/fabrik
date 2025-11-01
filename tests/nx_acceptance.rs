@@ -13,6 +13,7 @@
 //    ```
 // 4. Or run tests: `cargo test --test nx_acceptance -- --nocapture`
 
+use serial_test::serial;
 use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
@@ -34,6 +35,7 @@ fn count_fabrik_cache_objects(cache_dir: &std::path::Path) -> usize {
 }
 
 #[test]
+#[serial]
 fn test_nx_cache_integration() {
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
 
@@ -215,6 +217,7 @@ fn test_nx_cache_integration() {
 }
 
 #[test]
+#[serial]
 fn test_nx_wrapper_starts_server() {
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
 
@@ -258,6 +261,7 @@ fn test_nx_wrapper_starts_server() {
         .arg("demo")
         .current_dir(&fixture_path)
         .env("NX_CACHE_DIRECTORY", &nx_cache)
+        .env("NX_DAEMON", "false") // Disable daemon to prevent EPIPE errors in tests
         .env("RUST_LOG", "debug")
         .output()
         .expect("Failed to execute fabrik nx build");
@@ -278,6 +282,7 @@ fn test_nx_wrapper_starts_server() {
 }
 
 #[test]
+#[serial]
 fn test_nx_cache_passes_through_args() {
     let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
 
@@ -310,6 +315,7 @@ fn test_nx_cache_passes_through_args() {
         .arg("--")
         .arg("--version")
         .current_dir(&fixture_path)
+        .env("NX_DAEMON", "false") // Disable daemon to prevent EPIPE errors in tests
         .env("RUST_LOG", "debug")
         .output()
         .expect("Failed to execute fabrik nx --version");
