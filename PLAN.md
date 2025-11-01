@@ -343,10 +343,40 @@ lazy_static = "1.4"  # for global metrics
 - [ ] Intelligent prefetching
 
 ### Phase 12: Additional Build Systems
+
+**Tier 1 - High Priority (Common Build Systems)**
+- [ ] TurboRepo support (HTTP REST API)
+  - Protocol: HTTP with Bearer token
+  - Endpoints: `PUT/GET /v8/artifacts/:hash?teamId=<id>`
+  - Documentation: https://turborepo.com/docs/core-concepts/remote-caching#self-hosting
+  - Status: Planned
+- [ ] sccache support (S3 API for Cargo/Rust compiler cache)
+  - Protocol: S3-compatible API
+  - Integration: Via `RUSTC_WRAPPER` environment variable
+  - Documentation: https://github.com/mozilla/sccache
+  - Status: Planned
+
+**Tier 1 - Free via Bazel (gRPC Remote Execution API)**
+- [ ] Buck2 support (FREE - uses Bazel's gRPC RE API)
+- [ ] Pants support (FREE - uses Bazel's gRPC RE API)
+- [ ] Please support (FREE - uses Bazel's gRPC RE API)
+
+**Tier 2 - Recommended (Additional Capabilities)**
+- [ ] ccache support (HTTP API for C/C++ compiler cache)
+  - Status: Recommended
+- [ ] BuildKit support (OCI Registry protocol for container builds)
+  - Protocol: OCI Registry API
+  - Status: Recommended
+
+**Future - Monitoring**
 - [ ] Vite+ support (when available - currently in early access)
-- [ ] Buck2 support
-- [ ] Pants support
-- [ ] Research other build systems
+  - Expected: HTTP-based remote cache protocol
+  - Website: https://viteplus.dev
+  - Status: Monitoring (early access)
+- [ ] Rspack support (TBD)
+  - Status: Monitoring
+- [ ] Maven support
+  - Status: To be evaluated
 
 ---
 
@@ -398,6 +428,26 @@ lazy_static = "1.4"  # for global metrics
   - Multiple archive formats: tar.gz, tar.xz, tar.zst for Unix, zip for Windows
   - SHA256 checksums generated for all artifacts
   - CHANGELOG.md automatically updated on releases
+
+### Build System Support Status (2025-11-01)
+
+**Currently Implemented:**
+- ✅ **Gradle** - HTTP REST API with Basic Auth or Bearer token
+- ✅ **Bazel** - gRPC Remote Execution API (ContentAddressableStorage, ActionCache)
+- ✅ **Nx** - HTTP REST API with Bearer token
+- ✅ **Xcode** - HTTP REST API (custom implementation)
+
+**Pending Implementation (Prioritized):**
+- ⏳ **TurboRepo** - Tier 1 (HTTP REST, similar to Nx)
+- ⏳ **sccache** - Tier 1 (S3 API for Rust/Cargo)
+- ⏳ **Buck2** - Tier 1 (FREE via Bazel gRPC RE API)
+- ⏳ **Pants** - Tier 1 (FREE via Bazel gRPC RE API)
+- ⏳ **Please** - Tier 1 (FREE via Bazel gRPC RE API)
+- 💡 **ccache** - Tier 2 (HTTP API for C/C++)
+- 💡 **BuildKit** - Tier 2 (OCI Registry for containers)
+- 👀 **Vite+** - Future (monitoring, currently in early access)
+- 👀 **Rspack** - Future (monitoring)
+- 👀 **Maven** - Future (to be evaluated)
 
 ### Open Questions
 - Should we support custom storage backends via plugins? (Future consideration)
