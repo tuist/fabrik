@@ -3,6 +3,7 @@ mod bazel;
 mod cli;
 mod commands;
 mod config;
+mod config_discovery;
 mod http;
 mod logging;
 mod merger;
@@ -24,20 +25,10 @@ async fn main() -> Result<()> {
 
     // Dispatch to appropriate command handler
     match cli.command {
-        Commands::Activate(args) => {
-            // TODO: Implement activate command
-            println!("fabrik activate - not yet implemented");
-            println!("Args: {:?}", args);
-            Ok(())
-        }
+        Commands::Activate(args) => commands::activate::run(args),
         Commands::Exec(args) => commands::exec::run(args),
         Commands::Daemon(args) => commands::daemon::run(args).await,
-        Commands::Deactivate(args) => {
-            // TODO: Implement deactivate command
-            println!("fabrik deactivate - not yet implemented");
-            println!("Args: {:?}", args);
-            Ok(())
-        }
+        Commands::Deactivate(args) => commands::deactivate::run(args),
         Commands::Server(args) => commands::server::run(*args).await,
         Commands::Config(args) => commands::config::run(args.command),
         Commands::Health(args) => commands::health::run(args),
