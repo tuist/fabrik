@@ -17,9 +17,20 @@ use crate::storage;
 use tonic::transport::Server;
 
 pub async fn run(args: DaemonArgs) -> Result<()> {
+    use crate::config_discovery::{hash_config, DaemonState};
+
     // Load config file if specified
     let file_config = if let Some(config_path) = &args.config {
         Some(FabrikConfig::from_file(config_path)?)
+    } else {
+        None
+    };
+
+    // If we have a config file, compute hash and save daemon state
+    let daemon_state_opt = if let Some(ref config_path_str) = args.config {
+        let config_path = std::path::PathBuf::from(config_path_str);
+        let config_hash = hash_config(&config_path)?;
+        Some((config_hash, config_path))
     } else {
         None
     };
@@ -114,6 +125,25 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     // For now, Gradle can use the generic HTTP server
 
     info!("Daemon started - press Ctrl+C to stop");
+
+    // Save daemon state if we have config info
+    if let Some((config_hash, config_path)) = daemon_state_opt {
+        let state = DaemonState {
+            config_hash,
+            pid: std::process::id(),
+            http_port: config.http_port,
+            grpc_port: config.grpc_port,
+            metrics_port: config.metrics_port.unwrap_or(9091),
+            unix_socket: None, // TODO: Implement Unix socket server
+            config_path,
+        };
+
+        if let Err(e) = state.save() {
+            tracing::warn!("Failed to save daemon state: {}", e);
+        } else {
+            info!("Daemon state saved with hash: {}", state.config_hash);
+        }
+    }
 
     // Wait for all servers (runs until ctrl-c or error)
     for handle in handles {

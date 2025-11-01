@@ -110,9 +110,53 @@ fn activate_current_directory() -> Result<()> {
         config_path.display()
     );
 
-    // TODO: Actually start the daemon process
-    // For now, just indicate it would start
-    println!("# TODO: Start daemon with config hash: {}", config_hash);
+    // Start daemon process in background
+    start_daemon_background(&config_path, &config_hash)?;
+
+    // Load the state and export env vars
+    if let Some(state) = DaemonState::load(&config_hash)? {
+        println!("{}", state.generate_env_exports("bash"));
+    }
+
+    Ok(())
+}
+
+fn start_daemon_background(config_path: &std::path::Path, config_hash: &str) -> Result<()> {
+    use std::process::{Command, Stdio};
+
+    // Get the current executable path
+    let exe = env::current_exe().context("Failed to get current executable path")?;
+
+    // Spawn fabrik daemon with the config file
+    let child = Command::new(&exe)
+        .arg("daemon")
+        .arg("--config")
+        .arg(config_path)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .context("Failed to spawn daemon process")?;
+
+    let pid = child.id();
+
+    // Wait a moment for daemon to start and bind ports
+    std::thread::sleep(std::time::Duration::from_millis(500));
+
+    // Create daemon state
+    // Note: We don't know the ports yet - daemon needs to write them
+    // For now, use default ports
+    let state = DaemonState {
+        config_hash: config_hash.to_string(),
+        pid,
+        http_port: 8080, // TODO: Read from daemon's port file
+        grpc_port: 9090,
+        metrics_port: 9091,
+        unix_socket: None, // TODO: Daemon should create this
+        config_path: config_path.to_path_buf(),
+    };
+
+    state.save()?;
 
     Ok(())
 }
