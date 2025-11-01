@@ -7,7 +7,11 @@
     "build": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "mkdir -p {projectRoot}/dist && echo 'Build complete!' > {projectRoot}/dist/output.txt"
+        "commands": [
+          "node -e \"require('fs').mkdirSync('{projectRoot}/dist', { recursive: true })\"",
+          "node -e \"require('fs').writeFileSync('{projectRoot}/dist/output.txt', 'Build complete!\\n')\""
+        ],
+        "parallel": false
       },
       "outputs": ["{projectRoot}/dist"]
     }
