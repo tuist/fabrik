@@ -60,6 +60,9 @@ pub enum Commands {
 
     /// Health check and diagnostics
     Health(HealthArgs),
+
+    /// Check system configuration and shell integration
+    Doctor(DoctorArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -385,4 +388,11 @@ pub struct HealthArgs {
     /// Output format (text, json)
     #[arg(long, default_value = "text")]
     pub format: String,
+}
+
+#[derive(Parser, Debug)]
+pub struct DoctorArgs {
+    /// Verbose output
+    #[arg(short, long)]
+    pub verbose: bool,
 }

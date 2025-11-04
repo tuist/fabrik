@@ -138,7 +138,7 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
             pid: std::process::id(),
             http_port: actual_http_port,
             grpc_port: actual_grpc_port,
-            metrics_port: config.metrics_port.unwrap_or(9091),
+            metrics_port: config.metrics_port,
             unix_socket: None, // TODO: Implement Unix socket server
             config_path,
         };
@@ -159,18 +159,26 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     info!("Daemon started - waiting for shutdown signal");
 
     // Wait for shutdown signal (Ctrl+C or SIGTERM)
-    tokio::select! {
-        _ = signal::ctrl_c() => {
-            info!("Received Ctrl+C, shutting down gracefully...");
+    #[cfg(unix)]
+    {
+        tokio::select! {
+            _ = signal::ctrl_c() => {
+                info!("Received Ctrl+C, shutting down gracefully...");
+            }
+            _ = async {
+                use tokio::signal::unix::{signal, SignalKind};
+                let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
+                sigterm.recv().await
+            } => {
+                info!("Received SIGTERM, shutting down gracefully...");
+            }
         }
-        #[cfg(unix)]
-        _ = async {
-            use tokio::signal::unix::{signal, SignalKind};
-            let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
-            sigterm.recv().await
-        } => {
-            info!("Received SIGTERM, shutting down gracefully...");
-        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+        info!("Received Ctrl+C, shutting down gracefully...");
     }
 
     // Gracefully wait for all servers to finish with a timeout

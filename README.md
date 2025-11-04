@@ -53,16 +53,47 @@ Fabrik implements a three-tier caching strategy:
 >
 > This is where services like [Tuist](https://tuist.dev) come in. Just as Supabase manages Postgres infrastructure, Tuist can manage Fabrik infrastructure for you, automatically deploying warm cache instances in the right regions and handling all the operational complexity.
 
-## 🚀 Installation
+## 🚀 Getting Started
 
-### Docker
+### Step 1: Install Fabrik
+
+**Using Mise (Recommended)**
+
+```bash
+# Install Mise if you haven't already
+curl https://mise.run | sh
+
+# Install Fabrik
+mise use -g ubi:tuist/fabrik
+```
+
+<details>
+<summary>Alternative: Install from GitHub Releases</summary>
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/tuist/fabrik/releases):
+
+```bash
+# macOS (ARM)
+curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv fabrik /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-x86_64-apple-darwin.tar.gz | tar xz
+sudo mv fabrik /usr/local/bin/
+
+# Linux (x86_64)
+curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv fabrik /usr/local/bin/
+```
+
+</details>
+
+<details>
+<summary>Alternative: Docker</summary>
 
 ```bash
 # Pull the latest image
 docker pull ghcr.io/tuist/fabrik:latest
-
-# Or a specific version
-docker pull ghcr.io/tuist/fabrik:0.1.0
 
 # Run the server
 docker run -p 7070:7070 -p 8888:8888 -p 9091:9091 ghcr.io/tuist/fabrik:latest server
@@ -70,79 +101,107 @@ docker run -p 7070:7070 -p 8888:8888 -p 9091:9091 ghcr.io/tuist/fabrik:latest se
 
 **Docker Registry**: [ghcr.io/tuist/fabrik](https://github.com/tuist/fabrik/pkgs/container/fabrik)
 
-### Using Mise
+</details>
 
-```bash
-# Install globally
-mise use -g ubi:tuist/fabrik
-
-# Or in .mise.toml
-[tools]
-"ubi:tuist/fabrik" = "latest"
-```
-
-### From Source
+<details>
+<summary>Alternative: Build from Source</summary>
 
 ```bash
 git clone https://github.com/tuist/fabrik.git
 cd fabrik
 cargo build --release
+sudo cp target/release/fabrik /usr/local/bin/
 ```
 
-## 📘 Usage
+</details>
 
-### Quick Start with Daemon Mode
+### Step 2: Set Up Shell Integration (Required)
 
-Fabrik uses an **activation-based daemon model** where each project automatically gets its own cache daemon when you navigate into the project directory. This provides zero-configuration caching with automatic port allocation and project isolation.
+Fabrik uses shell integration to automatically start cache daemons when you navigate into projects. This step is **required** for Fabrik to work.
 
-**1. Set up shell integration (one-time):**
+**For Bash:**
+```bash
+echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**For Zsh:**
+```bash
+echo 'eval "$(fabrik activate zsh)"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**For Fish:**
+```bash
+echo 'fabrik activate fish | source' >> ~/.config/fish/config.fish
+source ~/.config/fish/config.fish
+```
+
+### Step 3: Verify Installation
+
+Run the doctor command to verify everything is configured correctly:
 
 ```bash
-# For bash
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-
-# For zsh
-echo 'eval "$(fabrik activate zsh)"' >> ~/.zshrc
-
-# For fish
-echo 'fabrik activate fish | source' >> ~/.config/fish/config.fish
+fabrik doctor
 ```
 
-**2. Create a `.fabrik.toml` in your project:**
+You should see:
+```
+✅ Fabrik binary found
+✅ Shell detected
+✅ Shell integration configured
+```
+
+### Step 4: Configure Your Project
+
+Create a `.fabrik.toml` file in your project root:
 
 ```toml
-# .fabrik.toml
 [cache]
 dir = ".fabrik/cache"
 max_size = "5GB"
 
-# Optional: configure upstream cache
-[[upstream]]
-url = "grpc://cache.tuist.io:7070"
-timeout = "30s"
+# Optional: Configure upstream cache
+# [[upstream]]
+# url = "grpc://cache.tuist.io:7070"
+# timeout = "30s"
 ```
 
-**3. Navigate to your project:**
+### Step 5: Choose Your Build System
+
+Fabrik works with any build system that supports remote caching. Follow the guide for your build system:
+
+- **[Gradle →](docs/build-systems/gradle.md)** - Java, Kotlin, Android projects
+- **[Bazel →](docs/build-systems/bazel.md)** - Multi-language monorepos
+- **[Nx →](docs/build-systems/nx.md)** - JavaScript/TypeScript monorepos
+- **[TurboRepo →](docs/build-systems/turborepo.md)** - JavaScript/TypeScript monorepos
+- **[Xcode →](docs/build-systems/xcode.md)** - iOS, macOS apps
+- **[sccache →](docs/build-systems/sccache.md)** - Rust compiler cache
+
+## 💡 How It Works
+
+Once shell integration is set up, Fabrik automatically manages cache daemons for you:
 
 ```bash
+# Navigate to your project
 cd ~/myproject
-# Daemon automatically starts and exports environment variables
-# Build tools will use the cache automatically
 
-gradle build    # ✅ Uses cache via GRADLE_BUILD_CACHE_URL
-nx build        # ✅ Uses cache via NX_SELF_HOSTED_REMOTE_CACHE_SERVER
+# Daemon automatically starts (if .fabrik.toml exists)
+# Build tools automatically use the cache
+gradle build    # ✅ Uses cache
+nx build        # ✅ Uses cache
+xcodebuild      # ✅ Uses cache
 ```
 
-**That's it!** The daemon:
-- Automatically starts when you `cd` into a project with `.fabrik.toml`
-- Binds to random available ports (no conflicts)
-- Exports environment variables for build tools
-- Persists across shell sessions
-- Shuts down cleanly when you stop it
+**Behind the scenes:**
+1. Shell hook detects `.fabrik.toml`
+2. Daemon starts with random available ports (no conflicts!)
+3. Environment variables exported automatically
+4. Build tools read env vars and connect to daemon
+5. Cache hits = faster builds! 🚀
 
-### Multi-Project Support
-
-Each project gets its own daemon instance with isolated ports:
+**Multi-Project Support:**
+Each project gets its own isolated daemon:
 
 ```bash
 # Terminal 1
@@ -152,49 +211,53 @@ gradle build  # Uses daemon on ports 54321/54322
 # Terminal 2 (simultaneously)
 cd ~/project-b  
 gradle build  # Uses different daemon on ports 54401/54402
-
-# Terminal 3 (simultaneously)
-cd ~/project-c
-gradle build  # Uses different daemon on ports 54515/54516
 ```
 
-### Manual Daemon Control
+## 📚 Documentation
 
-```bash
-# Start daemon manually
-fabrik daemon --config .fabrik.toml
-
-# Check daemon status
-fabrik activate --status
-
-# Stop daemon (from activate/deactivate)
-fabrik deactivate --stop-daemon
-```
-
-### Other Usage Modes
-
-```bash
-# Bazel wrapper with automatic cache
-fabrik bazel -- build //...
-
-# Run as a remote cache server (Layer 2)
-fabrik server --config /etc/fabrik/config.toml
-
-# Configuration management
-fabrik config generate --template=server
-fabrik config validate .fabrik.toml
-```
-
-## 📖 Documentation
-
-- [CLAUDE.md](./CLAUDE.md) - Architecture and design decisions
-- [PLAN.md](./PLAN.md) - Implementation roadmap
+- **[CLAUDE.md](./CLAUDE.md)** - Architecture and design decisions
+- **[CLI Reference](./docs/cli-reference.md)** - Command-line interface documentation
+- **[Build System Integration](./docs/build-systems/)** - Integration guides for specific build systems
+- **[PLAN.md](./PLAN.md)** - Implementation roadmap
 
 ## 🛠️ Development
 
 ```bash
+# Build the project
 cargo build
+
+# Run tests
 cargo test
+
+# Format code
 cargo fmt
+
+# Lint
 cargo clippy
+
+# Run doctor command for debugging
+cargo run -- doctor --verbose
 ```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+MPL-2.0 - See [LICENSE](./LICENSE) for details.
+
+## 🙏 Acknowledgments
+
+Fabrik is built on the shoulders of giants:
+- [RocksDB](https://rocksdb.org/) - High-performance embedded database
+- [Tokio](https://tokio.rs/) - Async runtime for Rust
+- [Axum](https://github.com/tokio-rs/axum) - Web framework
+- [Tonic](https://github.com/hyperium/tonic) - gRPC framework
+
+## 🔗 Related Projects
+
+- [Tuist](https://tuist.dev) - Managed Fabrik infrastructure as a service
+- [Bazel](https://bazel.build) - Build system with remote execution
+- [Gradle](https://gradle.org) - Build automation tool
+- [Nx](https://nx.dev) - Smart monorepo build system

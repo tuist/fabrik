@@ -1,278 +1,325 @@
-# Gradle
+# Gradle Integration
 
-Fabrik provides transparent remote build caching for Gradle via the Gradle Build Cache HTTP API.
+Complete guide for using Fabrik with Gradle builds.
+
+## Prerequisites
+
+1. ✅ Fabrik installed ([Installation Guide](../../README.md#-getting-started))
+2. ✅ Shell integration configured ([Step 2](../../README.md#step-2-set-up-shell-integration-required))
+3. ✅ Gradle 6.0 or later
 
 ## Quick Start
 
-### 1. Activate Fabrik (One-Time Setup)
+### 1. Create `.fabrik.toml` in your project root:
 
-```bash
-# Add to your shell config
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-source ~/.bashrc
+```toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "5GB"
 ```
 
-### 2. Configure Your Project
+### 2. Navigate to your project:
 
-Create `.fabrik.toml` in your project root:
+```bash
+cd ~/my-gradle-project
+# Daemon automatically starts
+```
+
+### 3. Run your build:
+
+```bash
+./gradlew build
+```
+
+That's it! Gradle will automatically use the Fabrik cache via the `GRADLE_BUILD_CACHE_URL` environment variable.
+
+## How It Works
+
+1. **Shell Hook Activation**
+   - When you `cd` into your project, the Fabrik shell hook detects `.fabrik.toml`
+   - Daemon starts automatically and binds to random available ports
+   - Environment variable exported: `GRADLE_BUILD_CACHE_URL=http://127.0.0.1:{port}`
+
+2. **Gradle Configuration**
+   - Gradle reads `GRADLE_BUILD_CACHE_URL` automatically
+   - No `settings.gradle` or `build.gradle` changes needed!
+   - Works with both Kotlin DSL and Groovy DSL
+
+3. **Cache Operations**
+   - Build outputs are stored in Fabrik cache
+   - Subsequent builds retrieve cached outputs
+   - Cache misses fall back to upstream if configured
+
+## Verification
+
+Check that caching is working:
+
+```bash
+# First build (cache miss)
+./gradlew clean build
+
+# Second build (cache hit - should be much faster)
+./gradlew clean build
+```
+
+You should see significant speedup on the second build.
+
+## Configuration
+
+### Basic Configuration
+
+Minimal `.fabrik.toml` for local caching only:
 
 ```toml
 [cache]
 dir = ".fabrik/cache"
 max_size = "10GB"
+```
 
-# Optional: Connect to remote cache
+### With Upstream Cache
+
+Share cache across team members:
+
+```toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "5GB"
+
 [[upstream]]
-url = "http://cache.example.com:8080"
+url = "grpc://cache.tuist.io:7070"
 timeout = "30s"
+
+[auth]
+token_file = ".fabrik.token"
 ```
 
-### 3. Enable Gradle Build Cache
+### CI Configuration
 
-Add to your `settings.gradle` or `settings.gradle.kts`:
-
-```kotlin
-// settings.gradle.kts
-buildCache {
-    local {
-        isEnabled = true
-    }
-    remote<HttpBuildCache> {
-        url = uri(System.getenv("GRADLE_BUILD_CACHE_URL") ?: "")
-        isEnabled = System.getenv("GRADLE_BUILD_CACHE_URL") != null
-        isPush = true
-    }
-}
-```
-
-Or for Groovy:
-
-```groovy
-// settings.gradle
-buildCache {
-    local {
-        enabled = true
-    }
-    remote(HttpBuildCache) {
-        url = System.getenv('GRADLE_BUILD_CACHE_URL') ?: ''
-        enabled = System.getenv('GRADLE_BUILD_CACHE_URL') != null
-        push = true
-    }
-}
-```
-
-### 4. Use Gradle Normally
-
-```bash
-cd ~/my-gradle-project
-
-# Daemon starts automatically
-./gradlew build
-./gradlew test
-./gradlew :app:assemble
-```
-
-That's it! Gradle automatically uses Fabrik's cache via the `GRADLE_BUILD_CACHE_URL` environment variable.
-
-## Configuration
-
-### Shell Activation (Recommended for Development)
-
-Shell activation automatically manages the daemon:
-
-```bash
-cd ~/gradle-project
-# Daemon starts, exports GRADLE_BUILD_CACHE_URL
-./gradlew build
-
-cd ~/another-project
-# New daemon starts if different config
-```
-
-### Explicit Execution (CI/CD)
-
-For CI/CD pipelines, use `fabrik exec`:
-
-```bash
-# In your CI script
-fabrik exec ./gradlew build
-fabrik exec ./gradlew test
-```
-
-## How It Works
-
-When Fabrik is activated:
-
-1. **Daemon starts** with an HTTP server implementing Gradle's Build Cache API
-2. **Environment variable exported**: `GRADLE_BUILD_CACHE_URL=http://127.0.0.1:{port}`
-3. **Gradle connects** to the HTTP server (via your settings.gradle configuration)
-4. **Cache operations** flow through Fabrik's multi-layer cache
-
-The daemon implements:
-- **GET /cache/{hash}**: Retrieve cached build outputs
-- **PUT /cache/{hash}**: Store build outputs
-- **HEAD /cache/{hash}**: Check if artifact exists
-
-## Examples
-
-### Development Workflow
-
-```bash
-# One-time setup
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-source ~/.bashrc
-
-# Daily usage
-cd ~/my-gradle-project
-./gradlew clean build        # First build (cache miss)
-./gradlew clean build        # Second build (cache hit) - much faster!
-./gradlew :app:test          # Reuses cached dependencies
-```
-
-### CI/CD Workflow
+For GitHub Actions:
 
 ```yaml
-# GitHub Actions
-steps:
-  - uses: actions/checkout@v4
-  
-  - uses: actions/setup-java@v4
-    with:
-      java-version: '17'
-      distribution: 'temurin'
-  
-  - run: |
-      curl -fsSL https://raw.githubusercontent.com/tuist/fabrik/main/install.sh | sh
-      
-  - run: fabrik exec ./gradlew build
-  
-  - run: fabrik exec ./gradlew test
-```
+name: Build
 
-### Multi-Module Projects
+on: [push, pull_request]
 
-```bash
-cd ~/my-monorepo
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
 
-# Build specific modules
-./gradlew :backend:build
-./gradlew :frontend:build
+      - name: Set up JDK
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-# All modules share the same cache
-./gradlew build  # Reuses artifacts from previous builds
+      - name: Install Fabrik
+        run: |
+          curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          sudo mv fabrik /usr/local/bin/
+
+      - name: Build with Gradle
+        run: ./gradlew build
+        env:
+          FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
 ```
 
 ## Advanced Configuration
 
-### Gradle Properties
+### Custom Gradle Settings
 
-Enable additional caching features in `gradle.properties`:
-
-```properties
-# gradle.properties
-org.gradle.caching=true
-org.gradle.parallel=true
-org.gradle.configureondemand=true
-```
-
-### Custom Cache Configuration
-
-For more control, you can customize the cache behavior:
+While Fabrik works without Gradle configuration changes, you can customize cache behavior in `settings.gradle.kts`:
 
 ```kotlin
-// settings.gradle.kts
 buildCache {
-    local {
-        directory = file(".gradle/build-cache")
-        removeUnusedEntriesAfterDays = 7
-    }
     remote<HttpBuildCache> {
-        url = uri(System.getenv("GRADLE_BUILD_CACHE_URL") ?: "")
-        isEnabled = System.getenv("GRADLE_BUILD_CACHE_URL") != null
-        isPush = true
-        
-        // Optional: Authentication
-        credentials {
-            username = System.getenv("GRADLE_CACHE_USERNAME")
-            password = System.getenv("GRADLE_CACHE_PASSWORD")
-        }
+        url = uri(System.getenv("GRADLE_BUILD_CACHE_URL") ?: "http://localhost:8080")
+        isPush = true  // Enable push to cache
+        isAllowUntrustedServer = true  // For local daemon
     }
 }
 ```
 
-### Selective Caching
+Or in `settings.gradle`:
 
-Cache only specific tasks:
+```groovy
+buildCache {
+    remote(HttpBuildCache) {
+        url = System.getenv("GRADLE_BUILD_CACHE_URL") ?: "http://localhost:8080"
+        push = true
+        allowUntrustedServer = true
+    }
+}
+```
+
+### Disable Cache for Specific Tasks
 
 ```kotlin
 // build.gradle.kts
-tasks.withType<Test> {
-    outputs.cacheIf { true }
+tasks.named("test") {
+    outputs.cacheIf { false }  // Never cache test results
 }
+```
 
-tasks.withType<JavaCompile> {
-    outputs.cacheIf { true }
+### Cache Key Customization
+
+```kotlin
+tasks.register("customTask") {
+    inputs.files(fileTree("src"))
+    inputs.property("version", project.version)
+    outputs.dir("build/custom")
+    
+    doLast {
+        // Task implementation
+    }
 }
 ```
 
 ## Troubleshooting
 
-### Gradle Not Using Cache
+### Cache Not Working
 
-Check that environment variable is set:
+1. **Check daemon is running:**
+   ```bash
+   fabrik doctor --verbose
+   ```
 
-```bash
-echo $GRADLE_BUILD_CACHE_URL
-# Should output: http://127.0.0.1:{port}
-```
+2. **Check environment variable:**
+   ```bash
+   echo $GRADLE_BUILD_CACHE_URL
+   # Should show: http://127.0.0.1:{port}
+   ```
 
-Check daemon is running:
+3. **Enable Gradle build cache:**
+   ```bash
+   ./gradlew build --build-cache
+   ```
 
-```bash
-fabrik daemon list
-```
+### Slow Builds Despite Cache
 
-Enable Gradle build cache logging:
+1. **Check cache hit rate:**
+   ```bash
+   ./gradlew build --scan
+   # Check "Build Cache" section in build scan
+   ```
 
-```bash
-./gradlew build --info | grep cache
-```
+2. **Increase cache size:**
+   ```toml
+   [cache]
+   max_size = "20GB"  # Increase from 5GB
+   ```
 
-### Cache Misses
+3. **Check for cache-busting:**
+   - Ensure inputs are stable
+   - Avoid timestamps or random values in build
+   - Check for absolute paths
 
-Check Gradle build scan:
+### Daemon Not Starting
 
-```bash
-./gradlew build --scan
-```
+1. **Run doctor command:**
+   ```bash
+   fabrik doctor
+   ```
 
-Verify tasks are cacheable:
+2. **Check `.fabrik.toml` exists:**
+   ```bash
+   ls -la .fabrik.toml
+   ```
 
-```kotlin
-tasks.withType<MyTask> {
-    outputs.cacheIf { true }
-}
-```
-
-### Connection Issues
-
-Restart the daemon:
-
-```bash
-fabrik daemon stop
-fabrik activate --status
-```
+3. **Manually start daemon:**
+   ```bash
+   fabrik daemon --config .fabrik.toml
+   ```
 
 ## Performance Tips
 
-1. **Enable parallel builds**: Add `org.gradle.parallel=true` to `gradle.properties`
-2. **Use configuration cache**: Run with `--configuration-cache`
-3. **Exclude generated files**: Don't cache generated source files
-4. **Cache unit tests**: Enable for Test tasks with `outputs.cacheIf { true }`
+### 1. Optimize Cache Size
+
+```toml
+[cache]
+max_size = "20GB"  # Larger cache = better hit rate
+eviction_policy = "lfu"  # Keep frequently used artifacts
+```
+
+### 2. Enable Parallel Builds
+
+```properties
+# gradle.properties
+org.gradle.parallel=true
+org.gradle.workers.max=8
+org.gradle.caching=true
+```
+
+### 3. Use Configuration Cache
+
+```bash
+./gradlew build --configuration-cache
+```
+
+### 4. Profile Your Build
+
+```bash
+./gradlew build --profile
+# Check HTML report in build/reports/profile/
+```
+
+## Multi-Module Projects
+
+Fabrik works seamlessly with multi-module Gradle projects:
+
+```
+my-app/
+├── .fabrik.toml
+├── settings.gradle.kts
+├── build.gradle.kts
+├── app/
+│   └── build.gradle.kts
+├── lib/
+│   └── build.gradle.kts
+└── common/
+    └── build.gradle.kts
+```
+
+Each module's outputs are cached independently. Changing one module only rebuilds that module and its dependents.
+
+## Examples
+
+### Android Project
+
+```toml
+# .fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "15GB"  # Android builds need more cache
+
+[[upstream]]
+url = "grpc://cache.tuist.io:7070"
+timeout = "60s"  # Longer timeout for large APKs
+```
+
+### Spring Boot Project
+
+```toml
+# .fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "5GB"
+
+[[upstream]]
+url = "grpc://cache.tuist.io:7070"
+timeout = "30s"
+```
+
+## Next Steps
+
+- [CLI Reference](../cli-reference.md) - Command-line documentation
+- [Bazel Integration](./bazel.md) - For Bazel users
+- [Nx Integration](./nx.md) - For Nx users
+- [Architecture](../../CLAUDE.md) - Deep dive into Fabrik internals
 
 ## See Also
 
-- [Getting Started](/getting-started) - Complete setup guide
-- [CLI Reference](/reference/cli) - Command-line options
-- [Configuration](/reference/config-file) - Configuration reference
-- [Gradle Build Cache Docs](https://docs.gradle.org/current/userguide/build_cache.html) - Official Gradle documentation
+- [Gradle Build Cache Documentation](https://docs.gradle.org/current/userguide/build_cache.html)
+- [Gradle Performance Guide](https://docs.gradle.org/current/userguide/performance.html)
+- [Fabrik Architecture](../../CLAUDE.md)

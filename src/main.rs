@@ -32,5 +32,6 @@ async fn main() -> Result<()> {
         Commands::Server(args) => commands::server::run(*args).await,
         Commands::Config(args) => commands::config::run(args.command),
         Commands::Health(args) => commands::health::run(args),
+        Commands::Doctor(args) => commands::doctor::run(args),
     }
 }
