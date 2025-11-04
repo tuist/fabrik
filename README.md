@@ -91,18 +91,98 @@ cargo build --release
 
 ## 📘 Usage
 
+### Quick Start with Daemon Mode
+
+Fabrik uses an **activation-based daemon model** where each project automatically gets its own cache daemon when you navigate into the project directory. This provides zero-configuration caching with automatic port allocation and project isolation.
+
+**1. Set up shell integration (one-time):**
+
 ```bash
-# Bazel with automatic cache
+# For bash
+echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
+
+# For zsh
+echo 'eval "$(fabrik activate zsh)"' >> ~/.zshrc
+
+# For fish
+echo 'fabrik activate fish | source' >> ~/.config/fish/config.fish
+```
+
+**2. Create a `.fabrik.toml` in your project:**
+
+```toml
+# .fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "5GB"
+
+# Optional: configure upstream cache
+[[upstream]]
+url = "grpc://cache.tuist.io:7070"
+timeout = "30s"
+```
+
+**3. Navigate to your project:**
+
+```bash
+cd ~/myproject
+# Daemon automatically starts and exports environment variables
+# Build tools will use the cache automatically
+
+gradle build    # ✅ Uses cache via GRADLE_BUILD_CACHE_URL
+nx build        # ✅ Uses cache via NX_SELF_HOSTED_REMOTE_CACHE_SERVER
+```
+
+**That's it!** The daemon:
+- Automatically starts when you `cd` into a project with `.fabrik.toml`
+- Binds to random available ports (no conflicts)
+- Exports environment variables for build tools
+- Persists across shell sessions
+- Shuts down cleanly when you stop it
+
+### Multi-Project Support
+
+Each project gets its own daemon instance with isolated ports:
+
+```bash
+# Terminal 1
+cd ~/project-a
+gradle build  # Uses daemon on ports 54321/54322
+
+# Terminal 2 (simultaneously)
+cd ~/project-b  
+gradle build  # Uses different daemon on ports 54401/54402
+
+# Terminal 3 (simultaneously)
+cd ~/project-c
+gradle build  # Uses different daemon on ports 54515/54516
+```
+
+### Manual Daemon Control
+
+```bash
+# Start daemon manually
+fabrik daemon --config .fabrik.toml
+
+# Check daemon status
+fabrik activate --status
+
+# Stop daemon (from activate/deactivate)
+fabrik deactivate --stop-daemon
+```
+
+### Other Usage Modes
+
+```bash
+# Bazel wrapper with automatic cache
 fabrik bazel -- build //...
 
-# Long-running daemon
-fabrik daemon
-
-# Remote cache server
-fabrik server
+# Run as a remote cache server (Layer 2)
+fabrik server --config /etc/fabrik/config.toml
 
 # Configuration management
 fabrik config generate --template=server
+fabrik config validate .fabrik.toml
 ```
 
 ## 📖 Documentation

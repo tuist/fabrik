@@ -39,6 +39,29 @@ impl<S: Storage + Clone + 'static> HttpServer<S> {
         Self { port, storage }
     }
 
+    /// Create a new HTTP server with automatic port allocation (port 0)
+    /// Returns the server, actual assigned port, and the pre-bound listener
+    pub async fn new_with_port_zero(
+        storage: Arc<S>,
+    ) -> Result<(Self, u16, tokio::net::TcpListener)> {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        let actual_port = listener.local_addr()?.port();
+        let server = Self {
+            port: actual_port,
+            storage,
+        };
+        Ok((server, actual_port, listener))
+    }
+
+    /// Run the server with a pre-bound listener
+    /// This is useful when you need to know the actual port before starting the server
+    pub async fn run_with_listener(self, listener: tokio::net::TcpListener) -> Result<()> {
+        let app = self.router();
+        info!("HTTP server listening on {}", listener.local_addr()?);
+        axum::serve(listener, app).await?;
+        Ok(())
+    }
+
     /// Create the Axum router with all cache endpoints
     pub fn router(self) -> Router {
         let state = AppState {

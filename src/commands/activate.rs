@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use std::env;
+use std::time::Duration;
 
 use crate::cli::ActivateArgs;
 use crate::config_discovery::{discover_config, hash_config, DaemonState};
@@ -101,6 +102,9 @@ fn activate_current_directory() -> Result<()> {
             // Daemon running, export env vars
             println!("{}", state.generate_env_exports("bash"));
             return Ok(());
+        } else {
+            // Daemon state exists but process is dead, clean it up
+            let _ = state.cleanup();
         }
     }
 
@@ -116,6 +120,8 @@ fn activate_current_directory() -> Result<()> {
     // Load the state and export env vars
     if let Some(state) = DaemonState::load(&config_hash)? {
         println!("{}", state.generate_env_exports("bash"));
+    } else {
+        println!("# Warning: Daemon started but state not found");
     }
 
     Ok(())
@@ -128,7 +134,7 @@ fn start_daemon_background(config_path: &std::path::Path, config_hash: &str) -> 
     let exe = env::current_exe().context("Failed to get current executable path")?;
 
     // Spawn fabrik daemon with the config file
-    let child = Command::new(&exe)
+    Command::new(&exe)
         .arg("daemon")
         .arg("--config")
         .arg(config_path)
@@ -138,27 +144,33 @@ fn start_daemon_background(config_path: &std::path::Path, config_hash: &str) -> 
         .spawn()
         .context("Failed to spawn daemon process")?;
 
-    let pid = child.id();
+    // Wait for daemon to write its state file (with timeout)
+    // The daemon needs to:
+    // 1. Start up
+    // 2. Bind to port 0 (get actual port)
+    // 3. Write state file with actual ports
+    let max_wait = Duration::from_secs(5);
+    let check_interval = Duration::from_millis(100);
+    let start = std::time::Instant::now();
 
-    // Wait a moment for daemon to start and bind ports
-    std::thread::sleep(std::time::Duration::from_millis(500));
+    loop {
+        // Try to load the state
+        if let Some(state) = DaemonState::load(config_hash)? {
+            // Verify the daemon is actually running
+            if state.is_running() {
+                // Success! Daemon is running and state is valid
+                return Ok(());
+            }
+        }
 
-    // Create daemon state
-    // Note: We don't know the ports yet - daemon needs to write them
-    // For now, use default ports
-    let state = DaemonState {
-        config_hash: config_hash.to_string(),
-        pid,
-        http_port: 8080, // TODO: Read from daemon's port file
-        grpc_port: 9090,
-        metrics_port: 9091,
-        unix_socket: None, // TODO: Daemon should create this
-        config_path: config_path.to_path_buf(),
-    };
+        // Check if we've exceeded the timeout
+        if start.elapsed() > max_wait {
+            anyhow::bail!("Timeout waiting for daemon to start (5 seconds)");
+        }
 
-    state.save()?;
-
-    Ok(())
+        // Wait a bit before checking again
+        std::thread::sleep(check_interval);
+    }
 }
 
 fn output_unset_env_vars(shell: &str) {

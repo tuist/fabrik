@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
+use tokio::signal;
 use tracing::info;
 
 use crate::bazel::proto::bytestream::byte_stream_server::ByteStreamServer;
@@ -26,8 +27,8 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         None
     };
 
-    // If we have a config file, compute hash and save daemon state
-    let daemon_state_opt = if let Some(ref config_path_str) = args.config {
+    // If we have a config file, compute hash for daemon identification
+    let daemon_state_info = if let Some(ref config_path_str) = args.config {
         let config_path = std::path::PathBuf::from(config_path_str);
         let config_hash = hash_config(&config_path)?;
         Some((config_hash, config_path))
@@ -65,9 +66,6 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     info!("  Cache directory: {}", config.cache_dir);
     info!("  Max cache size: {}", config.max_cache_size);
     info!("  Upstream: {:?}", config.upstream);
-    info!("  HTTP port: {}", config.http_port);
-    info!("  gRPC port: {}", config.grpc_port);
-    info!("  S3 port: {}", config.s3_port);
 
     // Initialize shared storage backend
     let storage = storage::create_storage(&config.cache_dir)?;
@@ -75,26 +73,45 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
 
     // Start all servers in parallel
     let mut handles = vec![];
+    let mut actual_http_port = 0u16;
+    let mut actual_grpc_port = 0u16;
 
-    // 1. HTTP server (for Metro, Gradle, Nx, TurboRepo)
-    if config.http_port > 0 {
-        info!("Starting HTTP cache server on port {}", config.http_port);
+    // 1. HTTP server (for Metro, Gradle, Nx, TurboRepo, Xcode)
+    // Always use port 0 for daemon mode to avoid conflicts
+    if config.http_port != 0 {
         let http_storage = storage.clone();
-        let http_port = config.http_port;
+
+        // Bind to port 0 to get an available port
+        let (http_server, http_port, http_listener) =
+            HttpServer::new_with_port_zero(http_storage).await?;
+
+        actual_http_port = http_port;
+        info!("HTTP cache server bound to port {}", actual_http_port);
+
         handles.push(tokio::spawn(async move {
-            HttpServer::new(http_port, http_storage).run().await
+            http_server.run_with_listener(http_listener).await
         }));
     }
 
     // 2. gRPC server (for Bazel, Fabrik protocol)
-    if config.grpc_port > 0 {
-        info!("Starting gRPC cache server on port {}", config.grpc_port);
+    // For gRPC, we bind to port 0 as well
+    if config.grpc_port != 0 {
         let grpc_storage = storage.clone();
-        let grpc_port = config.grpc_port;
+
+        // Bind to find an available port
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+        actual_grpc_port = listener.local_addr()?.port();
+
+        // We need to convert TcpListener to the address for tonic
+        // tonic doesn't support pre-bound listeners easily, so we'll use the port
+        let addr = format!("127.0.0.1:{}", actual_grpc_port).parse().unwrap();
+
+        // Drop the listener since tonic will bind again
+        drop(listener);
+
+        info!("Starting gRPC cache server on port {}", actual_grpc_port);
 
         handles.push(tokio::spawn(async move {
-            let addr = format!("0.0.0.0:{}", grpc_port).parse().unwrap();
-
             // Create Bazel gRPC services
             let action_cache = BazelActionCacheService::new(grpc_storage.clone());
             let cas = BazelCasService::new(grpc_storage.clone());
@@ -114,25 +131,13 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         }));
     }
 
-    // 3. S3-compatible server (for sccache, BuildKit) - TODO: implement
-    // if config.s3_port > 0 {
-    //     info!("Starting S3-compatible server on port {}", config.s3_port);
-    //     // TODO: Implement S3 protocol server
-    // }
-
-    // 4. Gradle-specific HTTP server (different endpoints than generic HTTP)
-    // Gradle uses /cache/ prefix, so we might need a separate router
-    // For now, Gradle can use the generic HTTP server
-
-    info!("Daemon started - press Ctrl+C to stop");
-
-    // Save daemon state if we have config info
-    if let Some((config_hash, config_path)) = daemon_state_opt {
+    // Save daemon state with actual bound ports BEFORE starting servers
+    let state_opt = if let Some((config_hash, config_path)) = daemon_state_info {
         let state = DaemonState {
             config_hash,
             pid: std::process::id(),
-            http_port: config.http_port,
-            grpc_port: config.grpc_port,
+            http_port: actual_http_port,
+            grpc_port: actual_grpc_port,
             metrics_port: config.metrics_port.unwrap_or(9091),
             unix_socket: None, // TODO: Implement Unix socket server
             config_path,
@@ -140,15 +145,62 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
 
         if let Err(e) = state.save() {
             tracing::warn!("Failed to save daemon state: {}", e);
+            None
         } else {
             info!("Daemon state saved with hash: {}", state.config_hash);
+            info!("  HTTP port: {}", state.http_port);
+            info!("  gRPC port: {}", state.grpc_port);
+            Some(state)
+        }
+    } else {
+        None
+    };
+
+    info!("Daemon started - waiting for shutdown signal");
+
+    // Wait for shutdown signal (Ctrl+C or SIGTERM)
+    tokio::select! {
+        _ = signal::ctrl_c() => {
+            info!("Received Ctrl+C, shutting down gracefully...");
+        }
+        #[cfg(unix)]
+        _ = async {
+            use tokio::signal::unix::{signal, SignalKind};
+            let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
+            sigterm.recv().await
+        } => {
+            info!("Received SIGTERM, shutting down gracefully...");
         }
     }
 
-    // Wait for all servers (runs until ctrl-c or error)
+    // Gracefully wait for all servers to finish with a timeout
+    info!("Waiting for servers to shutdown...");
+    let shutdown_timeout = tokio::time::Duration::from_secs(5);
+
     for handle in handles {
-        handle.await??;
+        match tokio::time::timeout(shutdown_timeout, handle).await {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(e))) => {
+                tracing::warn!("Server shutdown error: {}", e);
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("Server task error: {}", e);
+            }
+            Err(_) => {
+                tracing::warn!("Server shutdown timeout");
+            }
+        }
     }
 
+    // Cleanup daemon state
+    if let Some(state) = state_opt {
+        if let Err(e) = state.cleanup() {
+            tracing::warn!("Failed to cleanup daemon state: {}", e);
+        } else {
+            info!("Daemon state cleaned up");
+        }
+    }
+
+    info!("Daemon stopped");
     Ok(())
 }

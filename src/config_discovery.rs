@@ -107,6 +107,16 @@ impl DaemonState {
         Ok(())
     }
 
+    /// Remove daemon state files
+    pub fn cleanup(&self) -> Result<()> {
+        let state_dir = self.state_dir();
+        if state_dir.exists() {
+            fs::remove_dir_all(&state_dir)
+                .with_context(|| format!("Failed to remove state dir: {}", state_dir.display()))?;
+        }
+        Ok(())
+    }
+
     pub fn load(config_hash: &str) -> Result<Option<Self>> {
         let state_dir = if let Some(home) = dirs::home_dir() {
             home.join(".fabrik/daemons").join(config_hash)
