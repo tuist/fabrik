@@ -9,6 +9,7 @@ TIPI_HOME_DIR = "{{config_root}}/.tipi-home"
 rust = "latest"
 git-cliff = "latest"
 bazel = "latest"
+gradle = "latest"
 protoc = "28.3"  # Protocol Buffers compiler (supports proto3 optional keyword)
 node = "24.10.0"
 pnpm = "latest"

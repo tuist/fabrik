@@ -57,12 +57,20 @@ pub struct DaemonState {
 }
 
 impl DaemonState {
-    pub fn state_dir(&self) -> PathBuf {
-        if let Some(home) = dirs::home_dir() {
-            home.join(".fabrik/daemons").join(&self.config_hash)
+    /// Get the base directory for daemon state
+    /// Can be overridden with FABRIK_STATE_DIR for testing
+    fn state_base_dir() -> PathBuf {
+        if let Ok(state_dir) = std::env::var("FABRIK_STATE_DIR") {
+            PathBuf::from(state_dir)
+        } else if let Some(home) = dirs::home_dir() {
+            home.join(".fabrik/daemons")
         } else {
-            PathBuf::from("/tmp/fabrik/daemons").join(&self.config_hash)
+            PathBuf::from("/tmp/fabrik/daemons")
         }
+    }
+
+    pub fn state_dir(&self) -> PathBuf {
+        Self::state_base_dir().join(&self.config_hash)
     }
 
     pub fn pid_file(&self) -> PathBuf {
@@ -118,11 +126,7 @@ impl DaemonState {
     }
 
     pub fn load(config_hash: &str) -> Result<Option<Self>> {
-        let state_dir = if let Some(home) = dirs::home_dir() {
-            home.join(".fabrik/daemons").join(config_hash)
-        } else {
-            PathBuf::from("/tmp/fabrik/daemons").join(config_hash)
-        };
+        let state_dir = Self::state_base_dir().join(config_hash);
 
         if !state_dir.exists() {
             return Ok(None);

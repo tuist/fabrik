@@ -77,11 +77,11 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     let mut actual_grpc_port = 0u16;
 
     // 1. HTTP server (for Metro, Gradle, Nx, TurboRepo, Xcode)
-    // Always use port 0 for daemon mode to avoid conflicts
-    if config.http_port != 0 {
+    // Always start HTTP server in daemon mode
+    {
         let http_storage = storage.clone();
 
-        // Bind to port 0 to get an available port
+        // Bind to port 0 to get an available port (or use config port if specified)
         let (http_server, http_port, http_listener) =
             HttpServer::new_with_port_zero(http_storage).await?;
 
@@ -94,8 +94,8 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     }
 
     // 2. gRPC server (for Bazel, Fabrik protocol)
-    // For gRPC, we bind to port 0 as well
-    if config.grpc_port != 0 {
+    // Always start gRPC server in daemon mode
+    {
         let grpc_storage = storage.clone();
 
         // Bind to find an available port

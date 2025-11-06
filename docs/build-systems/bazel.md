@@ -4,75 +4,70 @@ Bazel integration guide for Fabrik. This assumes you've already [completed the g
 
 ## How It Works
 
-Fabrik provides transparent remote caching for Bazel via the Bazel Remote Caching protocol (gRPC). When you navigate to your project, Fabrik exports `FABRIK_GRPC_URL` which you can use in your Bazel configuration.
+Fabrik provides transparent remote caching for Bazel via the Bazel Remote Caching protocol (gRPC). When you navigate to your project, Fabrik exports `FABRIK_GRPC_URL` which you can use with Bazel's `--remote_cache` flag.
 
 ## Quick Start
 
-### 1. Configure Bazel
+### Option 1: Shell Integration (Development)
 
-Add to your `.bazelrc`:
-
-```bash
-# Use Fabrik cache
-build --remote_cache=grpc://localhost:9090
-build --remote_upload_local_results=true
-```
-
-**Note**: You'll need to update the port dynamically since Fabrik uses random ports. See configuration options below.
-
-### 2. Build
+Once you have shell integration set up, Bazel can use the `FABRIK_GRPC_URL` environment variable:
 
 ```bash
 cd ~/my-bazel-project
-bazel build //...
-```
+# Daemon starts automatically, exports FABRIK_GRPC_URL
 
-## Configuration Options
-
-Since Bazel doesn't directly read environment variables in `.bazelrc`, you have several options:
-
-### Option 1: Wrapper Script (Recommended)
-
-Create a `bazel` wrapper script:
-
-```bash
-#!/bin/bash
-# bazel-wrapper.sh
-if [ -n "$FABRIK_GRPC_URL" ]; then
-    # Convert grpc://localhost:54322 to grpc://localhost:54322
-    exec command bazel --remote_cache="$FABRIK_GRPC_URL" "$@"
-else
-    exec command bazel "$@"
-fi
-```
-
-Make it executable and use it:
-
-```bash
-chmod +x bazel-wrapper.sh
-./bazel-wrapper.sh build //...
-```
-
-### Option 2: Shell Alias
-
-Add to your shell config:
-
-```bash
-# ~/.bashrc or ~/.zshrc
-alias bazel='command bazel --remote_cache="$FABRIK_GRPC_URL"'
-```
-
-### Option 3: Explicit Flag
-
-Pass the flag directly:
-
-```bash
 bazel build --remote_cache="$FABRIK_GRPC_URL" //...
 ```
 
-## Bazel-Specific Configuration
+### Option 2: fabrik exec (CI/Development)
 
-### Local Cache Only
+Use `fabrik exec` to automatically manage the daemon lifecycle:
+
+```bash
+cd ~/my-bazel-project
+fabrik exec -- bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+The `fabrik exec` command:
+1. Starts the daemon with your project's config
+2. Exports `FABRIK_GRPC_URL`
+3. Runs your command
+4. Keeps daemon alive for subsequent commands
+
+## Configuration
+
+### .bazelrc Setup
+
+To avoid typing `--remote_cache` every time, add to your `.bazelrc`:
+
+```bash
+# .bazelrc
+build --remote_cache=grpc://localhost:9090
+build --remote_upload_local_results=true
+build --remote_timeout=60s
+```
+
+However, since Fabrik uses dynamic ports, you'll need to either:
+
+1. **Use the environment variable in commands:**
+   ```bash
+   bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+   ```
+
+2. **Use a shell alias:**
+   ```bash
+   alias bazel='command bazel --remote_cache="$FABRIK_GRPC_URL"'
+   ```
+
+3. **Use fabrik exec:**
+   ```bash
+   fabrik exec -- bazel build //...
+   # Automatically uses FABRIK_GRPC_URL
+   ```
+
+### Fabrik Configuration Examples
+
+#### Local Cache Only
 
 ```toml
 # fabrik.toml
@@ -81,7 +76,7 @@ dir = ".fabrik/cache"
 max_size = "20GB"  # Bazel can generate lots of artifacts
 ```
 
-### With Remote Cache
+#### With Remote Cache
 
 ```toml
 # fabrik.toml
@@ -92,6 +87,9 @@ max_size = "10GB"
 [[upstream]]
 url = "grpc://cache.tuist.io:7070"
 timeout = "30s"
+
+[auth]
+token_file = ".fabrik.token"
 ```
 
 ## Advanced Bazel Configuration
@@ -100,10 +98,10 @@ timeout = "30s"
 
 ```bash
 # .bazelrc
-build --remote_cache=grpc://localhost:9090
 build --remote_upload_local_results=true
 build --remote_timeout=60s
 build --remote_retries=3
+build --experimental_remote_cache_compression
 
 # Optional: Remote execution (if server supports it)
 # build --remote_executor=grpc://localhost:9090
@@ -115,17 +113,59 @@ build --remote_retries=3
 # .bazelrc
 # Use both disk cache and remote cache
 build --disk_cache=~/.cache/bazel
-build --remote_cache=grpc://localhost:9090
+# Remote cache passed via command line
 ```
 
 ### Platform-Specific Settings
 
 ```bash
 # .bazelrc
-build:linux --remote_cache=grpc://localhost:9090
-build:macos --remote_cache=grpc://localhost:9090
-build:windows --remote_cache=grpc://localhost:9090
+build:linux --remote_instance_name=linux
+build:macos --remote_instance_name=macos
+build:windows --remote_instance_name=windows
 ```
+
+## Usage Examples
+
+### Development
+
+```bash
+# With shell integration
+cd ~/my-bazel-project
+# Daemon starts automatically
+
+# Option 1: Pass remote_cache explicitly
+bazel build --remote_cache="$FABRIK_GRPC_URL" //src/main:app
+
+# Option 2: Use alias
+alias bzl='bazel --remote_cache="$FABRIK_GRPC_URL"'
+bzl build //...
+bzl test //...
+```
+
+### CI/CD
+
+```bash
+# Use fabrik exec for managed daemon lifecycle
+fabrik exec -- bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+fabrik exec -- bazel test --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+## Verification
+
+Check that caching is working:
+
+```bash
+# First build (cache miss)
+bazel clean
+bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+
+# Second build (cache hit - should be much faster)
+bazel clean
+bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+You should see "remote cache hit" messages in the output.
 
 ## Troubleshooting
 
@@ -137,54 +177,57 @@ build:windows --remote_cache=grpc://localhost:9090
    # Should show: grpc://127.0.0.1:{port}
    ```
 
-2. **Verify Bazel sees the cache:**
-   ```bash
-   bazel build --remote_cache="$FABRIK_GRPC_URL" //... --explain=explain.txt
-   cat explain.txt | grep cache
-   ```
-
-3. **Check daemon status:**
+2. **Verify daemon is running:**
    ```bash
    fabrik doctor --verbose
+   ```
+
+3. **Test with verbose output:**
+   ```bash
+   bazel build --remote_cache="$FABRIK_GRPC_URL" //... --execution_log_json_file=exec.json
+   cat exec.json | jq '.[] | select(.remoteCacheHit != null)'
    ```
 
 ### Connection Errors
 
 If you see "failed to connect to remote cache":
 
-1. **Verify daemon is running:**
-   ```bash
-   fabrik doctor
-   ```
-
-2. **Check gRPC port:**
+1. **Verify GRPC_URL format:**
    ```bash
    echo $FABRIK_GRPC_URL
-   # Should be: grpc://127.0.0.1:{port}
+   # Should be: grpc://127.0.0.1:{port} (not http://)
    ```
 
-3. **Test connection:**
+2. **Check daemon logs:**
    ```bash
-   grpcurl -plaintext 127.0.0.1:{port} list
+   fabrik doctor --verbose
+   ```
+
+3. **Test gRPC connection:**
+   ```bash
+   # Install grpcurl
+   grpcurl -plaintext ${FABRIK_GRPC_URL#grpc://} list
+   # Should list Bazel services
    ```
 
 ### Slow Builds Despite Cache
 
-1. **Enable verbose logging:**
+1. **Enable execution log:**
    ```bash
    bazel build --remote_cache="$FABRIK_GRPC_URL" //... --execution_log_json_file=exec.json
-   ```
-
-2. **Check cache hit rate:**
-   ```bash
    cat exec.json | jq '.[] | .remoteCacheHit' | sort | uniq -c
    ```
 
-3. **Increase cache size:**
+2. **Increase cache size:**
    ```toml
    [cache]
    max_size = "50GB"
    ```
+
+3. **Check for non-deterministic builds:**
+   - Timestamps in genrules
+   - Absolute paths
+   - Random values
 
 ## CI/CD Integration
 
@@ -212,7 +255,12 @@ jobs:
           sudo mv fabrik /usr/local/bin/
 
       - name: Build
-        run: bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+        run: fabrik exec -- bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+        env:
+          FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
+
+      - name: Test
+        run: fabrik exec -- bazel test --remote_cache="$FABRIK_GRPC_URL" //...
         env:
           FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
 ```
@@ -231,6 +279,7 @@ jobs:
    # .bazelrc
    build --remote_timeout=120s
    build --remote_max_connections=100
+   build --experimental_remote_cache_compression
    ```
 
 3. **Use build without the bytes:**
@@ -239,6 +288,12 @@ jobs:
    build --remote_download_minimal
    ```
 
+4. **Enable local disk cache as L1:**
+   ```bash
+   # .bazelrc
+   build --disk_cache=~/.cache/bazel
+   # Fabrik becomes L2/L3
+   ```
 
 ## Other Build Systems
 
