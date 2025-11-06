@@ -1,132 +1,231 @@
-# Metro
+# Metro Integration
 
-Metro is the JavaScript bundler used by React Native and other JavaScript projects. Fabrik integrates with Metro's cache system through two approaches:
-
-1. **Shell Activation** (Recommended) - Use Fabrik's activation system
-2. **NPM Package** - Use `@tuist/fabrik` for programmatic integration
-
-## Approach 1: Shell Activation (Recommended)
-
-### Quick Start
-
-#### 1. Activate Fabrik
-
-```bash
-# Add to your shell config
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-#### 2. Configure Your Project
-
-Create `.fabrik.toml` in your project root:
-
-```toml
-[cache]
-dir = ".fabrik/cache"
-max_size = "10GB"
-
-# Optional: Connect to remote cache
-[[upstream]]
-url = "http://cache.example.com:8080"
-timeout = "30s"
-```
-
-#### 3. Configure Metro
-
-Update your `metro.config.js` to read from environment variables:
-
-```javascript
-// metro.config.js
-const { FabrikStore } = require('@tuist/fabrik/metro');
-
-module.exports = {
-  cacheStores: [
-    new FabrikStore({
-      // Connect to activated daemon via environment variable
-      url: process.env.FABRIK_HTTP_URL,
-    }),
-  ],
-};
-```
-
-#### 4. Run Metro Normally
-
-```bash
-cd ~/my-react-native-app
-
-# Daemon starts automatically
-npm start
-npx react-native start
-```
-
-The FabrikStore will automatically connect to the activated daemon via `FABRIK_HTTP_URL`.
-
-## Approach 2: NPM Package Integration
-
-For projects that prefer programmatic configuration without shell activation.
-
-### Installation
-
-```bash
-npm install @tuist/fabrik
-# or
-pnpm add @tuist/fabrik
-# or
-yarn add @tuist/fabrik
-```
-
-The Fabrik binary will be automatically downloaded during installation based on your platform.
-
-### Configuration
-
-Add Fabrik to your Metro configuration with explicit settings:
-
-```javascript
-// metro.config.js
-const { FabrikStore } = require('@tuist/fabrik/metro');
-
-module.exports = {
-  cacheStores: [
-    new FabrikStore({
-      // Local cache directory
-      cacheDir: '.fabrik/cache',
-
-      // Optional: Upstream Fabrik server
-      upstream: 'http://cache.example.com:8080',
-
-      // Optional: Maximum cache size
-      maxSize: '5GB',
-
-      // Optional: Authentication token
-      token: process.env.TUIST_TOKEN,
-    }),
-  ],
-};
-```
-
-The `FabrikStore` will start its own daemon if no activated daemon is detected.
+Metro integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
 
 ## How It Works
 
-### With Shell Activation
+Fabrik provides HTTP-based caching for Metro bundler (React Native). When you navigate to your project, Fabrik exports `FABRIK_HTTP_URL` which Metro can use for remote caching.
 
-1. **Daemon starts** when you enter the project directory
-2. **Environment variable exported**: `FABRIK_HTTP_URL=http://127.0.0.1:{port}`
-3. **FabrikStore connects** to the existing daemon via the URL
-4. **Metro cache operations** flow through Fabrik's multi-layer cache
+## Quick Start
 
-### With NPM Package
+Configure Metro to use Fabrik's cache by updating your `metro.config.js`:
 
-1. **Automatic Binary Management** - Downloads the correct Fabrik binary for your platform during `npm install`
-2. **Daemon Lifecycle** - Automatically starts the Fabrik daemon when Metro builds
-3. **Transparent Caching** - Metro cache operations flow through Fabrik's HTTP API
-4. **Multi-Layer Fallback** - Local cache → Regional cache → S3 (configured via `upstream`)
+```javascript
+const {getDefaultConfig} = require('metro-config');
 
-## API
+module.exports = (async () => {
+  const config = await getDefaultConfig();
+  
+  return {
+    ...config,
+    cacheStores: [
+      // Local cache (default)
+      require('metro-cache/src/stores/FileStore'),
+      
+      // Remote cache via Fabrik
+      {
+        get: async (key) => {
+          const url = `${process.env.FABRIK_HTTP_URL}/api/v1/artifacts/${key}`;
+          const response = await fetch(url);
+          return response.ok ? await response.buffer() : null;
+        },
+        set: async (key, value) => {
+          const url = `${process.env.FABRIK_HTTP_URL}/api/v1/artifacts/${key}`;
+          await fetch(url, {
+            method: 'PUT',
+            body: value,
+          });
+        },
+      },
+    ],
+  };
+})();
+```
 
-The Fabrik daemon exposes an HTTP cache API that Metro uses:
+Then start Metro:
 
-- `GET /api/v1/artifacts/{hash}` - Retrieve cached artifact
-- `PUT /api/v1/artifacts/{hash}` - Store artifact  
-- `GET /health` - Health check
+```bash
+cd ~/my-react-native-app
+npm start
+```
+
+## Configuration Examples
+
+### Local Cache Only
+
+```toml
+# fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "5GB"
+```
+
+### With Remote Cache
+
+```toml
+# fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "3GB"
+
+[[upstream]]
+url = "grpc://cache.tuist.io:7070"
+timeout = "30s"
+```
+
+## Metro Cache Configuration
+
+### Full Metro Config Example
+
+```javascript
+// metro.config.js
+const {getDefaultConfig} = require('metro-config');
+
+const FABRIK_URL = process.env.FABRIK_HTTP_URL;
+
+module.exports = (async () => {
+  const config = await getDefaultConfig();
+  
+  const cacheStores = [
+    require('metro-cache/src/stores/FileStore'),
+  ];
+  
+  // Add Fabrik remote cache if available
+  if (FABRIK_URL) {
+    cacheStores.push({
+      get: async (key) => {
+        try {
+          const response = await fetch(`${FABRIK_URL}/api/v1/artifacts/${key}`);
+          if (!response.ok) return null;
+          return await response.buffer();
+        } catch (error) {
+          console.warn('Fabrik cache miss:', error.message);
+          return null;
+        }
+      },
+      set: async (key, value) => {
+        try {
+          await fetch(`${FABRIK_URL}/api/v1/artifacts/${key}`, {
+            method: 'PUT',
+            body: value,
+            headers: {
+              'Content-Type': 'application/octet-stream',
+            },
+          });
+        } catch (error) {
+          console.warn('Fabrik cache set failed:', error.message);
+        }
+      },
+    });
+  }
+  
+  return {
+    ...config,
+    cacheStores,
+  };
+})();
+```
+
+## Troubleshooting
+
+### Cache Not Working
+
+1. **Check environment variable:**
+   ```bash
+   echo $FABRIK_HTTP_URL
+   # Should show: http://127.0.0.1:{port}
+   ```
+
+2. **Verify daemon is running:**
+   ```bash
+   fabrik doctor --verbose
+   ```
+
+3. **Check Metro cache hits:**
+   ```bash
+   # Clear Metro cache
+   npm start -- --reset-cache
+   
+   # Run again and check logs
+   npm start
+   ```
+
+### Metro Not Using Remote Cache
+
+1. **Verify Metro config:**
+   ```javascript
+   console.log('Fabrik URL:', process.env.FABRIK_HTTP_URL);
+   ```
+
+2. **Check Metro bundler logs:**
+   ```bash
+   npm start -- --verbose
+   ```
+
+3. **Test cache endpoint manually:**
+   ```bash
+   curl -I $FABRIK_HTTP_URL/api/v1/artifacts/test
+   ```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Build React Native App
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Fabrik
+        run: |
+          curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          sudo mv fabrik /usr/local/bin/
+
+      - name: Bundle
+        run: npm run bundle
+        env:
+          FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
+```
+
+## Performance Tips
+
+1. **Increase cache size for large apps:**
+   ```toml
+   [cache]
+   max_size = "10GB"
+   ```
+
+2. **Use watchman for faster rebuilds:**
+   ```bash
+   brew install watchman  # macOS
+   ```
+
+3. **Enable Metro's transformer cache:**
+   ```javascript
+   // metro.config.js
+   module.exports = {
+     transformer: {
+       enableBabelRCLookup: false,
+       enableBabelRuntime: false,
+     },
+   };
+   ```
+
+## See Also
+
+- [Metro Bundler Documentation](https://metrobundler.dev/)
+- [React Native Caching](https://reactnative.dev/docs/performance#metro-bundler)
+- [CLI Reference](../cli-reference.md)
+- [Getting Started](../../README.md)

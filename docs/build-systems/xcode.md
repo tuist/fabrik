@@ -1,240 +1,183 @@
-# Xcode
+# Xcode Integration
 
-Fabrik provides transparent build caching for Xcode projects using Unix domain sockets for optimal performance with iOS, macOS, watchOS, and tvOS builds.
+Xcode integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
+
+## How It Works
+
+Fabrik provides build caching for Xcode projects using Unix domain sockets for optimal performance with iOS, macOS, watchOS, and tvOS builds. When you navigate to your project, Fabrik exports `XCODE_CACHE_SERVER` which points to a Unix socket for low-latency communication.
 
 ## Quick Start
 
-### 1. Activate Fabrik (One-Time Setup)
-
 ```bash
-# Add to your shell config
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-source ~/.bashrc
+cd ~/my-xcode-project
+xcodebuild -project MyApp.xcodeproj -scheme MyApp
 ```
 
-### 2. Configure Your Project
+The daemon automatically starts and Xcode will use the cache via the `XCODE_CACHE_SERVER` environment variable.
 
-Create `.fabrik.toml` in your project root:
+## Xcode Configuration
 
-```toml
-[cache]
-dir = ".fabrik/cache"
-max_size = "20GB"
+### For Command-Line Builds
 
-# Optional: Connect to remote cache
-[[upstream]]
-url = "http://cache.example.com:8080"
-timeout = "30s"
-```
+No configuration needed! Xcode automatically reads `XCODE_CACHE_SERVER` from your shell environment.
 
-### 3. Configure Xcode Build Settings
+### For Xcode GUI Builds
 
-Xcode reads the cache server from the `XCODE_CACHE_SERVER` environment variable. When using Fabrik activation, this is automatically set to a Unix socket path for best performance.
-
-Add to your scheme's environment variables (optional, for Xcode GUI builds):
+To use caching when building from Xcode.app:
 
 1. Edit Scheme → Run → Arguments → Environment Variables
 2. Add: `XCODE_CACHE_SERVER = ${XCODE_CACHE_SERVER}`
 
-### 4. Build Normally
+This passes the environment variable from your shell to Xcode.
+
+## Configuration Examples
+
+### Local Cache Only
+
+```toml
+# fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "20GB"  # iOS builds can be large
+```
+
+### With Remote Cache
+
+```toml
+# fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "10GB"
+
+[[upstream]]
+url = "http://cache.tuist.io:8080"
+timeout = "60s"  # iOS artifacts can be large
+```
+
+## Xcode-Specific Tips
+
+### Cache Directory Location
+
+For better performance, use a local SSD:
+
+```toml
+[cache]
+dir = "~/.fabrik/xcode-cache"  # Expands to home directory
+max_size = "30GB"
+```
+
+### Derived Data
+
+Xcode's Derived Data is separate from Fabrik's cache:
 
 ```bash
-cd ~/my-xcode-project
+# Clear Xcode's Derived Data
+rm -rf ~/Library/Developer/Xcode/DerivedData
 
-# Daemon starts automatically with Unix socket
-xcodebuild -project MyApp.xcodeproj -scheme MyApp
-
-# Or use fabrik exec for CI
-fabrik exec xcodebuild -workspace MyApp.xcworkspace -scheme MyApp -configuration Release
+# Fabrik cache remains intact
 ```
 
-## Unix Socket vs HTTP
+### Build Settings
 
-**Xcode uses Unix domain sockets by default for better performance:**
-
-- **Unix Socket** (preferred): `XCODE_CACHE_SERVER=/path/to/socket`
-- **HTTP Fallback**: `XCODE_CACHE_SERVER=http://127.0.0.1:{port}`
-
-Fabrik automatically creates a Unix socket when activated, providing:
-- ✅ Lower latency (no TCP overhead)
-- ✅ Higher throughput
-- ✅ Better security (filesystem permissions)
-
-The `XCODE_CACHE_SERVER` environment variable is automatically set to the Unix socket path.
-
-## Configuration
-
-### Shell Activation (Recommended for Development)
+For optimal caching, ensure consistent build settings:
 
 ```bash
-cd ~/xcode-project
-# Daemon starts with Unix socket
-xcodebuild -project MyApp.xcodeproj -scheme MyApp
-
-cd ~/another-project
-# New daemon starts if different config
+# In your xcconfig or build settings
+COMPILER_INDEX_STORE_ENABLE = NO  # Improves cache hit rate
+ENABLE_BITCODE = NO  # For iOS (deprecated in Xcode 14+)
 ```
-
-### Explicit Execution (CI/CD)
-
-For CI/CD pipelines, use `fabrik exec`:
-
-```bash
-# In your CI script
-fabrik exec xcodebuild -workspace MyApp.xcworkspace \
-  -scheme MyApp \
-  -configuration Release \
-  -destination 'platform=iOS Simulator,name=iPhone 15'
-```
-
-## How It Works
-
-When Fabrik is activated:
-
-1. **Daemon starts** with a Unix domain socket for Xcode
-2. **Environment variable exported**: `XCODE_CACHE_SERVER=/path/to/socket`
-3. **Xcode connects** to the socket (via environment variable or build settings)
-4. **Build artifacts** cached through Fabrik's multi-layer cache
-
-## Examples
-
-### Development Workflow
-
-```bash
-# One-time setup
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-source ~/.bashrc
-
-# Daily usage
-cd ~/MyiOSApp
-xcodebuild -project MyApp.xcodeproj -scheme MyApp         # First build
-xcodebuild clean
-xcodebuild -project MyApp.xcodeproj -scheme MyApp         # Second build (cached) - much faster!
-```
-
-### CI/CD Workflow
-
-```yaml
-# GitHub Actions
-steps:
-  - uses: actions/checkout@v4
-  
-  - uses: maxim-lobanov/setup-xcode@v1
-    with:
-      xcode-version: '15.0'
-  
-  - run: |
-      curl -fsSL https://raw.githubusercontent.com/tuist/fabrik/main/install.sh | sh
-      
-  - run: |
-      fabrik exec xcodebuild \
-        -workspace MyApp.xcworkspace \
-        -scheme MyApp \
-        -destination 'platform=iOS Simulator,name=iPhone 15' \
-        clean build
-```
-
-### Testing with Fabrik
-
-```bash
-# Run unit tests
-fabrik exec xcodebuild test \
-  -workspace MyApp.xcworkspace \
-  -scheme MyAppTests \
-  -destination 'platform=iOS Simulator,name=iPhone 15'
-
-# Run UI tests
-fabrik exec xcodebuild test \
-  -workspace MyApp.xcworkspace \
-  -scheme MyAppUITests \
-  -destination 'platform=iOS Simulator,name=iPhone 15'
-```
-
-## Xcode GUI Integration
-
-To use Fabrik with builds triggered from Xcode's GUI:
-
-1. **Edit your scheme**: Product → Scheme → Edit Scheme
-2. **Add environment variable**: Run → Arguments → Environment Variables
-3. **Add**: `XCODE_CACHE_SERVER` = `${XCODE_CACHE_SERVER}`
-
-Now when you build from Xcode GUI (⌘B), it will use the Fabrik cache if the daemon is running.
-
-::: tip
-Make sure to activate Fabrik in your terminal before opening Xcode:
-```bash
-cd ~/my-project
-fabrik activate --status  # Start daemon
-open MyApp.xcworkspace     # Open Xcode
-```
-:::
 
 ## Troubleshooting
 
-### Xcode Not Using Cache
+### Cache Not Working
 
-Check that environment variable is set:
+1. **Check environment variable:**
+   ```bash
+   echo $XCODE_CACHE_SERVER
+   # Should show: unix:///path/to/socket or http://127.0.0.1:{port}
+   ```
 
-```bash
-echo $XCODE_CACHE_SERVER
-# Should output: /path/to/fabrik/socket or http://127.0.0.1:{port}
+2. **Verify daemon is running:**
+   ```bash
+   fabrik doctor --verbose
+   ```
+
+3. **Check Xcode build logs:**
+   ```bash
+   xcodebuild -project MyApp.xcodeproj -scheme MyApp | grep cache
+   ```
+
+### Slow Builds Despite Cache
+
+1. **Increase cache size:**
+   ```toml
+   [cache]
+   max_size = "40GB"
+   ```
+
+2. **Clean build folder:**
+   ```bash
+   xcodebuild clean -project MyApp.xcodeproj -scheme MyApp
+   ```
+
+3. **Check for non-deterministic inputs:**
+   - Timestamps in build phase scripts
+   - Random values in code generation
+   - Absolute paths in build settings
+
+### GUI Builds Not Using Cache
+
+Make sure you've added `XCODE_CACHE_SERVER` to your scheme's environment variables (see Xcode Configuration above).
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Build iOS App
+on: [push]
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_15.0.app
+
+      - name: Install Fabrik
+        run: |
+          curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-aarch64-apple-darwin.tar.gz | tar xz
+          sudo mv fabrik /usr/local/bin/
+
+      - name: Build
+        run: xcodebuild -project MyApp.xcodeproj -scheme MyApp -configuration Release
+        env:
+          FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
 ```
-
-Check daemon is running:
-
-```bash
-fabrik daemon list
-```
-
-Verify socket exists:
-
-```bash
-ls -la $XCODE_CACHE_SERVER
-```
-
-### Socket Permission Issues
-
-If you get permission denied errors:
-
-```bash
-# Restart the daemon
-fabrik daemon stop
-fabrik activate --status
-```
-
-### Connection Issues
-
-Check if socket is accessible:
-
-```bash
-# Test socket connection
-nc -U $XCODE_CACHE_SERVER
-```
-
-Restart daemon:
-
-```bash
-fabrik daemon stop
-fabrik daemon start
-```
-
-### Build from GUI Not Caching
-
-Ensure the environment variable is set in your scheme:
-
-1. Product → Scheme → Edit Scheme
-2. Run → Arguments → Environment Variables
-3. Verify `XCODE_CACHE_SERVER` is present
 
 ## Performance Tips
 
-1. **Use Unix socket** instead of HTTP for ~30% better performance
-2. **Cache derived data**: Large max_size in .fabrik.toml (20GB+)
-3. **Clean builds occasionally**: Test cache effectiveness
-4. **Monitor cache hits**: Check daemon logs
+1. **Use Unix sockets** (automatic when daemon runs locally):
+   - Lower latency than HTTP
+   - Better for large artifacts
+   - Preferred for local development
+
+2. **Larger cache for complex projects:**
+   ```toml
+   [cache]
+   max_size = "50GB"
+   eviction_policy = "lfu"
+   ```
+
+3. **Enable parallel builds:**
+   ```bash
+   xcodebuild -parallelizeTargets -jobs 8
+   ```
 
 ## See Also
 
-- [Getting Started](/getting-started) - Complete setup guide
-- [CLI Reference](/reference/cli) - Command-line options
-- [Configuration](/reference/config-file) - Configuration reference
+- [Xcode Build System](https://developer.apple.com/documentation/xcode/build-system)
+- [CLI Reference](../cli-reference.md)
+- [Getting Started](../../README.md)

@@ -1,230 +1,247 @@
-# Bazel
+# Bazel Integration
 
-Fabrik provides transparent remote caching for Bazel via the Bazel Remote Caching protocol (gRPC).
+Bazel integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
+
+## How It Works
+
+Fabrik provides transparent remote caching for Bazel via the Bazel Remote Caching protocol (gRPC). When you navigate to your project, Fabrik exports `FABRIK_GRPC_URL` which you can use in your Bazel configuration.
 
 ## Quick Start
 
-### 1. Activate Fabrik (One-Time Setup)
-
-```bash
-# Add to your shell config
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-source ~/.bashrc
-```
-
-### 2. Configure Your Project
-
-Create `.fabrik.toml` in your project root:
-
-```toml
-[cache]
-dir = ".fabrik/cache"
-max_size = "20GB"
-
-# Optional: Connect to remote cache
-[[upstream]]
-url = "grpc://cache.example.com:7070"
-timeout = "30s"
-```
-
-### 3. Use Bazel Normally
-
-```bash
-cd ~/my-bazel-project
-
-# Daemon starts automatically when you enter the directory
-# Just use bazel as normal:
-bazel build //...
-bazel test //...
-bazel build //src:myapp --config=release
-```
-
-That's it! Bazel automatically uses Fabrik's cache via the `FABRIK_GRPC_URL` environment variable.
-
-## Configuration
-
-### Shell Activation (Recommended for Development)
-
-Shell activation automatically manages the daemon:
-
-```bash
-cd ~/project-with-bazel
-# Daemon starts, exports FABRIK_GRPC_URL
-bazel build //...
-
-cd ~/another-project
-# New daemon starts if different config
-
-cd ~
-# Daemons cleaned up
-```
-
-### Explicit Execution (CI/CD)
-
-For CI/CD pipelines, use `fabrik exec`:
-
-```bash
-# In your CI script
-fabrik exec bazel build //...
-fabrik exec bazel test //...
-```
-
-## .bazelrc Configuration
-
-Bazel doesn't automatically read cache URLs from environment variables. You have two options:
-
-### Option 1: Using .bazelrc with Environment Variable
+### 1. Configure Bazel
 
 Add to your `.bazelrc`:
 
 ```bash
-# Use Fabrik cache when available
-build --remote_cache=${FABRIK_GRPC_URL}
+# Use Fabrik cache
+build --remote_cache=grpc://localhost:9090
 build --remote_upload_local_results=true
 ```
 
-**Note:** Bazel doesn't expand environment variables directly. You need to pass it via command:
+**Note**: You'll need to update the port dynamically since Fabrik uses random ports. See configuration options below.
+
+### 2. Build
 
 ```bash
-bazel build --remote_cache=$(echo $FABRIK_GRPC_URL) //...
+cd ~/my-bazel-project
+bazel build //...
 ```
 
-### Option 2: Script Wrapper (Recommended)
+## Configuration Options
 
-Create a `bazel` wrapper script in your project:
+Since Bazel doesn't directly read environment variables in `.bazelrc`, you have several options:
+
+### Option 1: Wrapper Script (Recommended)
+
+Create a `bazel` wrapper script:
 
 ```bash
 #!/bin/bash
 # bazel-wrapper.sh
 if [ -n "$FABRIK_GRPC_URL" ]; then
-    exec bazel --remote_cache="$FABRIK_GRPC_URL" "$@"
+    # Convert grpc://localhost:54322 to grpc://localhost:54322
+    exec command bazel --remote_cache="$FABRIK_GRPC_URL" "$@"
 else
-    exec bazel "$@"
+    exec command bazel "$@"
 fi
 ```
 
+Make it executable and use it:
+
 ```bash
 chmod +x bazel-wrapper.sh
-alias bazel='./bazel-wrapper.sh'
+./bazel-wrapper.sh build //...
 ```
 
-### Option 3: Using .bazelrc.user (Per-Developer)
+### Option 2: Shell Alias
 
-Each developer creates `.bazelrc.user` (gitignored):
+Add to your shell config:
 
 ```bash
-# .bazelrc.user (not in git)
-build --remote_cache=grpc://127.0.0.1:58235  # Your local daemon port
+# ~/.bashrc or ~/.zshrc
+alias bazel='command bazel --remote_cache="$FABRIK_GRPC_URL"'
+```
+
+### Option 3: Explicit Flag
+
+Pass the flag directly:
+
+```bash
+bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+## Bazel-Specific Configuration
+
+### Local Cache Only
+
+```toml
+# fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "20GB"  # Bazel can generate lots of artifacts
+```
+
+### With Remote Cache
+
+```toml
+# fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "10GB"
+
+[[upstream]]
+url = "grpc://cache.tuist.io:7070"
+timeout = "30s"
+```
+
+## Advanced Bazel Configuration
+
+### Remote Execution Settings
+
+```bash
+# .bazelrc
+build --remote_cache=grpc://localhost:9090
 build --remote_upload_local_results=true
+build --remote_timeout=60s
+build --remote_retries=3
+
+# Optional: Remote execution (if server supports it)
+# build --remote_executor=grpc://localhost:9090
 ```
 
-Then in `.bazelrc`:
+### Disk Cache + Remote Cache
 
 ```bash
-# Try to import .bazelrc.user if it exists
-try-import %workspace%/.bazelrc.user
+# .bazelrc
+# Use both disk cache and remote cache
+build --disk_cache=~/.cache/bazel
+build --remote_cache=grpc://localhost:9090
 ```
 
-## How It Works
-
-When Fabrik is activated:
-
-1. **Daemon starts** with a gRPC server implementing Bazel's Remote Caching protocol
-2. **Environment variable exported**: `FABRIK_GRPC_URL=grpc://127.0.0.1:{port}`
-3. **Bazel connects** to the gRPC server (via your .bazelrc or wrapper)
-4. **Cache operations** flow through Fabrik's multi-layer cache
-
-The daemon implements:
-- **ContentAddressableStorage (CAS)**: Store/retrieve build artifacts by content hash
-- **ActionCache**: Cache action results (mapping action hashes to outputs)
-- **Capabilities**: Advertise supported features to Bazel
-
-## Examples
-
-### Development Workflow
+### Platform-Specific Settings
 
 ```bash
-# One-time setup
-echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
-source ~/.bashrc
-
-# Daily usage
-cd ~/my-bazel-workspace
-bazel build //...           # Uses local + remote cache
-bazel test //...            # Reuses cached test results
-bazel build //src:myapp --config=release
-```
-
-### CI/CD Workflow
-
-```yaml
-# GitHub Actions
-steps:
-  - uses: actions/checkout@v4
-  
-  - run: |
-      curl -fsSL https://raw.githubusercontent.com/tuist/fabrik/main/install.sh | sh
-      
-  - run: fabrik exec bazel build //...
-  
-  - run: fabrik exec bazel test //...
-```
-
-### Multi-Project Setup
-
-Different projects get different daemon instances:
-
-```bash
-cd ~/project-a
-bazel build //...    # Daemon A (config hash: abc123)
-
-cd ~/project-b  
-bazel build //...    # Daemon B (config hash: def456)
+# .bazelrc
+build:linux --remote_cache=grpc://localhost:9090
+build:macos --remote_cache=grpc://localhost:9090
+build:windows --remote_cache=grpc://localhost:9090
 ```
 
 ## Troubleshooting
 
-### Bazel Not Using Cache
+### Cache Not Working
 
-Check that environment variable is set:
+1. **Check environment variable:**
+   ```bash
+   echo $FABRIK_GRPC_URL
+   # Should show: grpc://127.0.0.1:{port}
+   ```
 
-```bash
-echo $FABRIK_GRPC_URL
-# Should output: grpc://127.0.0.1:{port}
+2. **Verify Bazel sees the cache:**
+   ```bash
+   bazel build --remote_cache="$FABRIK_GRPC_URL" //... --explain=explain.txt
+   cat explain.txt | grep cache
+   ```
+
+3. **Check daemon status:**
+   ```bash
+   fabrik doctor --verbose
+   ```
+
+### Connection Errors
+
+If you see "failed to connect to remote cache":
+
+1. **Verify daemon is running:**
+   ```bash
+   fabrik doctor
+   ```
+
+2. **Check gRPC port:**
+   ```bash
+   echo $FABRIK_GRPC_URL
+   # Should be: grpc://127.0.0.1:{port}
+   ```
+
+3. **Test connection:**
+   ```bash
+   grpcurl -plaintext 127.0.0.1:{port} list
+   ```
+
+### Slow Builds Despite Cache
+
+1. **Enable verbose logging:**
+   ```bash
+   bazel build --remote_cache="$FABRIK_GRPC_URL" //... --execution_log_json_file=exec.json
+   ```
+
+2. **Check cache hit rate:**
+   ```bash
+   cat exec.json | jq '.[] | .remoteCacheHit' | sort | uniq -c
+   ```
+
+3. **Increase cache size:**
+   ```toml
+   [cache]
+   max_size = "50GB"
+   ```
+
+## CI/CD Integration
+
+### GitHub Actions
+
+```yaml
+name: Build
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Bazel
+        run: |
+          wget https://github.com/bazelbuild/bazelisk/releases/latest/download/bazelisk-linux-amd64
+          chmod +x bazelisk-linux-amd64
+          sudo mv bazelisk-linux-amd64 /usr/local/bin/bazel
+
+      - name: Install Fabrik
+        run: |
+          curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          sudo mv fabrik /usr/local/bin/
+
+      - name: Build
+        run: bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+        env:
+          FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
 ```
 
-Check daemon is running:
+## Performance Tips
 
-```bash
-fabrik daemon list
-```
+1. **Larger cache for monorepos:**
+   ```toml
+   [cache]
+   max_size = "50GB"
+   eviction_policy = "lfu"
+   ```
 
-Verify Bazel is configured:
+2. **Tune remote cache settings:**
+   ```bash
+   # .bazelrc
+   build --remote_timeout=120s
+   build --remote_max_connections=100
+   ```
 
-```bash
-bazel info | grep remote_cache
-```
-
-### Connection Refused
-
-Restart the daemon:
-
-```bash
-fabrik daemon stop
-fabrik activate --status
-```
-
-### Cache Misses
-
-Check cache statistics:
-
-```bash
-# TODO: Add stats command
-```
+3. **Use build without the bytes:**
+   ```bash
+   # .bazelrc
+   build --remote_download_minimal
+   ```
 
 ## See Also
 
-- [Getting Started](/getting-started) - Complete setup guide
-- [CLI Reference](/reference/cli) - Command-line options
-- [Configuration](/reference/config-file) - Configuration reference
-- [Bazel Remote Caching Docs](https://bazel.build/remote/caching) - Official Bazel documentation
+- [Bazel Remote Caching Documentation](https://bazel.build/remote/caching)
+- [Bazel Remote Execution API](https://github.com/bazelbuild/remote-apis)
+- [CLI Reference](../cli-reference.md)
+- [Getting Started](../../README.md)
