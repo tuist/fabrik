@@ -910,7 +910,7 @@ Fabrik uses an **activation-based daemon model** where each project automaticall
 
 **How It Works:**
 
-1. **Config Hash as Identity**: Each `.fabrik.toml` is hashed (SHA256, 16 chars) to create a unique daemon identifier
+1. **Config Hash as Identity**: Each `fabrik.toml` is hashed (SHA256, 16 chars) to create a unique daemon identifier
    - Same config = same daemon (automatic reuse)
    - Different config = different daemon (isolation)
    - Config changes = new daemon (safety)
@@ -921,7 +921,7 @@ Fabrik uses an **activation-based daemon model** where each project automaticall
    - Actual ports written to state file: `~/.fabrik/daemons/{hash}/ports.json`
 
 3. **Shell Integration**: `fabrik activate` hook runs on directory change
-   - Detects `.fabrik.toml` (walks up directory tree)
+   - Detects `fabrik.toml` (walks up directory tree)
    - Computes config hash
    - Checks if daemon is running for this config
    - If not running: starts daemon in background
@@ -932,7 +932,7 @@ Fabrik uses an **activation-based daemon model** where each project automaticall
    ~/.fabrik/daemons/a3f5d9c2b1e8f7a4/
    ├── pid                 # Process ID
    ├── ports.json          # { "http": 54321, "grpc": 54322, "metrics": 9091 }
-   └── config_path.txt     # /path/to/project/.fabrik.toml
+   └── config_path.txt     # /path/to/project/fabrik.toml
    ```
 
 5. **Graceful Shutdown**: Daemon handles SIGTERM/SIGINT
@@ -950,10 +950,10 @@ eval "$(fabrik activate bash)"   # Or zsh, fish
 cd ~/myproject
 
 # Behind the scenes:
-# - Finds .fabrik.toml
+# - Finds fabrik.toml
 # - Computes hash: a3f5d9c2b1e8f7a4
 # - Checks ~/.fabrik/daemons/a3f5d9c2b1e8f7a4/ → not found
-# - Spawns: fabrik daemon --config .fabrik.toml &
+# - Spawns: fabrik daemon --config fabrik.toml &
 # - Daemon binds to random ports (e.g., 54321, 54322)
 # - Daemon writes ports.json
 # - Shell hook exports:
@@ -998,7 +998,7 @@ gradle build  # Uses different daemon on ports 54515/54516
 ```
 User Event              Daemon Action
 ──────────────────────  ────────────────────────────────────────
-cd ~/project            1. Detect .fabrik.toml
+cd ~/project            1. Detect fabrik.toml
                         2. Compute hash: a3f5d9c2
                         3. Check state: ~/.fabrik/daemons/a3f5d9c2/
                         4. If not running: spawn daemon
@@ -1008,7 +1008,7 @@ cd ~/project            1. Detect .fabrik.toml
                         
 gradle build            → Connects to http://127.0.0.1:54321 ✅
 
-cd ~/other-project      1. Detect different .fabrik.toml
+cd ~/other-project      1. Detect different fabrik.toml
                         2. Compute hash: b7e4a1f9 (different!)
                         3. Spawn new daemon on different ports
                         4. Export new env vars
@@ -1024,7 +1024,7 @@ Ctrl+C on daemon        1. Receive SIGINT
 Each daemon loads its authentication token from the project's config:
 
 ```toml
-# .fabrik.toml (checked into git)
+# fabrik.toml (checked into git)
 [cache]
 dir = ".fabrik/cache"
 
@@ -1185,7 +1185,7 @@ jobs:
 1. Fabrik detects `ACTIONS_CACHE_URL` environment variable (auto-provided by GitHub)
 2. Automatically uses GitHub Actions Cache as primary storage
 3. Cache persists across workflow runs
-4. No `.fabrik.toml` needed
+4. No `fabrik.toml` needed
 
 **GitLab CI** (no configuration needed):
 ```yaml
@@ -1227,7 +1227,7 @@ INFO fabrik::storage - Cache directory: /tmp/fabrik-cache
 
 **Layer 1 (CI with mounted volume - Bazel):**
 ```toml
-# .fabrik.toml in repository (optimized for Bazel)
+# fabrik.toml in repository (optimized for Bazel)
 [cache]
 dir = "/mnt/build-cache"
 max_size = "20GB"
@@ -1247,7 +1247,7 @@ fabrik bazel -- build //...
 
 **Layer 1 (Local development):**
 ```toml
-# .fabrik.toml in repository
+# fabrik.toml in repository
 [cache]
 dir = ".fabrik/cache"
 max_size = "5GB"
@@ -1377,7 +1377,7 @@ Fabrik checks both `FABRIK_CONFIG_*` and standard environment variables:
 **Generating config files:**
 ```bash
 # Generate example Layer 1 config
-fabrik config generate --template layer1 > .fabrik.toml
+fabrik config generate --template layer1 > fabrik.toml
 
 # Generate example server config
 fabrik config generate --template server > /etc/fabrik/config.toml

@@ -63,6 +63,9 @@ pub enum Commands {
 
     /// Check system configuration and shell integration
     Doctor(DoctorArgs),
+
+    /// Initialize Fabrik configuration for a project
+    Init(InitArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -395,4 +398,23 @@ pub struct DoctorArgs {
     /// Verbose output
     #[arg(short, long)]
     pub verbose: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct InitArgs {
+    /// Skip interactive prompts and use defaults
+    #[arg(long)]
+    pub non_interactive: bool,
+
+    /// Cache directory (default: .fabrik/cache)
+    #[arg(long)]
+    pub cache_dir: Option<String>,
+
+    /// Max cache size (default: 5GB)
+    #[arg(long)]
+    pub max_cache_size: Option<String>,
+
+    /// Upstream cache URL
+    #[arg(long)]
+    pub upstream_url: Option<String>,
 }

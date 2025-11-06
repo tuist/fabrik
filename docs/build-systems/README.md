@@ -25,7 +25,7 @@ All build systems follow the same pattern:
 
 1. **Install Fabrik** ([Getting Started](../../README.md#-getting-started))
 2. **Set up shell integration** (Required - see [Step 2](../../README.md#step-2-set-up-shell-integration-required))
-3. **Create `.fabrik.toml`** in your project root
+3. **Create `fabrik.toml`** in your project root
 4. **Navigate to project** - Daemon starts automatically
 5. **Run your build** - Build tool reads environment variables and uses cache
 
@@ -44,7 +44,7 @@ Fabrik exports these environment variables for build tools:
 
 ## Example Configuration
 
-Minimal `.fabrik.toml` that works for all build systems:
+Minimal `fabrik.toml` that works for all build systems:
 
 ```toml
 [cache]

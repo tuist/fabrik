@@ -113,9 +113,9 @@ pub fn run(args: DoctorArgs) -> Result<()> {
                 }
             }
         } else {
-            println!("ℹ️  No .fabrik.toml found in current directory");
+            println!("ℹ️  No fabrik.toml found in current directory");
             if args.verbose {
-                println!("   Create .fabrik.toml to enable daemon mode");
+                println!("   Run 'fabrik init' to create fabrik.toml");
             }
         }
     }

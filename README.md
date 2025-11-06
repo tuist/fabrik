@@ -57,7 +57,7 @@ Fabrik implements a three-tier caching strategy:
 
 ### Step 1: Install Fabrik
 
-**Using Mise (Recommended)**
+**Using Mise:**
 
 ```bash
 # Install Mise if you haven't already
@@ -115,9 +115,9 @@ sudo cp target/release/fabrik /usr/local/bin/
 
 </details>
 
-### Step 2: Set Up Shell Integration (Required)
+### Step 2: Set Up Shell Integration
 
-Fabrik uses shell integration to automatically start cache daemons when you navigate into projects. This step is **required** for Fabrik to work.
+Fabrik uses shell integration to automatically start cache daemons when you navigate into projects.
 
 **For Bash:**
 ```bash
@@ -152,31 +152,48 @@ You should see:
 ✅ Shell integration configured
 ```
 
-### Step 4: Configure Your Project
+### Step 4: Initialize Your Project
 
-Create a `.fabrik.toml` file in your project root:
+Navigate to your project and run the interactive initialization:
 
-```toml
-[cache]
-dir = ".fabrik/cache"
-max_size = "5GB"
-
-# Optional: Configure upstream cache
-# [[upstream]]
-# url = "grpc://cache.tuist.io:7070"
-# timeout = "30s"
+```bash
+cd ~/your-project
+fabrik init
 ```
 
-### Step 5: Choose Your Build System
+This will ask you:
+- Cache directory location (default: `.fabrik/cache`)
+- Maximum cache size (default: `5GB`)
+- Whether you have a remote cache server (optional)
 
-Fabrik works with any build system that supports remote caching. Follow the guide for your build system:
+The command creates a `fabrik.toml` configuration file in your project root.
 
-- **[Gradle →](docs/build-systems/gradle.md)** - Java, Kotlin, Android projects
-- **[Bazel →](docs/build-systems/bazel.md)** - Multi-language monorepos
-- **[Nx →](docs/build-systems/nx.md)** - JavaScript/TypeScript monorepos
-- **[TurboRepo →](docs/build-systems/turborepo.md)** - JavaScript/TypeScript monorepos
-- **[Xcode →](docs/build-systems/xcode.md)** - iOS, macOS apps
-- **[sccache →](docs/build-systems/sccache.md)** - Rust compiler cache
+### Step 5: Start Building
+
+Once initialized, simply navigate to your project and run your build:
+
+```bash
+cd ~/your-project
+# Daemon starts automatically
+gradle build  # or your build command
+```
+
+The daemon will:
+1. Start automatically when you enter the project directory
+2. Export environment variables for your build tool
+3. Cache your build outputs locally
+4. Sync with remote cache if configured
+
+### Step 6: Choose Your Build System
+
+For build system-specific instructions, see:
+
+- **[Gradle](docs/build-systems/gradle.md)** - Java, Kotlin, Android projects
+- **[Bazel](docs/build-systems/bazel.md)** - Multi-language monorepos
+- **[Nx](docs/build-systems/nx.md)** - JavaScript/TypeScript monorepos
+- **[TurboRepo](docs/build-systems/turborepo.md)** - JavaScript/TypeScript monorepos
+- **[Xcode](docs/build-systems/xcode.md)** - iOS, macOS apps
+- **[sccache](docs/build-systems/sccache.md)** - Rust compiler cache
 
 ## 💡 How It Works
 
@@ -186,7 +203,7 @@ Once shell integration is set up, Fabrik automatically manages cache daemons for
 # Navigate to your project
 cd ~/myproject
 
-# Daemon automatically starts (if .fabrik.toml exists)
+# Daemon automatically starts (if fabrik.toml exists)
 # Build tools automatically use the cache
 gradle build    # ✅ Uses cache
 nx build        # ✅ Uses cache
@@ -194,7 +211,7 @@ xcodebuild      # ✅ Uses cache
 ```
 
 **Behind the scenes:**
-1. Shell hook detects `.fabrik.toml`
+1. Shell hook detects `fabrik.toml`
 2. Daemon starts with random available ports (no conflicts!)
 3. Environment variables exported automatically
 4. Build tools read env vars and connect to daemon
@@ -215,9 +232,9 @@ gradle build  # Uses different daemon on ports 54401/54402
 
 ## 📚 Documentation
 
-- **[CLAUDE.md](./CLAUDE.md)** - Architecture and design decisions
 - **[CLI Reference](./docs/cli-reference.md)** - Command-line interface documentation
 - **[Build System Integration](./docs/build-systems/)** - Integration guides for specific build systems
+- **[CLAUDE.md](./CLAUDE.md)** - Architecture and design decisions
 - **[PLAN.md](./PLAN.md)** - Implementation roadmap
 
 ## 🛠️ Development

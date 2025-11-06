@@ -33,5 +33,6 @@ async fn main() -> Result<()> {
         Commands::Config(args) => commands::config::run(args.command),
         Commands::Health(args) => commands::health::run(args),
         Commands::Doctor(args) => commands::doctor::run(args),
+        Commands::Init(args) => commands::init::run(args),
     }
 }

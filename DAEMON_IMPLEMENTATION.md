@@ -36,7 +36,7 @@ http_server.run_with_listener(http_listener).await?;
 
 **Problem**: Need a way to uniquely identify daemons per project configuration.
 
-**Solution**: SHA256 hash (16 chars) of `.fabrik.toml` content
+**Solution**: SHA256 hash (16 chars) of `fabrik.toml` content
 
 **Files Modified**:
 - `src/config_discovery.rs`: Already had `hash_config()` function
@@ -66,7 +66,7 @@ let config_hash = hash_config(&config_path)?; // e.g., "a3f5d9c2b1e8f7a4"
 ~/.fabrik/daemons/a3f5d9c2b1e8f7a4/
 ├── pid                 # Process ID (e.g., "12345")
 ├── ports.json          # {"http": 54321, "grpc": 54322, "metrics": 9091}
-└── config_path.txt     # /Users/user/project/.fabrik.toml
+└── config_path.txt     # /Users/user/project/fabrik.toml
 ```
 
 ### 4. Activation Hook ✅
@@ -86,7 +86,7 @@ eval "$(fabrik activate bash)"
 # 2. Hook runs on directory change
 cd ~/myproject
 
-# 3. Hook detects .fabrik.toml → computes hash
+# 3. Hook detects fabrik.toml → computes hash
 # 4. Checks ~/.fabrik/daemons/{hash}/
 # 5. If daemon not running: spawns daemon
 # 6. Waits for daemon to write state (max 5 seconds)
@@ -161,14 +161,14 @@ for _ in 0..50 {
 └─────────────────────────────────────────────────────────────┘
                           │
                           ▼
-              cd ~/myproject (.fabrik.toml exists)
+              cd ~/myproject (fabrik.toml exists)
                           │
                           ▼
 ┌─────────────────────────────────────────────────────────────┐
 │ Shell Hook (_fabrik_hook)                                   │
 │                                                              │
-│ 1. Discover .fabrik.toml (walk up tree)                     │
-│ 2. Compute hash: sha256(.fabrik.toml) → "a3f5d9c2b1e8f7a4"  │
+│ 1. Discover fabrik.toml (walk up tree)                     │
+│ 2. Compute hash: sha256(fabrik.toml) → "a3f5d9c2b1e8f7a4"  │
 │ 3. Check state: ~/.fabrik/daemons/a3f5d9c2b1e8f7a4/         │
 │                                                              │
 │    If state exists && process running:                      │
@@ -184,13 +184,13 @@ for _ in 0..50 {
 ┌─────────────────────────────────────────────────────────────┐
 │ Daemon (Background Process)                                 │
 │                                                              │
-│ 1. Load config from .fabrik.toml                            │
+│ 1. Load config from fabrik.toml                            │
 │ 2. Bind HTTP server to port 0 → OS assigns 54321            │
 │ 3. Bind gRPC server to port 0 → OS assigns 54322            │
 │ 4. Write state to ~/.fabrik/daemons/a3f5d9c2b1e8f7a4/       │
 │    - pid: 12345                                             │
 │    - ports.json: {"http": 54321, "grpc": 54322}             │
-│    - config_path.txt: /Users/user/project/.fabrik.toml      │
+│    - config_path.txt: /Users/user/project/fabrik.toml      │
 │ 5. Start HTTP & gRPC servers                                │
 │ 6. Wait for shutdown signal (SIGTERM/SIGINT)                │
 │ 7. Cleanup state directory on exit                          │
@@ -213,12 +213,12 @@ for _ in 0..50 {
 
 ```bash
 # Terminal 1
-cd ~/project-a  # .fabrik.toml (hash: a3f5d9c2)
+cd ~/project-a  # fabrik.toml (hash: a3f5d9c2)
 # Daemon starts on ports 54321/54322
 gradle build
 
 # Terminal 2 (simultaneously)
-cd ~/project-b  # Different .fabrik.toml (hash: b7e4a1f9)
+cd ~/project-b  # Different fabrik.toml (hash: b7e4a1f9)
 # New daemon starts on ports 54401/54402
 gradle build
 
@@ -242,7 +242,7 @@ cargo build
 # 3. Create test project
 mkdir /tmp/test-project
 cd /tmp/test-project
-cat > .fabrik.toml << EOF
+cat > fabrik.toml << EOF
 [cache]
 dir = ".fabrik/cache"
 max_size = "1GB"

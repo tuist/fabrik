@@ -5,4 +5,5 @@ pub mod deactivate;
 pub mod doctor;
 pub mod exec;
 pub mod health;
+pub mod init;
 pub mod server;

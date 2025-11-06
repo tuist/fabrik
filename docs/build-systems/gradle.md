@@ -10,7 +10,7 @@ Complete guide for using Fabrik with Gradle builds.
 
 ## Quick Start
 
-### 1. Create `.fabrik.toml` in your project root:
+### 1. Create `fabrik.toml` in your project root:
 
 ```toml
 [cache]
@@ -36,7 +36,7 @@ That's it! Gradle will automatically use the Fabrik cache via the `GRADLE_BUILD_
 ## How It Works
 
 1. **Shell Hook Activation**
-   - When you `cd` into your project, the Fabrik shell hook detects `.fabrik.toml`
+   - When you `cd` into your project, the Fabrik shell hook detects `fabrik.toml`
    - Daemon starts automatically and binds to random available ports
    - Environment variable exported: `GRADLE_BUILD_CACHE_URL=http://127.0.0.1:{port}`
 
@@ -68,7 +68,7 @@ You should see significant speedup on the second build.
 
 ### Basic Configuration
 
-Minimal `.fabrik.toml` for local caching only:
+Minimal `fabrik.toml` for local caching only:
 
 ```toml
 [cache]
@@ -222,14 +222,14 @@ tasks.register("customTask") {
    fabrik doctor
    ```
 
-2. **Check `.fabrik.toml` exists:**
+2. **Check `fabrik.toml` exists:**
    ```bash
-   ls -la .fabrik.toml
+   ls -la fabrik.toml
    ```
 
 3. **Manually start daemon:**
    ```bash
-   fabrik daemon --config .fabrik.toml
+   fabrik daemon --config fabrik.toml
    ```
 
 ## Performance Tips
@@ -270,7 +270,7 @@ Fabrik works seamlessly with multi-module Gradle projects:
 
 ```
 my-app/
-├── .fabrik.toml
+├── fabrik.toml
 ├── settings.gradle.kts
 ├── build.gradle.kts
 ├── app/
@@ -288,7 +288,7 @@ Each module's outputs are cached independently. Changing one module only rebuild
 ### Android Project
 
 ```toml
-# .fabrik.toml
+# fabrik.toml
 [cache]
 dir = ".fabrik/cache"
 max_size = "15GB"  # Android builds need more cache
@@ -301,7 +301,7 @@ timeout = "60s"  # Longer timeout for large APKs
 ### Spring Boot Project
 
 ```toml
-# .fabrik.toml
+# fabrik.toml
 [cache]
 dir = ".fabrik/cache"
 max_size = "5GB"

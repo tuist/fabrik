@@ -87,7 +87,7 @@ fn activate_current_directory() -> Result<()> {
         Some(path) => path,
         None => {
             // No config found, unset variables
-            println!("# No .fabrik.toml found");
+            println!("# No fabrik.toml found");
             output_unset_env_vars("bash");
             return Ok(());
         }

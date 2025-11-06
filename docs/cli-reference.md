@@ -42,7 +42,7 @@ fabrik activate --status
 **What it does:**
 - **Without flags**: Outputs shell integration code to stdout
 - **With `--status`**: 
-  1. Detects `.fabrik.toml` in current directory (walks up tree)
+  1. Detects `fabrik.toml` in current directory (walks up tree)
   2. Computes config hash
   3. Checks if daemon is running for this config
   4. If not running: spawns daemon in background
@@ -56,6 +56,57 @@ fabrik activate --status
 - `GRADLE_BUILD_CACHE_URL` - For Gradle
 - `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` - For Nx
 - `XCODE_CACHE_SERVER` - For Xcode
+
+---
+
+### `fabrik init`
+
+Initialize Fabrik configuration for a project.
+
+```bash
+fabrik init [OPTIONS]
+```
+
+**Options:**
+- `--non-interactive` - Skip interactive prompts and use defaults
+- `--cache-dir <DIR>` - Cache directory (default: `.fabrik/cache`)
+- `--max-cache-size <SIZE>` - Max cache size (default: `5GB`)
+- `--upstream-url <URL>` - Upstream cache URL (optional)
+
+**Examples:**
+
+```bash
+# Interactive initialization (recommended)
+fabrik init
+
+# Non-interactive with defaults
+fabrik init --non-interactive
+
+# Non-interactive with custom values
+fabrik init --non-interactive \
+  --cache-dir /tmp/cache \
+  --max-cache-size 10GB \
+  --upstream-url grpc://cache.tuist.io:7070
+```
+
+**What it does:**
+1. Checks if `fabrik.toml` already exists (prompts to overwrite)
+2. Asks for configuration values interactively:
+   - Cache directory location
+   - Maximum cache size
+   - Whether you have a remote cache server
+   - Remote cache URL (if applicable)
+3. Generates `fabrik.toml` in current directory
+4. Shows configuration summary
+5. Displays next steps
+
+**Interactive prompts:**
+```
+Cache directory [.fabrik/cache]:
+Max cache size [5GB]:
+Do you have a remote cache server? [y/N]
+Remote cache URL (e.g., grpc://cache.tuist.io:7070):
+```
 
 ---
 
@@ -80,7 +131,7 @@ fabrik daemon [OPTIONS]
 
 ```bash
 # Start daemon with config file
-fabrik daemon --config .fabrik.toml
+fabrik daemon --config fabrik.toml
 
 # Start daemon with CLI options
 fabrik daemon --config-cache-dir /tmp/cache --config-http-port 0
@@ -145,7 +196,7 @@ fabrik doctor --verbose
 - ✅ Shell detected (bash, zsh, fish)
 - ✅ Shell integration configured (checks rc file)
 - ✅ State directory exists
-- ✅ `.fabrik.toml` in current directory
+- ✅ `fabrik.toml` in current directory
 - ✅ Daemon running for current config
 - ✅ Environment variables set (verbose mode)
 
@@ -206,13 +257,13 @@ fabrik config <SUBCOMMAND>
 
 ```bash
 # Validate config file
-fabrik config validate .fabrik.toml
+fabrik config validate fabrik.toml
 
 # Generate example config
 fabrik config generate --template=server > config.toml
 
 # Show effective configuration
-fabrik config show --config .fabrik.toml
+fabrik config show --config fabrik.toml
 ```
 
 ---
@@ -247,7 +298,7 @@ fabrik health --url http://127.0.0.1:54321 --format json
 
 ## Configuration File
 
-Fabrik can be configured via a `.fabrik.toml` file:
+Fabrik can be configured via a `fabrik.toml` file:
 
 ```toml
 # Cache settings
@@ -296,7 +347,7 @@ Configuration is loaded in this order (highest to lowest priority):
 
 1. **Command-line arguments** - `--config-*` flags
 2. **Environment variables** - `FABRIK_CONFIG_*` variables
-3. **Configuration file** - `.fabrik.toml`
+3. **Configuration file** - `fabrik.toml`
 
 ## Exit Codes
 

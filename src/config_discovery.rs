@@ -9,7 +9,7 @@ pub fn discover_config(start_dir: &Path) -> Result<Option<PathBuf>> {
     let mut current = start_dir.to_path_buf();
 
     loop {
-        let config_path = current.join(".fabrik.toml");
+        let config_path = current.join("fabrik.toml");
         if config_path.exists() {
             return Ok(Some(config_path));
         }
@@ -276,7 +276,7 @@ mod tests {
         fs::create_dir_all(&subdir).unwrap();
 
         // Create config in project root
-        let config_path = project.join(".fabrik.toml");
+        let config_path = project.join("fabrik.toml");
         fs::write(&config_path, "# test config").unwrap();
 
         // Search from subdir should find project config
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn test_hash_config_is_consistent() {
         let temp = TempDir::new().unwrap();
-        let config_path = temp.path().join(".fabrik.toml");
+        let config_path = temp.path().join("fabrik.toml");
         fs::write(&config_path, "[cache]\ndir = \"/tmp/cache\"").unwrap();
 
         let hash1 = hash_config(&config_path).unwrap();
