@@ -240,11 +240,18 @@ gradle build  # Uses different daemon on ports 54401/54402
 ## 🛠️ Development
 
 ```bash
+# Install development dependencies
+mise install
+
 # Build the project
 cargo build
 
-# Run tests
-cargo test
+# Run unit tests
+cargo test --lib
+
+# Run acceptance tests (requires build tools via mise)
+mise exec -- cargo test --test bazel_integration_test
+mise exec -- cargo test --test gradle_acceptance
 
 # Format code
 cargo fmt
