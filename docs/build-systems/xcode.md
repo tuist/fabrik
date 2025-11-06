@@ -177,20 +177,3 @@ jobs:
    ```
 
 
-## Other Build Systems
-
-Looking for a different build system?
-
-- **[🏗️ Gradle](./gradle.md)** - Java, Kotlin, Android projects
-- **[📦 Bazel](./bazel.md)** - Multi-language monorepos
-- **[📱 Xcode](./xcode.md)** - iOS, macOS, watchOS, tvOS apps  
-- **[⚡ Nx](./nx.md)** - JavaScript/TypeScript monorepos
-- **[📲 Metro](./metro.md)** - React Native bundler
-
-[View all build systems →](./README.md)
-
-## See Also
-
-- [Xcode Build System](https://developer.apple.com/documentation/xcode/build-system)
-- [CLI Reference](../cli-reference.md)
-- [Getting Started](../../README.md)

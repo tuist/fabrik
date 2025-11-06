@@ -37,20 +37,4 @@ cd ~/my-bazel-project
 bazel build --remote_cache="$FABRIK_GRPC_URL" //...
 ```
 
-## Other Build Systems
 
-Looking for a different build system?
-
-- **[🏗️ Gradle](./gradle.md)** - Java, Kotlin, Android projects
-- **[📦 Bazel](./bazel.md)** - Multi-language monorepos
-- **[📱 Xcode](./xcode.md)** - iOS, macOS, watchOS, tvOS apps  
-- **[⚡ Nx](./nx.md)** - JavaScript/TypeScript monorepos
-- **[📲 Metro](./metro.md)** - React Native bundler
-
-[View all build systems →](./README.md)
-
-## See Also
-
-- [Bazel Remote Caching Documentation](https://bazel.build/remote/caching)
-- [CLI Reference](../cli-reference.md)
-- [Getting Started](../../README.md)

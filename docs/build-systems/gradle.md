@@ -256,20 +256,3 @@ jobs:
           FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
 ```
 
-## Other Build Systems
-
-Looking for a different build system?
-
-- **[📦 Bazel](./bazel.md)** - Multi-language monorepos
-- **[📱 Xcode](./xcode.md)** - iOS, macOS, watchOS, tvOS apps  
-- **[⚡ Nx](./nx.md)** - JavaScript/TypeScript monorepos
-- **[📲 Metro](./metro.md)** - React Native bundler
-
-[View all build systems →](./README.md)
-
-## See Also
-
-- [Gradle Build Cache Documentation](https://docs.gradle.org/current/userguide/build_cache.html)
-- [Gradle Performance Guide](https://docs.gradle.org/current/userguide/performance.html)
-- [CLI Reference](../cli-reference.md)
-- [Getting Started](../../README.md)
