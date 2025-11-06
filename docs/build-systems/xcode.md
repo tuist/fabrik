@@ -4,24 +4,36 @@ Xcode integration guide for Fabrik. This assumes you've already [completed the g
 
 ## How It Works
 
-Fabrik provides build caching for Xcode projects. When you navigate to your project, Fabrik exports `XCODE_CACHE_SERVER` which Xcode can use for caching.
+Xcode's compilation cache (available in Xcode 16+) requires a Unix socket path set via the `COMPILATION_CACHE_REMOTE_SERVICE_PATH` build setting.
+
+> **Note:** Unix socket support is planned but not yet implemented in Fabrik. For now, Xcode integration requires using HTTP with the socket path workaround below, or using a remote Fabrik server with a fixed address.
 
 ## Quick Start
 
-### For Command-Line Builds
+### Using xcodebuild with Build Setting
+
+When the daemon starts, Fabrik will export `XCODE_CACHE_SERVER`. Pass it to xcodebuild:
 
 ```bash
 cd ~/my-xcode-project
-xcodebuild -project MyApp.xcodeproj -scheme MyApp
+
+xcodebuild \
+  -project MyApp.xcodeproj \
+  -scheme MyApp \
+  COMPILATION_CACHE_ENABLE_CACHING=YES \
+  COMPILATION_CACHE_ENABLE_PLUGIN=YES \
+  COMPILATION_CACHE_REMOTE_SERVICE_PATH="$XCODE_CACHE_SERVER"
 ```
 
-The daemon automatically starts and Xcode will use the cache via the `XCODE_CACHE_SERVER` environment variable.
-
-### For Xcode GUI Builds
+### Using Xcode GUI
 
 To use caching when building from Xcode.app:
 
 1. Edit Scheme → Run → Arguments → Environment Variables
 2. Add: `XCODE_CACHE_SERVER = ${XCODE_CACHE_SERVER}`
+3. Edit your project's build settings and set:
+   - `COMPILATION_CACHE_ENABLE_CACHING = YES`
+   - `COMPILATION_CACHE_ENABLE_PLUGIN = YES`
+   - `COMPILATION_CACHE_REMOTE_SERVICE_PATH = $(XCODE_CACHE_SERVER)`
 
-This passes the environment variable from your shell to Xcode.
+> **Limitation:** Currently, `XCODE_CACHE_SERVER` points to an HTTP URL, not a Unix socket. Unix socket support (for better performance) is coming soon.
