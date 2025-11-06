@@ -2,11 +2,6 @@
 
 Gradle integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
 
-## Prerequisites
-
-- Gradle 6.0 or later
-- Fabrik installed and shell integration configured
-
 ## How It Works
 
 Gradle automatically reads the `GRADLE_BUILD_CACHE_URL` environment variable that Fabrik exports when you `cd` into your project. No Gradle configuration changes needed!
@@ -260,6 +255,17 @@ jobs:
         env:
           FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}
 ```
+
+## Other Build Systems
+
+Looking for a different build system?
+
+- **[📦 Bazel](./bazel.md)** - Multi-language monorepos
+- **[📱 Xcode](./xcode.md)** - iOS, macOS, watchOS, tvOS apps  
+- **[⚡ Nx](./nx.md)** - JavaScript/TypeScript monorepos
+- **[📲 Metro](./metro.md)** - React Native bundler
+
+[View all build systems →](./README.md)
 
 ## See Also
 

@@ -239,6 +239,19 @@ jobs:
    build --remote_download_minimal
    ```
 
+
+## Other Build Systems
+
+Looking for a different build system?
+
+- **[🏗️ Gradle](./gradle.md)** - Java, Kotlin, Android projects
+- **[📦 Bazel](./bazel.md)** - Multi-language monorepos
+- **[📱 Xcode](./xcode.md)** - iOS, macOS, watchOS, tvOS apps  
+- **[⚡ Nx](./nx.md)** - JavaScript/TypeScript monorepos
+- **[📲 Metro](./metro.md)** - React Native bundler
+
+[View all build systems →](./README.md)
+
 ## See Also
 
 - [Bazel Remote Caching Documentation](https://bazel.build/remote/caching)
