@@ -38,32 +38,60 @@ The `fabrik exec` command:
 
 ### .bazelrc Setup
 
-To avoid typing `--remote_cache` every time, add to your `.bazelrc`:
+Bazel's `.bazelrc` file **does not support environment variable expansion**, so you cannot use `${FABRIK_GRPC_URL}` directly. Instead, you have several options:
+
+#### Option 1: Pass --remote_cache on Command Line (Recommended)
+
+Always pass the flag using the environment variable:
+
+```bash
+bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+You can create a shell alias to make this easier:
+
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+alias bazel='command bazel --remote_cache="$FABRIK_GRPC_URL"'
+
+# Now just use bazel normally
+bazel build //...
+bazel test //...
+```
+
+#### Option 2: Use fabrik exec
+
+`fabrik exec` manages the daemon and exports variables for you:
+
+```bash
+fabrik exec -- bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+#### Option 3: .bazelrc with try-import (For Remote Server Only)
+
+If you're using a **remote Fabrik server** with a fixed URL (not daemon mode), you can use `.bazelrc`:
 
 ```bash
 # .bazelrc
-build --remote_cache=grpc://localhost:9090
+# Only use this if you have a FIXED remote cache URL
+build --remote_cache=grpc://cache.tuist.io:7070
 build --remote_upload_local_results=true
 build --remote_timeout=60s
 ```
 
-However, since Fabrik uses dynamic ports, you'll need to either:
+**Note:** This doesn't work with daemon mode (dynamic ports).
 
-1. **Use the environment variable in commands:**
-   ```bash
-   bazel build --remote_cache="$FABRIK_GRPC_URL" //...
-   ```
+### Additional .bazelrc Settings
 
-2. **Use a shell alias:**
-   ```bash
-   alias bazel='command bazel --remote_cache="$FABRIK_GRPC_URL"'
-   ```
+Add these to your `.bazelrc` regardless of which option you choose:
 
-3. **Use fabrik exec:**
-   ```bash
-   fabrik exec -- bazel build //...
-   # Automatically uses FABRIK_GRPC_URL
-   ```
+```bash
+# .bazelrc
+build --remote_upload_local_results=true
+build --remote_timeout=60s
+build --remote_retries=3
+build --experimental_remote_cache_compression
+```
 
 ### Fabrik Configuration Examples
 
