@@ -1,6 +1,14 @@
 # Build System Integration
 
-Fabrik supports any build system with remote caching capabilities. Choose your build system below for detailed integration instructions.
+Build system-specific integration guides for Fabrik.
+
+> **Note:** This section assumes you've already completed the [Getting Started Guide](../../README.md#-getting-started) which covers:
+> - Installing Fabrik
+> - Setting up shell integration
+> - Running `fabrik init`
+> - Verifying with `fabrik doctor`
+
+The guides below focus on **build system-specific** configuration and tips.
 
 ## Supported Build Systems
 
@@ -19,19 +27,39 @@ Fabrik supports any build system with remote caching capabilities. Choose your b
 
 - **[sccache](./sccache.md)** - Rust, C, C++ compiler cache *(coming soon)*
 
-## General Integration Pattern
+## What These Guides Cover
+
+Each build system guide includes:
+
+- **How it works** - How Fabrik integrates with the build system
+- **Quick start** - Minimal example to get started
+- **Configuration examples** - Build system-specific configurations
+- **Advanced tips** - Performance optimization and best practices
+- **Troubleshooting** - Common issues and solutions
+- **CI/CD integration** - Examples for popular CI platforms
+
+## What These Guides DON'T Cover
+
+Setup instructions that are **common to all build systems**:
+
+- ❌ Installing Fabrik (see [Getting Started](../../README.md#step-1-install-fabrik))
+- ❌ Shell integration setup (see [Getting Started](../../README.md#step-2-set-up-shell-integration))
+- ❌ Running `fabrik init` (see [Getting Started](../../README.md#step-4-initialize-your-project))
+- ❌ Basic troubleshooting with `fabrik doctor` (see [Getting Started](../../README.md#step-3-verify-installation))
+
+## General Pattern
 
 All build systems follow the same pattern:
 
-1. **Install Fabrik** ([Getting Started](../../README.md#-getting-started))
-2. **Set up shell integration** (Required - see [Step 2](../../README.md#step-2-set-up-shell-integration-required))
-3. **Create `fabrik.toml`** in your project root
-4. **Navigate to project** - Daemon starts automatically
-5. **Run your build** - Build tool reads environment variables and uses cache
+1. **Navigate to project**: `cd ~/myproject`
+2. **Daemon starts automatically**: Fabrik detects `fabrik.toml`
+3. **Environment variables exported**: Build tool-specific URLs
+4. **Build tool reads env var**: Connects to daemon automatically
+5. **Cache magic happens**: Builds are faster! 🚀
 
 ## Environment Variables
 
-Fabrik exports these environment variables for build tools:
+Fabrik exports these for different build tools:
 
 | Variable | Build Systems | Purpose |
 |----------|--------------|---------|
@@ -44,17 +72,19 @@ Fabrik exports these environment variables for build tools:
 
 ## Example Configuration
 
-Minimal `fabrik.toml` that works for all build systems:
+A typical `fabrik.toml` works for all build systems:
 
 ```toml
+# Local cache only
 [cache]
 dir = ".fabrik/cache"
 max_size = "5GB"
 ```
 
-With upstream cache:
+Or with remote cache:
 
 ```toml
+# With remote cache
 [cache]
 dir = ".fabrik/cache"
 max_size = "5GB"
@@ -67,53 +97,12 @@ timeout = "30s"
 token_file = ".fabrik.token"
 ```
 
-## Common Troubleshooting
-
-### Cache Not Working
-
-1. **Verify shell integration:**
-   ```bash
-   fabrik doctor
-   ```
-
-2. **Check environment variables:**
-   ```bash
-   env | grep FABRIK
-   env | grep GRADLE  # For Gradle
-   env | grep NX      # For Nx
-   ```
-
-3. **Check daemon is running:**
-   ```bash
-   fabrik doctor --verbose
-   ```
-
-### Performance Issues
-
-1. **Increase cache size:**
-   ```toml
-   [cache]
-   max_size = "20GB"
-   ```
-
-2. **Use LFU eviction:**
-   ```toml
-   [cache]
-   eviction_policy = "lfu"
-   ```
-
-3. **Add upstream cache:**
-   ```toml
-   [[upstream]]
-   url = "grpc://cache.tuist.io:7070"
-   ```
-
 ## Contributing
 
 Want to add support for a new build system? See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
 
 ## See Also
 
-- [CLI Reference](../cli-reference.md)
-- [Architecture](../../CLAUDE.md)
-- [Getting Started](../../README.md)
+- [Getting Started Guide](../../README.md#-getting-started) - Setup instructions
+- [CLI Reference](../cli-reference.md) - Command documentation
+- [Architecture](../../CLAUDE.md) - Deep dive into Fabrik internals
