@@ -1,6 +1,7 @@
 pub mod cache_dir;
 pub mod filesystem;
 
+#[allow(unused_imports)]
 pub use cache_dir::default_cache_dir;
 pub use filesystem::FilesystemStorage;
 

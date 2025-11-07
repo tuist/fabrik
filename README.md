@@ -53,16 +53,47 @@ Fabrik implements a three-tier caching strategy:
 >
 > This is where services like [Tuist](https://tuist.dev) come in. Just as Supabase manages Postgres infrastructure, Tuist can manage Fabrik infrastructure for you, automatically deploying warm cache instances in the right regions and handling all the operational complexity.
 
-## 🚀 Installation
+## 🚀 Getting Started
 
-### Docker
+### Step 1: Install Fabrik
+
+**Using Mise:**
+
+```bash
+# Install Mise if you haven't already
+curl https://mise.run | sh
+
+# Install Fabrik
+mise use -g ubi:tuist/fabrik
+```
+
+<details>
+<summary>Alternative: Install from GitHub Releases</summary>
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/tuist/fabrik/releases):
+
+```bash
+# macOS (ARM)
+curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-aarch64-apple-darwin.tar.gz | tar xz
+sudo mv fabrik /usr/local/bin/
+
+# macOS (Intel)
+curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-x86_64-apple-darwin.tar.gz | tar xz
+sudo mv fabrik /usr/local/bin/
+
+# Linux (x86_64)
+curl -L https://github.com/tuist/fabrik/releases/latest/download/fabrik-x86_64-unknown-linux-gnu.tar.gz | tar xz
+sudo mv fabrik /usr/local/bin/
+```
+
+</details>
+
+<details>
+<summary>Alternative: Docker</summary>
 
 ```bash
 # Pull the latest image
 docker pull ghcr.io/tuist/fabrik:latest
-
-# Or a specific version
-docker pull ghcr.io/tuist/fabrik:0.1.0
 
 # Run the server
 docker run -p 7070:7070 -p 8888:8888 -p 9091:9091 ghcr.io/tuist/fabrik:latest server
@@ -70,51 +101,187 @@ docker run -p 7070:7070 -p 8888:8888 -p 9091:9091 ghcr.io/tuist/fabrik:latest se
 
 **Docker Registry**: [ghcr.io/tuist/fabrik](https://github.com/tuist/fabrik/pkgs/container/fabrik)
 
-### Using Mise
+</details>
 
-```bash
-# Install globally
-mise use -g ubi:tuist/fabrik
-
-# Or in .mise.toml
-[tools]
-"ubi:tuist/fabrik" = "latest"
-```
-
-### From Source
+<details>
+<summary>Alternative: Build from Source</summary>
 
 ```bash
 git clone https://github.com/tuist/fabrik.git
 cd fabrik
 cargo build --release
+sudo cp target/release/fabrik /usr/local/bin/
 ```
 
-## 📘 Usage
+</details>
+
+### Step 2: Set Up Shell Integration
+
+Fabrik uses shell integration to automatically start cache daemons when you navigate into projects.
+
+**For Bash:**
+```bash
+echo 'eval "$(fabrik activate bash)"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+**For Zsh:**
+```bash
+echo 'eval "$(fabrik activate zsh)"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+**For Fish:**
+```bash
+echo 'fabrik activate fish | source' >> ~/.config/fish/config.fish
+source ~/.config/fish/config.fish
+```
+
+### Step 3: Verify Installation
+
+Run the doctor command to verify everything is configured correctly:
 
 ```bash
-# Bazel with automatic cache
-fabrik bazel -- build //...
-
-# Long-running daemon
-fabrik daemon
-
-# Remote cache server
-fabrik server
-
-# Configuration management
-fabrik config generate --template=server
+fabrik doctor
 ```
 
-## 📖 Documentation
+You should see:
+```
+✅ Fabrik binary found
+✅ Shell detected
+✅ Shell integration configured
+```
 
-- [CLAUDE.md](./CLAUDE.md) - Architecture and design decisions
-- [PLAN.md](./PLAN.md) - Implementation roadmap
+### Step 4: Initialize Your Project
+
+Navigate to your project and run the interactive initialization:
+
+```bash
+cd ~/your-project
+fabrik init
+```
+
+This will ask you:
+- Cache directory location (default: `.fabrik/cache`)
+- Maximum cache size (default: `5GB`)
+- Whether you have a remote cache server (optional)
+
+The command creates a `fabrik.toml` configuration file in your project root.
+
+### Step 5: Start Building
+
+Once initialized, simply navigate to your project and run your build:
+
+```bash
+cd ~/your-project
+# Daemon starts automatically
+gradle build  # or your build command
+```
+
+The daemon will:
+1. Start automatically when you enter the project directory
+2. Export environment variables for your build tool
+3. Cache your build outputs locally
+4. Sync with remote cache if configured
+
+### Step 6: Choose Your Build System
+
+For build system-specific instructions, see:
+
+- **[Gradle](docs/build-systems/gradle.md)** - Java, Kotlin, Android projects
+- **[Bazel](docs/build-systems/bazel.md)** - Multi-language monorepos
+- **[Nx](docs/build-systems/nx.md)** - JavaScript/TypeScript monorepos
+- **[TurboRepo](docs/build-systems/turborepo.md)** - JavaScript/TypeScript monorepos
+- **[Xcode](docs/build-systems/xcode.md)** - iOS, macOS apps
+- **[sccache](docs/build-systems/sccache.md)** - Rust compiler cache
+
+## 💡 How It Works
+
+Once shell integration is set up, Fabrik automatically manages cache daemons for you:
+
+```bash
+# Navigate to your project
+cd ~/myproject
+
+# Daemon automatically starts (if fabrik.toml exists)
+# Build tools automatically use the cache
+gradle build    # ✅ Uses cache
+nx build        # ✅ Uses cache
+xcodebuild      # ✅ Uses cache
+```
+
+**Behind the scenes:**
+1. Shell hook detects `fabrik.toml`
+2. Daemon starts with random available ports (no conflicts!)
+3. Environment variables exported automatically
+4. Build tools read env vars and connect to daemon
+5. Cache hits = faster builds! 🚀
+
+**Multi-Project Support:**
+Each project gets its own isolated daemon:
+
+```bash
+# Terminal 1
+cd ~/project-a
+gradle build  # Uses daemon on ports 54321/54322
+
+# Terminal 2 (simultaneously)
+cd ~/project-b  
+gradle build  # Uses different daemon on ports 54401/54402
+```
+
+## 📚 Documentation
+
+- **[CLI Reference](./docs/cli-reference.md)** - Command-line interface documentation
+- **[Build System Integration](./docs/build-systems/)** - Integration guides for specific build systems
+- **[CLAUDE.md](./CLAUDE.md)** - Architecture and design decisions
+- **[PLAN.md](./PLAN.md)** - Implementation roadmap
 
 ## 🛠️ Development
 
 ```bash
+# Install development dependencies
+mise install
+
+# Build the project
 cargo build
-cargo test
+
+# Run unit tests
+cargo test --lib
+
+# Run acceptance tests (requires build tools via mise)
+mise exec -- cargo test --test bazel_integration_test
+mise exec -- cargo test --test gradle_acceptance
+
+# Format code
 cargo fmt
+
+# Lint
 cargo clippy
+
+# Run doctor command for debugging
+cargo run -- doctor --verbose
 ```
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+
+## 📄 License
+
+MPL-2.0 - See [LICENSE](./LICENSE) for details.
+
+## 🙏 Acknowledgments
+
+Fabrik is built on the shoulders of giants:
+- [RocksDB](https://rocksdb.org/) - High-performance embedded database
+- [Tokio](https://tokio.rs/) - Async runtime for Rust
+- [Axum](https://github.com/tokio-rs/axum) - Web framework
+- [Tonic](https://github.com/hyperium/tonic) - gRPC framework
+
+## 🔗 Related Projects
+
+- [Tuist](https://tuist.dev) - Managed Fabrik infrastructure as a service
+- [Bazel](https://bazel.build) - Build system with remote execution
+- [Gradle](https://gradle.org) - Build automation tool
+- [Nx](https://nx.dev) - Smart monorepo build system

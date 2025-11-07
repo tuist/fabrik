@@ -1,18 +1,13 @@
 // Bazel integration tests
 //
-// These tests are marked as #[ignore] because they require a properly configured
-// Bazel environment and can be slow on first run.
+// These tests verify Bazel integration with Fabrik daemon.
+// Each test creates its own isolated daemon instance.
 //
-// To run manually:
-// 1. Ensure Bazel is installed: `bazel --version`
-// 2. Build fabrik: `cargo build`
-// 3. Test manually in fixtures/bazel/swift/:
-//    ```
-//    cd fixtures/bazel/swift
-//    ../../../target/debug/fabrik bazel -- build //:hello
-//    ```
-// 4. Or run ignored tests: `cargo test --test bazel_integration_test -- --ignored --nocapture`
+// To run: `cargo test --test bazel_integration_test -- --nocapture`
 
+mod common;
+
+use common::TestDaemon;
 use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
@@ -22,33 +17,31 @@ use tempfile::TempDir;
     target_os = "windows",
     ignore = "Bazel has directory creation issues on Windows CI"
 )]
-fn test_bazel_cache_integration() {
-    let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
+fn test_bazel_cache_with_daemon() {
+    // Start a test daemon
+    let daemon = TestDaemon::start();
 
-    // Create temporary directories for complete isolation
+    // Create isolated Bazel output base
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let cache_dir = temp_dir.path().join("cache");
     let bazel_output_base = temp_dir.path().join("bazel_output");
 
-    // Use simple fixture (no external dependencies)
+    // Use simple fixture
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
         .join("bazel")
         .join("simple");
 
     // First build: should miss cache and populate it
-    println!("=== First build (cache miss) ===");
-    let output = Command::new(fabrik_bin)
-        .arg("bazel")
-        .arg(format!("--config-cache-dir={}", cache_dir.display()))
-        .arg("--")
+    println!("\n=== First build (cache miss) ===");
+    let output = Command::new("bazel")
         .arg(format!("--output_base={}", bazel_output_base.display()))
         .arg("build")
+        .arg(format!("--remote_cache={}", daemon.grpc_url()))
+        .arg("--remote_upload_local_results=true")
         .arg("//:hello")
         .current_dir(&fixture_path)
-        .env("FABRIK_CONFIG_LOG_LEVEL", "info")
         .output()
-        .expect("Failed to execute fabrik bazel");
+        .expect("Failed to execute bazel build");
 
     println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
     println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
@@ -62,17 +55,15 @@ fn test_bazel_cache_integration() {
 
     // Second build: should hit cache
     println!("\n=== Second build (cache hit) ===");
-    let output2 = Command::new(fabrik_bin)
-        .arg("bazel")
-        .arg(format!("--config-cache-dir={}", cache_dir.display()))
-        .arg("--")
+    let output2 = Command::new("bazel")
         .arg(format!("--output_base={}", bazel_output_base.display()))
         .arg("build")
+        .arg(format!("--remote_cache={}", daemon.grpc_url()))
+        .arg("--remote_upload_local_results=true")
         .arg("//:hello")
         .current_dir(&fixture_path)
-        .env("FABRIK_CONFIG_LOG_LEVEL", "info")
         .output()
-        .expect("Failed to execute fabrik bazel");
+        .expect("Failed to execute bazel build");
 
     println!("stdout: {}", String::from_utf8_lossy(&output2.stdout));
     println!("stderr: {}", String::from_utf8_lossy(&output2.stderr));
@@ -82,116 +73,76 @@ fn test_bazel_cache_integration() {
         "Second bazel build should succeed"
     );
 
-    // Verify Fabrik cache was queried by checking for GetActionResult calls
-    // Logs are now in stderr with new structured logging format
+    // Verify cache was used
     let stderr2 = String::from_utf8_lossy(&output2.stderr);
-
-    let cache_queried = stderr2.contains("GetActionResult");
+    let cache_hit = stderr2.contains("remote cache hit") || stderr2.contains("remote-cache hit");
 
     assert!(
-        cache_queried,
-        "Second build should query cache for action results"
+        cache_hit,
+        "Second build should have cache hits. stderr: {}",
+        stderr2
     );
 
-    println!("\n=== Test completed successfully - Fabrik cache working! ===");
+    println!("\n=== Test completed successfully - Bazel cache working! ===");
 }
 
 #[test]
-fn test_bazel_wrapper_starts_server() {
-    // This test verifies the wrapper starts without building
-    let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
-
-    // Create temporary cache directory to avoid database locking with parallel tests
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let cache_dir = temp_dir.path().join("cache");
+#[cfg_attr(target_os = "windows", ignore = "Bazel not well supported on Windows")]
+fn test_bazel_version_with_daemon() {
+    let _daemon = TestDaemon::start();
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
         .join("bazel")
-        .join("swift");
+        .join("simple");
 
-    // Kill any existing Bazel server to avoid locking issues
-    let _ = Command::new("bazel")
-        .arg("shutdown")
-        .current_dir(&fixture_path)
-        .output();
+    println!("Running bazel version with Fabrik cache...");
 
-    println!("Running fabrik bazel version...");
-
-    // Just run 'bazel version' which should be fast
-    let output = Command::new(fabrik_bin)
-        .arg("bazel")
-        .arg(format!("--config-cache-dir={}", cache_dir.display()))
-        .arg("--")
+    let output = Command::new("bazel")
         .arg("version")
         .current_dir(&fixture_path)
-        .env("RUST_LOG", "debug")
         .output()
-        .expect("Failed to execute fabrik bazel version");
+        .expect("Failed to execute bazel version");
 
-    println!("=== STDOUT ===");
-    println!("{}", String::from_utf8_lossy(&output.stdout));
-    println!("\n=== STDERR ===");
-    println!("{}", String::from_utf8_lossy(&output.stderr));
-    println!("\n=== EXIT CODE ===");
-    println!("{:?}", output.status.code());
+    println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
+    println!("stderr: {}", String::from_utf8_lossy(&output.stderr));
 
-    // Just verify the command succeeds
     assert!(
         output.status.success(),
-        "Bazel version command should succeed. Exit code: {:?}",
-        output.status.code()
+        "Bazel version command should succeed"
     );
+
+    // Verify output contains version info
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Build label:") || stdout.contains("bazel"));
 }
 
 #[test]
-fn test_bazel_cache_passes_through_args() {
-    let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
-
-    // Create temporary cache directory to avoid database locking with parallel tests
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let cache_dir = temp_dir.path().join("cache");
+#[cfg_attr(target_os = "windows", ignore = "Bazel not well supported on Windows")]
+fn test_bazel_help_with_daemon() {
+    let _daemon = TestDaemon::start();
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
         .join("bazel")
-        .join("swift");
+        .join("simple");
 
-    // Kill any existing Bazel server to avoid locking issues
-    let _ = Command::new("bazel")
-        .arg("shutdown")
-        .current_dir(&fixture_path)
-        .output();
+    println!("Running bazel help...");
 
-    println!("Running fabrik bazel help...");
-
-    // Test that fabrik passes through bazel arguments correctly
-    let output = Command::new(fabrik_bin)
-        .arg("bazel")
-        .arg(format!("--config-cache-dir={}", cache_dir.display()))
-        .arg("--")
+    let output = Command::new("bazel")
         .arg("help")
         .current_dir(&fixture_path)
-        .env("RUST_LOG", "debug")
         .output()
-        .expect("Failed to execute fabrik bazel help");
+        .expect("Failed to execute bazel help");
 
-    println!("=== STDOUT ===");
-    println!("{}", String::from_utf8_lossy(&output.stdout));
-    println!("\n=== STDERR ===");
-    println!("{}", String::from_utf8_lossy(&output.stderr));
-    println!("\n=== EXIT CODE ===");
-    println!("{:?}", output.status.code());
+    println!("stdout: {}", String::from_utf8_lossy(&output.stdout));
 
-    // Should show bazel help output
+    assert!(output.status.success(), "Bazel help should succeed");
+
+    // Verify help output
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-
     assert!(
-        output.status.success(),
-        "Command should succeed. Exit code: {:?}\nStdout: {}\nStderr: {}",
-        output.status.code(),
-        stdout,
-        stderr
+        stdout.contains("Usage:") || stdout.contains("bazel"),
+        "Should show bazel help"
     );
 }

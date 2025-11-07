@@ -40,24 +40,17 @@ pub struct CommonConfigArgs {
 
 #[derive(Subcommand, Debug)]
 pub enum Commands {
-    /// Wrap a command with ephemeral cache server (Layer 1)
+    /// Activate shell integration for automatic daemon management
+    Activate(ActivateArgs),
+
+    /// Execute command with managed daemon lifecycle
     Exec(ExecArgs),
 
-    /// Wrap bazel with Fabrik cache enabled
-    Bazel(BazelArgs),
-
-    /// Wrap gradle with Fabrik cache enabled
-    Gradle(GradleArgs),
-
-    /// Wrap nx with Fabrik cache enabled
-    Nx(NxArgs),
-
-    /// Wrap xcodebuild with Fabrik cache enabled (Unix only)
-    #[cfg(unix)]
-    Xcodebuild(XcodebuildArgs),
-
-    /// Run long-lived local cache daemon (Layer 1)
+    /// Manually manage cache daemons
     Daemon(DaemonArgs),
+
+    /// Deactivate Fabrik and clean up environment
+    Deactivate(DeactivateArgs),
 
     /// Run regional/cloud cache server (Layer 2)
     Server(Box<ServerArgs>),
@@ -67,6 +60,29 @@ pub enum Commands {
 
     /// Health check and diagnostics
     Health(HealthArgs),
+
+    /// Check system configuration and shell integration
+    Doctor(DoctorArgs),
+
+    /// Initialize Fabrik configuration for a project
+    Init(InitArgs),
+}
+
+#[derive(Parser, Debug)]
+pub struct ActivateArgs {
+    /// Shell type (bash, zsh, fish)
+    pub shell: Option<String>,
+
+    /// Check status and start daemon if needed
+    #[arg(long)]
+    pub status: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct DeactivateArgs {
+    /// Also stop the daemon
+    #[arg(long)]
+    pub stop_daemon: bool,
 }
 
 #[derive(Parser, Debug)]
@@ -148,59 +164,6 @@ pub struct ExecArgs {
     /// Command to execute
     #[arg(last = true, required = true)]
     pub command: Vec<String>,
-}
-
-#[derive(Parser, Debug)]
-pub struct BazelArgs {
-    #[command(flatten)]
-    pub common: CommonConfigArgs,
-
-    /// Bazel gRPC server port (0 = random)
-    #[arg(long, env = "FABRIK_CONFIG_BAZEL_PORT", default_value = "0")]
-    pub port: u16,
-
-    /// Bazel arguments (e.g., build, test, //..., --config=release, etc.)
-    #[arg(last = true, required = true)]
-    pub bazel_args: Vec<String>,
-}
-
-#[derive(Parser, Debug)]
-pub struct GradleArgs {
-    #[command(flatten)]
-    pub common: CommonConfigArgs,
-
-    /// Gradle HTTP server port (0 = random)
-    #[arg(long, env = "FABRIK_CONFIG_GRADLE_PORT", default_value = "0")]
-    pub port: u16,
-
-    /// Gradle arguments (e.g., build, test, clean, --configuration-cache, etc.)
-    #[arg(last = true, required = true)]
-    pub gradle_args: Vec<String>,
-}
-
-#[derive(Parser, Debug)]
-pub struct NxArgs {
-    #[command(flatten)]
-    pub common: CommonConfigArgs,
-
-    /// Nx HTTP server port (0 = random)
-    #[arg(long, env = "FABRIK_CONFIG_NX_PORT", default_value = "0")]
-    pub port: u16,
-
-    /// Nx arguments (e.g., build, test, run-many, --parallel, etc.)
-    #[arg(last = true, required = true)]
-    pub nx_args: Vec<String>,
-}
-
-#[cfg(unix)]
-#[derive(Parser, Debug)]
-pub struct XcodebuildArgs {
-    #[command(flatten)]
-    pub common: CommonConfigArgs,
-
-    /// xcodebuild arguments (e.g., -project, -scheme, -destination, etc.)
-    #[arg(last = true, required = true)]
-    pub xcodebuild_args: Vec<String>,
 }
 
 #[derive(Parser, Debug)]
@@ -428,4 +391,30 @@ pub struct HealthArgs {
     /// Output format (text, json)
     #[arg(long, default_value = "text")]
     pub format: String,
+}
+
+#[derive(Parser, Debug)]
+pub struct DoctorArgs {
+    /// Verbose output
+    #[arg(short, long)]
+    pub verbose: bool,
+}
+
+#[derive(Parser, Debug)]
+pub struct InitArgs {
+    /// Skip interactive prompts and use defaults
+    #[arg(long)]
+    pub non_interactive: bool,
+
+    /// Cache directory (default: .fabrik/cache)
+    #[arg(long)]
+    pub cache_dir: Option<String>,
+
+    /// Max cache size (default: 5GB)
+    #[arg(long)]
+    pub max_cache_size: Option<String>,
+
+    /// Upstream cache URL
+    #[arg(long)]
+    pub upstream_url: Option<String>,
 }

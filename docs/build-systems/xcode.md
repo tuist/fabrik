@@ -1,39 +1,85 @@
-# Xcode
+# Xcode Integration
 
-Fabrik provides a wrapper command for Xcode-driven builds that automatically configures build caching for your iOS, macOS, watchOS, and tvOS projects.
-
-::: warning Work in Progress
-Support for builds triggered from Xcode's GUI (i.e., building a scheme directly in Xcode) is currently work in progress. For now, use the `fabrik xcodebuild` command-line wrapper documented below. GUI-based build support is under active development.
-:::
-
-## Usage
-
-The `fabrik xcodebuild` command is a drop-in replacement for the standard `xcodebuild` command:
-
-```bash
-# Instead of: xcodebuild -project MyApp.xcodeproj -scheme MyApp
-# Use:
-fabrik xcodebuild -- -project MyApp.xcodeproj -scheme MyApp
-```
-
-All `xcodebuild` arguments and flags work as normal:
-
-```bash
-# Build a workspace
-fabrik xcodebuild -- -workspace MyApp.xcworkspace -scheme MyApp -configuration Release
-
-# Clean and build
-fabrik xcodebuild -- clean build -project MyApp.xcodeproj -scheme MyApp
-
-# Run tests
-fabrik xcodebuild -- test -workspace MyApp.xcworkspace -scheme MyAppTests -destination 'platform=iOS Simulator,name=iPhone 15'
-```
+Xcode integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
 
 ## How It Works
 
-When you run `fabrik xcodebuild`, Fabrik:
+Xcode's compilation cache (Xcode 16+) uses a Unix socket for communication with the cache server. Fabrik creates a Unix socket when configured via the `[daemon] socket` setting in `fabrik.toml`.
 
-1. Starts the Fabrik cache daemon (if not already running)
-2. Automatically configures Xcode build settings to use the Fabrik cache
-3. Passes through all other xcodebuild arguments unchanged
-4. Handles graceful shutdown when the build completes
+## Configuration
+
+Configure the Unix socket path in `fabrik.toml`:
+
+```toml
+# fabrik.toml
+[cache]
+dir = ".fabrik/cache"
+max_size = "20GB"
+
+[daemon]
+socket = ".fabrik/xcode.sock"  # Relative to project root
+```
+
+**Important:** When socket is configured, the daemon creates **ONLY** the Unix socket server (no HTTP/gRPC TCP servers).
+
+## Xcode Project Setup
+
+Set these build settings in your Xcode project. The socket path **must match** the path in `fabrik.toml`:
+
+### Option 1: Build Settings
+
+In your project's build settings:
+
+```
+COMPILATION_CACHE_ENABLE_CACHING = YES
+COMPILATION_CACHE_ENABLE_PLUGIN = YES
+COMPILATION_CACHE_REMOTE_SERVICE_PATH = $(SRCROOT)/.fabrik/xcode.sock
+```
+
+### Option 2: .xcconfig File
+
+Create or update your `.xcconfig`:
+
+```
+// Build.xcconfig
+COMPILATION_CACHE_ENABLE_CACHING = YES
+COMPILATION_CACHE_ENABLE_PLUGIN = YES
+COMPILATION_CACHE_REMOTE_SERVICE_PATH = $(SRCROOT)/.fabrik/xcode.sock
+```
+
+### Option 3: Command Line
+
+Pass settings when calling `xcodebuild`:
+
+```bash
+cd ~/my-xcode-project
+
+xcodebuild \
+  -project MyApp.xcodeproj \
+  -scheme MyApp \
+  COMPILATION_CACHE_ENABLE_CACHING=YES \
+  COMPILATION_CACHE_ENABLE_PLUGIN=YES \
+  COMPILATION_CACHE_REMOTE_SERVICE_PATH=.fabrik/xcode.sock
+```
+
+## Quick Start
+
+Once configured, the daemon starts automatically when you navigate to your project:
+
+```bash
+cd ~/my-xcode-project
+# Daemon starts and creates .fabrik/xcode.sock
+
+xcodebuild -project MyApp.xcodeproj -scheme MyApp
+# Xcode connects to socket and uses cache
+```
+
+## Gitignore
+
+Add to your `.gitignore`:
+
+```
+.fabrik/
+```
+
+This ignores both the cache directory and the socket file.

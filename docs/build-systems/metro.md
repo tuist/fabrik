@@ -1,59 +1,57 @@
-# Metro
+# Metro Integration
 
-Metro is the JavaScript bundler used by React Native and other JavaScript projects. Fabrik integrates with Metro's cache system via the `@tuist/fabrik` NPM package.
-
-## Installation
-
-```bash
-npm install @tuist/fabrik
-# or
-pnpm add @tuist/fabrik
-# or
-yarn add @tuist/fabrik
-```
-
-The Fabrik binary will be automatically downloaded during installation based on your platform.
-
-## Configuration
-
-Add Fabrik to your Metro configuration:
-
-```javascript
-// metro.config.js
-const { FabrikStore } = require('@tuist/fabrik/metro');
-
-module.exports = {
-  cacheStores: [
-    new FabrikStore({
-      // Optional: Local cache directory
-      cacheDir: '.fabrik/cache',
-
-      // Optional: Upstream Fabrik server
-      upstream: 'grpc://cache.tuist.io:7070',
-
-      // Optional: Maximum cache size
-      maxSize: '5GB',
-
-      // Optional: Authentication token
-      token: process.env.TUIST_TOKEN,
-    }),
-  ],
-};
-```
+Metro integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
 
 ## How It Works
 
-The `FabrikStore` integrates Metro with Fabrik's multi-layer caching:
+Fabrik provides HTTP-based caching for Metro bundler (React Native). When you navigate to your project, Fabrik exports `FABRIK_HTTP_URL` which you can configure Metro to use.
 
-1. **Automatic Binary Management** - Downloads the correct Fabrik binary for your platform during `npm install`
-2. **Daemon Lifecycle** - Automatically starts the Fabrik daemon when Metro builds
-3. **Transparent Caching** - Metro cache operations flow through Fabrik's HTTP API
-4. **Multi-Layer Fallback** - Local cache → Regional cache → S3 (configured via `upstream`)
+## Quick Start
 
-## API
+Update your `metro.config.js` to use Fabrik's cache:
 
-The Fabrik daemon exposes an HTTP cache API that Metro uses:
+```javascript
+const {getDefaultConfig} = require('metro-config');
 
-- `GET /api/v1/artifacts/{hash}` - Retrieve cached artifact
-- `PUT /api/v1/artifacts/{hash}` - Store artifact
-- `GET /health` - Health check
+module.exports = (async () => {
+  const config = await getDefaultConfig();
+  
+  const cacheStores = [
+    require('metro-cache/src/stores/FileStore'),
+  ];
+  
+  // Add Fabrik remote cache
+  if (process.env.FABRIK_HTTP_URL) {
+    cacheStores.push({
+      get: async (key) => {
+        try {
+          const response = await fetch(`${process.env.FABRIK_HTTP_URL}/api/v1/artifacts/${key}`);
+          return response.ok ? await response.buffer() : null;
+        } catch {
+          return null;
+        }
+      },
+      set: async (key, value) => {
+        try {
+          await fetch(`${process.env.FABRIK_HTTP_URL}/api/v1/artifacts/${key}`, {
+            method: 'PUT',
+            body: value,
+          });
+        } catch {}
+      },
+    });
+  }
+  
+  return {
+    ...config,
+    cacheStores,
+  };
+})();
+```
+
+Then start Metro:
+
+```bash
+cd ~/my-react-native-app
+npm start
+```

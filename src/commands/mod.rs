@@ -1,11 +1,9 @@
-pub mod bazel;
+pub mod activate;
 pub mod config;
 pub mod daemon;
+pub mod deactivate;
+pub mod doctor;
 pub mod exec;
-pub mod gradle;
 pub mod health;
-pub mod nx;
+pub mod init;
 pub mod server;
-
-#[cfg(unix)]
-pub mod xcodebuild;

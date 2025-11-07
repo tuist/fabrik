@@ -5,6 +5,7 @@ use std::path::PathBuf;
 /// - Linux/Unix: $XDG_CACHE_HOME/fabrik or ~/.cache/fabrik
 /// - macOS: ~/Library/Caches/fabrik
 /// - Windows: %LOCALAPPDATA%/fabrik/cache
+#[allow(dead_code)]
 pub fn default_cache_dir() -> PathBuf {
     if let Some(cache_dir) = dirs::cache_dir() {
         cache_dir.join("fabrik")

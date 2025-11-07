@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::sync::Arc;
+use tokio::signal;
 use tracing::info;
 
 use crate::bazel::proto::bytestream::byte_stream_server::ByteStreamServer;
@@ -17,9 +18,20 @@ use crate::storage;
 use tonic::transport::Server;
 
 pub async fn run(args: DaemonArgs) -> Result<()> {
+    use crate::config_discovery::{hash_config, DaemonState};
+
     // Load config file if specified
     let file_config = if let Some(config_path) = &args.config {
         Some(FabrikConfig::from_file(config_path)?)
+    } else {
+        None
+    };
+
+    // If we have a config file, compute hash for daemon identification
+    let daemon_state_info = if let Some(ref config_path_str) = args.config {
+        let config_path = std::path::PathBuf::from(config_path_str);
+        let config_hash = hash_config(&config_path)?;
+        Some((config_hash, config_path))
     } else {
         None
     };
@@ -47,78 +59,247 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         command: vec![],
     };
 
-    let config = MergedExecConfig::merge(&exec_args, file_config);
+    let config = MergedExecConfig::merge(&exec_args, file_config.clone());
+
+    // Check if Unix socket is configured (for Xcode)
+    let socket_path = file_config.as_ref().and_then(|fc| fc.daemon.socket.clone());
 
     info!("Starting Fabrik daemon mode");
     info!("Configuration:");
     info!("  Cache directory: {}", config.cache_dir);
     info!("  Max cache size: {}", config.max_cache_size);
     info!("  Upstream: {:?}", config.upstream);
-    info!("  HTTP port: {}", config.http_port);
-    info!("  gRPC port: {}", config.grpc_port);
-    info!("  S3 port: {}", config.s3_port);
+
+    if let Some(ref socket) = socket_path {
+        info!("  Mode: Unix socket (Xcode)");
+        info!("  Socket path: {}", socket);
+    } else {
+        info!("  Mode: TCP (HTTP + gRPC)");
+    }
 
     // Initialize shared storage backend
     let storage = storage::create_storage(&config.cache_dir)?;
     let storage = Arc::new(storage);
 
-    // Start all servers in parallel
+    // Start servers based on mode
     let mut handles = vec![];
+    let mut actual_http_port = 0u16;
+    let mut actual_grpc_port = 0u16;
+    let mut actual_socket_path: Option<std::path::PathBuf> = None;
 
-    // 1. HTTP server (for Metro, Gradle, Nx, TurboRepo)
-    if config.http_port > 0 {
-        info!("Starting HTTP cache server on port {}", config.http_port);
-        let http_storage = storage.clone();
-        let http_port = config.http_port;
+    // Check if we should use Unix socket mode (for Xcode)
+    #[cfg(unix)]
+    if let Some(ref socket_path_str) = socket_path {
+        // Unix socket mode: Create ONLY Unix socket gRPC server
+        use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
+        use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
+        use crate::xcode::{CasService, KeyValueService};
+
+        // Resolve relative path to absolute (relative to config file directory)
+        let socket_path = if let Some((_, ref config_path)) = daemon_state_info {
+            let config_dir = config_path.parent().unwrap_or(std::path::Path::new("."));
+            config_dir.join(socket_path_str)
+        } else {
+            std::path::PathBuf::from(socket_path_str)
+        };
+
+        // Remove stale socket file if it exists
+        if socket_path.exists() {
+            info!("Removing stale socket file: {}", socket_path.display());
+            std::fs::remove_file(&socket_path)?;
+        }
+
+        info!(
+            "Creating Unix socket server for Xcode at: {}",
+            socket_path.display()
+        );
+
+        // Create Unix socket listener
+        let unix_listener = tokio::net::UnixListener::bind(&socket_path)?;
+        actual_socket_path = Some(socket_path.clone());
+
+        // Create Xcode gRPC services
+        let cas_service = CasService::new(storage.clone());
+        let keyvalue_service = KeyValueService::new(storage.clone());
+
+        info!("Unix socket server listening on {}", socket_path.display());
+
+        // Start Unix socket gRPC server
         handles.push(tokio::spawn(async move {
-            HttpServer::new(http_port, http_storage).run().await
-        }));
-    }
-
-    // 2. gRPC server (for Bazel, Fabrik protocol)
-    if config.grpc_port > 0 {
-        info!("Starting gRPC cache server on port {}", config.grpc_port);
-        let grpc_storage = storage.clone();
-        let grpc_port = config.grpc_port;
-
-        handles.push(tokio::spawn(async move {
-            let addr = format!("0.0.0.0:{}", grpc_port).parse().unwrap();
-
-            // Create Bazel gRPC services
-            let action_cache = BazelActionCacheService::new(grpc_storage.clone());
-            let cas = BazelCasService::new(grpc_storage.clone());
-            let bytestream = BazelByteStreamService::new(grpc_storage.clone());
-            let capabilities = BazelCapabilitiesService::new();
-
-            info!("gRPC server listening on {}", addr);
+            use tokio_stream::wrappers::UnixListenerStream;
 
             Server::builder()
-                .add_service(CapabilitiesServer::new(capabilities))
-                .add_service(ActionCacheServer::new(action_cache))
-                .add_service(ContentAddressableStorageServer::new(cas))
-                .add_service(ByteStreamServer::new(bytestream))
-                .serve(addr)
+                .add_service(CasdbServiceServer::new(cas_service))
+                .add_service(KeyValueDbServer::new(keyvalue_service))
+                .serve_with_incoming(UnixListenerStream::new(unix_listener))
                 .await
-                .map_err(|e| anyhow::anyhow!("gRPC server error: {}", e))
+                .map_err(|e| anyhow::anyhow!("Unix socket gRPC server error: {}", e))
         }));
+
+        info!("Daemon running in Unix socket mode (Xcode)");
     }
 
-    // 3. S3-compatible server (for sccache, BuildKit) - TODO: implement
-    // if config.s3_port > 0 {
-    //     info!("Starting S3-compatible server on port {}", config.s3_port);
-    //     // TODO: Implement S3 protocol server
-    // }
+    #[cfg(not(unix))]
+    if socket_path.is_some() {
+        anyhow::bail!(
+            "Unix sockets are not supported on Windows. Remove [daemon] socket from config."
+        );
+    }
 
-    // 4. Gradle-specific HTTP server (different endpoints than generic HTTP)
-    // Gradle uses /cache/ prefix, so we might need a separate router
-    // For now, Gradle can use the generic HTTP server
+    #[cfg(not(unix))]
+    let socket_configured = false;
 
-    info!("Daemon started - press Ctrl+C to stop");
+    #[cfg(unix)]
+    let socket_configured = socket_path.is_some();
 
-    // Wait for all servers (runs until ctrl-c or error)
+    if !socket_configured {
+        // TCP mode: Create HTTP + gRPC servers
+
+        // 1. HTTP server (for Metro, Gradle, Nx, TurboRepo)
+        // Always start HTTP server in TCP mode
+        {
+            let http_storage = storage.clone();
+
+            // Bind to port 0 to get an available port (or use config port if specified)
+            let (http_server, http_port, http_listener) =
+                HttpServer::new_with_port_zero(http_storage).await?;
+
+            actual_http_port = http_port;
+            info!("HTTP cache server bound to port {}", actual_http_port);
+
+            handles.push(tokio::spawn(async move {
+                http_server.run_with_listener(http_listener).await
+            }));
+        }
+
+        // 2. gRPC server (for Bazel, Fabrik protocol)
+        // Always start gRPC server in daemon mode
+        {
+            let grpc_storage = storage.clone();
+
+            // Bind to find an available port
+            let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await?;
+            actual_grpc_port = listener.local_addr()?.port();
+
+            // We need to convert TcpListener to the address for tonic
+            // tonic doesn't support pre-bound listeners easily, so we'll use the port
+            let addr = format!("127.0.0.1:{}", actual_grpc_port).parse().unwrap();
+
+            // Drop the listener since tonic will bind again
+            drop(listener);
+
+            info!("Starting gRPC cache server on port {}", actual_grpc_port);
+
+            handles.push(tokio::spawn(async move {
+                // Create Bazel gRPC services
+                let action_cache = BazelActionCacheService::new(grpc_storage.clone());
+                let cas = BazelCasService::new(grpc_storage.clone());
+                let bytestream = BazelByteStreamService::new(grpc_storage.clone());
+                let capabilities = BazelCapabilitiesService::new();
+
+                info!("gRPC server listening on {}", addr);
+
+                Server::builder()
+                    .add_service(CapabilitiesServer::new(capabilities))
+                    .add_service(ActionCacheServer::new(action_cache))
+                    .add_service(ContentAddressableStorageServer::new(cas))
+                    .add_service(ByteStreamServer::new(bytestream))
+                    .serve(addr)
+                    .await
+                    .map_err(|e| anyhow::anyhow!("gRPC server error: {}", e))
+            }));
+        }
+    } // End of TCP mode
+
+    // Save daemon state with actual bound ports/socket BEFORE starting servers
+    let state_opt = if let Some((config_hash, config_path)) = daemon_state_info {
+        let state = DaemonState {
+            config_hash,
+            pid: std::process::id(),
+            http_port: actual_http_port,
+            grpc_port: actual_grpc_port,
+            metrics_port: config.metrics_port,
+            unix_socket: actual_socket_path,
+            config_path,
+        };
+
+        if let Err(e) = state.save() {
+            tracing::warn!("Failed to save daemon state: {}", e);
+            None
+        } else {
+            info!("Daemon state saved with hash: {}", state.config_hash);
+            info!("  HTTP port: {}", state.http_port);
+            info!("  gRPC port: {}", state.grpc_port);
+            Some(state)
+        }
+    } else {
+        None
+    };
+
+    info!("Daemon started - waiting for shutdown signal");
+
+    // Wait for shutdown signal (Ctrl+C or SIGTERM)
+    #[cfg(unix)]
+    {
+        tokio::select! {
+            _ = signal::ctrl_c() => {
+                info!("Received Ctrl+C, shutting down gracefully...");
+            }
+            _ = async {
+                use tokio::signal::unix::{signal, SignalKind};
+                let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
+                sigterm.recv().await
+            } => {
+                info!("Received SIGTERM, shutting down gracefully...");
+            }
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
+        info!("Received Ctrl+C, shutting down gracefully...");
+    }
+
+    // Gracefully wait for all servers to finish with a timeout
+    info!("Waiting for servers to shutdown...");
+    let shutdown_timeout = tokio::time::Duration::from_secs(5);
+
     for handle in handles {
-        handle.await??;
+        match tokio::time::timeout(shutdown_timeout, handle).await {
+            Ok(Ok(Ok(()))) => {}
+            Ok(Ok(Err(e))) => {
+                tracing::warn!("Server shutdown error: {}", e);
+            }
+            Ok(Err(e)) => {
+                tracing::warn!("Server task error: {}", e);
+            }
+            Err(_) => {
+                tracing::warn!("Server shutdown timeout");
+            }
+        }
     }
 
+    // Cleanup daemon state
+    if let Some(state) = state_opt {
+        // Remove Unix socket file if it exists
+        if let Some(ref socket_path) = state.unix_socket {
+            if socket_path.exists() {
+                if let Err(e) = std::fs::remove_file(socket_path) {
+                    tracing::warn!("Failed to remove socket file: {}", e);
+                } else {
+                    info!("Removed Unix socket: {}", socket_path.display());
+                }
+            }
+        }
+
+        if let Err(e) = state.cleanup() {
+            tracing::warn!("Failed to cleanup daemon state: {}", e);
+        } else {
+            info!("Daemon state cleaned up");
+        }
+    }
+
+    info!("Daemon stopped");
     Ok(())
 }

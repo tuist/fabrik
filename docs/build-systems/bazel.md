@@ -1,56 +1,40 @@
-# Bazel
+# Bazel Integration
 
-Fabrik provides a wrapper command for Bazel that automatically configures remote caching via the Bazel Remote Caching protocol.
-
-## Usage
-
-The `fabrik bazel` command is a drop-in replacement for the standard `bazel` command:
-
-```bash
-# Instead of: bazel build //...
-# Use:
-fabrik bazel -- build //...
-```
-
-All `bazel` arguments and flags work as normal:
-
-```bash
-# Build a specific target
-fabrik bazel -- build //src:myapp
-
-# Run tests
-fabrik bazel -- test //...
-
-# Build with configuration
-fabrik bazel -- build //... --config=release --jobs=8
-
-# Query targets
-fabrik bazel -- query 'deps(//...)'
-
-# Clean build artifacts
-fabrik bazel -- clean
-```
+Bazel integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
 
 ## How It Works
 
-When you run `fabrik bazel`, Fabrik:
+Fabrik provides transparent remote caching for Bazel via the Bazel Remote Caching protocol (gRPC). When you navigate to your project, Fabrik exports `FABRIK_GRPC_URL` which you can use with Bazel's `--remote_cache` flag.
 
-1. Starts a local gRPC server implementing the Bazel Remote Caching protocol
-2. Automatically injects the `--remote_cache=grpc://localhost:{port}` flag
-3. Passes through all your bazel arguments unchanged
-4. Handles graceful shutdown when the build completes
+## Quick Start
 
-The local cache server implements the following gRPC services from the Bazel Remote APIs:
-- **ContentAddressableStorage (CAS)**: For storing and retrieving build artifacts (blobs) by content-addressed digest
-- **ActionCache**: For caching action results (mapping action hashes to outputs)
-- **Capabilities**: For advertising supported features to Bazel clients
+### Using Shell Alias (Recommended)
 
-## Requirements
+Create a shell alias to automatically use Fabrik's cache:
 
-- Bazel must be installed and available in `PATH`
+```bash
+# Add to ~/.bashrc or ~/.zshrc
+alias bazel='command bazel --remote_cache="$FABRIK_GRPC_URL"'
 
-## See Also
+# Then just use bazel normally
+cd ~/my-bazel-project
+bazel build //...
+bazel test //...
+```
 
-- [CLI Reference](/reference/cli) - Full command-line options
-- [Configuration File](/reference/config-file) - Complete configuration reference
-- [Bazel Remote Caching Documentation](https://bazel.build/remote/caching) - Official Bazel docs
+### Using fabrik exec
+
+```bash
+cd ~/my-bazel-project
+fabrik exec -- bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+### Passing Flag Manually
+
+```bash
+cd ~/my-bazel-project
+# Daemon starts automatically, exports FABRIK_GRPC_URL
+bazel build --remote_cache="$FABRIK_GRPC_URL" //...
+```
+
+

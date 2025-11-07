@@ -866,9 +866,20 @@ fabrik bazel <BAZEL_ARGS>...
 ```
 Starts Bazel gRPC adapter and injects `--remote_cache` flag automatically.
 
+**`fabrik activate`** - Activate shell integration for automatic daemon management
+```bash
+fabrik activate <shell>     # Generate shell hook (bash, zsh, fish)
+fabrik activate --status    # Check/start daemon and export env vars
+```
+
 **`fabrik daemon`** - Run long-lived local cache daemon (Layer 1 for development)
 ```bash
 fabrik daemon [OPTIONS]
+```
+
+**`fabrik deactivate`** - Deactivate Fabrik and optionally stop daemon
+```bash
+fabrik deactivate [--stop-daemon]
 ```
 
 **`fabrik server`** - Run regional/cloud cache server (Layer 2)
@@ -885,6 +896,164 @@ fabrik config <validate|generate|show> [OPTIONS]
 ```bash
 fabrik health [OPTIONS]
 ```
+
+### Daemon Architecture (Activation-Based)
+
+**Design Philosophy:**
+
+Fabrik uses an **activation-based daemon model** where each project automatically gets its own daemon instance when you `cd` into the project directory. This provides:
+
+- **Zero configuration**: Daemon starts automatically when needed
+- **Project isolation**: Each project gets its own daemon with independent ports
+- **No conflicts**: Multiple projects can run simultaneously without port conflicts
+- **Automatic cleanup**: Daemon state is tracked and cleaned up properly
+
+**How It Works:**
+
+1. **Config Hash as Identity**: Each `fabrik.toml` is hashed (SHA256, 16 chars) to create a unique daemon identifier
+   - Same config = same daemon (automatic reuse)
+   - Different config = different daemon (isolation)
+   - Config changes = new daemon (safety)
+
+2. **Dynamic Port Allocation**: Daemons bind to port 0 (random available ports)
+   - OS assigns free ports automatically
+   - No port conflicts between projects
+   - Actual ports written to state file: `~/.fabrik/daemons/{hash}/ports.json`
+
+3. **Shell Integration**: `fabrik activate` hook runs on directory change
+   - Detects `fabrik.toml` (walks up directory tree)
+   - Computes config hash
+   - Checks if daemon is running for this config
+   - If not running: starts daemon in background
+   - Exports environment variables with actual ports
+
+4. **State Management**: Each daemon writes state to `~/.fabrik/daemons/{hash}/`
+   ```
+   ~/.fabrik/daemons/a3f5d9c2b1e8f7a4/
+   ├── pid                 # Process ID
+   ├── ports.json          # { "http": 54321, "grpc": 54322, "metrics": 9091 }
+   └── config_path.txt     # /path/to/project/fabrik.toml
+   ```
+
+5. **Graceful Shutdown**: Daemon handles SIGTERM/SIGINT
+   - Waits for in-flight requests to complete (5 second timeout)
+   - Cleans up state directory
+   - Removes PID and port files
+
+**Usage Example:**
+
+```bash
+# 1. Add shell integration (one-time setup)
+eval "$(fabrik activate bash)"   # Or zsh, fish
+
+# 2. Navigate to project
+cd ~/myproject
+
+# Behind the scenes:
+# - Finds fabrik.toml
+# - Computes hash: a3f5d9c2b1e8f7a4
+# - Checks ~/.fabrik/daemons/a3f5d9c2b1e8f7a4/ → not found
+# - Spawns: fabrik daemon --config fabrik.toml &
+# - Daemon binds to random ports (e.g., 54321, 54322)
+# - Daemon writes ports.json
+# - Shell hook exports:
+export FABRIK_HTTP_URL=http://127.0.0.1:54321
+export FABRIK_GRPC_URL=grpc://127.0.0.1:54322
+export GRADLE_BUILD_CACHE_URL=http://127.0.0.1:54321
+export NX_SELF_HOSTED_REMOTE_CACHE_SERVER=http://127.0.0.1:54321
+
+# 3. Run build (uses daemon automatically)
+gradle build
+# Gradle reads GRADLE_BUILD_CACHE_URL and connects to daemon
+
+# 4. Navigate to different project
+cd ~/other-project
+# New daemon starts for this project's config (different hash)
+
+# 5. Return to first project
+cd ~/myproject
+# Same daemon still running (hash matches), env vars exported again
+```
+
+**Multi-Project Support:**
+
+Each project gets its own daemon instance, identified by config hash:
+
+```bash
+# Terminal 1
+cd ~/project-a
+gradle build  # Uses daemon on ports 54321/54322
+
+# Terminal 2 (simultaneously)
+cd ~/project-b
+gradle build  # Uses different daemon on ports 54401/54402
+
+# Terminal 3 (simultaneously)
+cd ~/project-c
+gradle build  # Uses different daemon on ports 54515/54516
+```
+
+**Daemon Lifecycle:**
+
+```
+User Event              Daemon Action
+──────────────────────  ────────────────────────────────────────
+cd ~/project            1. Detect fabrik.toml
+                        2. Compute hash: a3f5d9c2
+                        3. Check state: ~/.fabrik/daemons/a3f5d9c2/
+                        4. If not running: spawn daemon
+                        5. Daemon binds to port 0 → gets 54321
+                        6. Daemon writes ports.json
+                        7. Shell exports GRADLE_BUILD_CACHE_URL
+                        
+gradle build            → Connects to http://127.0.0.1:54321 ✅
+
+cd ~/other-project      1. Detect different fabrik.toml
+                        2. Compute hash: b7e4a1f9 (different!)
+                        3. Spawn new daemon on different ports
+                        4. Export new env vars
+                        
+Ctrl+C on daemon        1. Receive SIGINT
+                        2. Wait for servers to shutdown (5s timeout)
+                        3. Remove ~/.fabrik/daemons/a3f5d9c2/
+                        4. Exit cleanly
+```
+
+**Authentication:**
+
+Each daemon loads its authentication token from the project's config:
+
+```toml
+# fabrik.toml (checked into git)
+[cache]
+dir = ".fabrik/cache"
+
+[[upstream]]
+url = "grpc://cache.tuist.io:7070"
+
+[auth]
+token_file = ".fabrik.token"  # Gitignored, per-developer
+
+[daemon]
+http_port = 0  # 0 = random (recommended for daemon mode)
+grpc_port = 0
+```
+
+```bash
+# Developer workflow
+tuist auth login              # Creates .fabrik.token
+cd ~/project                  # Daemon starts, loads .fabrik.token
+gradle build                  # Daemon uses token for upstream requests
+```
+
+**Benefits:**
+
+- ✅ **Zero config**: Just `cd` into project
+- ✅ **No conflicts**: Each project gets unique ports
+- ✅ **Clean shutdown**: State files cleaned up properly
+- ✅ **Fast startup**: Daemon starts in <500ms
+- ✅ **Multi-tenant**: Multiple projects run simultaneously
+- ✅ **Secure**: Each daemon loads project-specific token
 
 ### Configuration File Format (TOML)
 
@@ -1016,7 +1185,7 @@ jobs:
 1. Fabrik detects `ACTIONS_CACHE_URL` environment variable (auto-provided by GitHub)
 2. Automatically uses GitHub Actions Cache as primary storage
 3. Cache persists across workflow runs
-4. No `.fabrik.toml` needed
+4. No `fabrik.toml` needed
 
 **GitLab CI** (no configuration needed):
 ```yaml
@@ -1058,7 +1227,7 @@ INFO fabrik::storage - Cache directory: /tmp/fabrik-cache
 
 **Layer 1 (CI with mounted volume - Bazel):**
 ```toml
-# .fabrik.toml in repository (optimized for Bazel)
+# fabrik.toml in repository (optimized for Bazel)
 [cache]
 dir = "/mnt/build-cache"
 max_size = "20GB"
@@ -1078,7 +1247,7 @@ fabrik bazel -- build //...
 
 **Layer 1 (Local development):**
 ```toml
-# .fabrik.toml in repository
+# fabrik.toml in repository
 [cache]
 dir = ".fabrik/cache"
 max_size = "5GB"
@@ -1208,7 +1377,7 @@ Fabrik checks both `FABRIK_CONFIG_*` and standard environment variables:
 **Generating config files:**
 ```bash
 # Generate example Layer 1 config
-fabrik config generate --template layer1 > .fabrik.toml
+fabrik config generate --template layer1 > fabrik.toml
 
 # Generate example server config
 fabrik config generate --template server > /etc/fabrik/config.toml
