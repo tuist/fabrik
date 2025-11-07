@@ -2,7 +2,7 @@
 
 Build system-specific integration guides for Fabrik.
 
-> **Note:** This section assumes you've already completed the [Getting Started Guide](../../README.md#-getting-started) which covers:
+> **Note:** This section assumes you've already completed the [Getting Started Guide](/getting-started) which covers:
 > - Installing Fabrik
 > - Setting up shell integration
 > - Running `fabrik init`
@@ -14,18 +14,18 @@ The guides below focus on **build system-specific** configuration and tips.
 
 ### Build Systems
 
-- **[Gradle](./gradle.md)** - Java, Kotlin, Android projects
-- **[Bazel](./bazel.md)** - Multi-language monorepos *(coming soon)*
-- **[Nx](./nx.md)** - JavaScript/TypeScript monorepos *(coming soon)*
-- **[TurboRepo](./turborepo.md)** - JavaScript/TypeScript monorepos *(coming soon)*
+- **[Gradle](./gradle)** - Java, Kotlin, Android projects
+- **[Bazel](./bazel)** - Multi-language monorepos *(coming soon)*
+- **[Nx](./nx)** - JavaScript/TypeScript monorepos *(coming soon)*
+- **TurboRepo** - JavaScript/TypeScript monorepos *(coming soon)*
 
 ### Platform-Specific
 
-- **[Xcode](./xcode.md)** - iOS, macOS, watchOS, tvOS apps *(coming soon)*
+- **[Xcode](./xcode)** - iOS, macOS, watchOS, tvOS apps *(coming soon)*
 
 ### Compiler Caches
 
-- **[sccache](./sccache.md)** - Rust, C, C++ compiler cache *(coming soon)*
+- **sccache** - Rust, C, C++ compiler cache *(coming soon)*
 
 ## What These Guides Cover
 
@@ -42,10 +42,10 @@ Each build system guide includes:
 
 Setup instructions that are **common to all build systems**:
 
-- ❌ Installing Fabrik (see [Getting Started](../../README.md#step-1-install-fabrik))
-- ❌ Shell integration setup (see [Getting Started](../../README.md#step-2-set-up-shell-integration))
-- ❌ Running `fabrik init` (see [Getting Started](../../README.md#step-4-initialize-your-project))
-- ❌ Basic troubleshooting with `fabrik doctor` (see [Getting Started](../../README.md#step-3-verify-installation))
+- ❌ Installing Fabrik (see [Getting Started](/getting-started))
+- ❌ Shell integration setup (see [Getting Started](/getting-started))
+- ❌ Running `fabrik init` (see [Getting Started](/getting-started))
+- ❌ Basic troubleshooting with `fabrik doctor` (see [Getting Started](/getting-started))
 
 ## General Pattern
 
@@ -97,12 +97,8 @@ timeout = "30s"
 token_file = ".fabrik.token"
 ```
 
-## Contributing
-
-Want to add support for a new build system? See [CONTRIBUTING.md](../../CONTRIBUTING.md) for guidelines.
-
 ## See Also
 
-- [Getting Started Guide](../../README.md#-getting-started) - Setup instructions
-- [CLI Reference](../cli-reference.md) - Command documentation
-- [Architecture](../../CLAUDE.md) - Deep dive into Fabrik internals
+- [Getting Started Guide](/getting-started) - Setup instructions
+- [CLI Reference](/reference/cli) - Command documentation
+- [Architecture](/guide/architecture) - Deep dive into Fabrik internals

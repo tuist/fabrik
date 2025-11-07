@@ -295,7 +295,7 @@ metrics_bind = "0.0.0.0:9091"
 health_bind = "0.0.0.0:8888"
 ```
 
-See [CLAUDE.md](/CLAUDE.md#layer-2-regional-server-with-s3-upstream) for complete server setup.
+See [Architecture](/guide/architecture) for complete server setup.
 
 ## `fabrik config`
 

@@ -1,6 +1,6 @@
 # Metro Integration
 
-Metro integration guide for Fabrik. This assumes you've already [completed the getting started guide](../../README.md#-getting-started).
+Metro integration guide for Fabrik. This assumes you've already [completed the getting started guide](/getting-started).
 
 ## How It Works
 
