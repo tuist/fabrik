@@ -88,7 +88,8 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     let mut actual_socket_path: Option<std::path::PathBuf> = None;
 
     // Check if we should use Unix socket mode (for Xcode)
-    if let Some(socket_path_str) = socket_path {
+    #[cfg(unix)]
+    if let Some(ref socket_path_str) = socket_path {
         // Unix socket mode: Create ONLY Unix socket gRPC server
         use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
         use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
@@ -97,9 +98,9 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         // Resolve relative path to absolute (relative to config file directory)
         let socket_path = if let Some((_, ref config_path)) = daemon_state_info {
             let config_dir = config_path.parent().unwrap_or(std::path::Path::new("."));
-            config_dir.join(&socket_path_str)
+            config_dir.join(socket_path_str)
         } else {
-            std::path::PathBuf::from(&socket_path_str)
+            std::path::PathBuf::from(socket_path_str)
         };
 
         // Remove stale socket file if it exists
@@ -136,7 +137,22 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         }));
 
         info!("Daemon running in Unix socket mode (Xcode)");
-    } else {
+    }
+
+    #[cfg(not(unix))]
+    if socket_path.is_some() {
+        anyhow::bail!(
+            "Unix sockets are not supported on Windows. Remove [daemon] socket from config."
+        );
+    }
+
+    #[cfg(not(unix))]
+    let socket_configured = false;
+
+    #[cfg(unix)]
+    let socket_configured = socket_path.is_some();
+
+    if !socket_configured {
         // TCP mode: Create HTTP + gRPC servers
 
         // 1. HTTP server (for Metro, Gradle, Nx, TurboRepo)
