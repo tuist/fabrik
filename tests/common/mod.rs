@@ -32,6 +32,12 @@ use std::thread;
 use std::time::Duration;
 use tempfile::TempDir;
 
+/// Daemon mode for testing
+enum DaemonMode {
+    Tcp,        // TCP mode: HTTP + gRPC servers
+    UnixSocket, // Unix socket mode: For Xcode
+}
+
 /// Helper to start a Fabrik daemon for testing
 /// Each test gets its own isolated daemon with unique ports and cache
 /// NO GLOBAL STATE - all state is in temporary directories
@@ -46,8 +52,17 @@ pub struct TestDaemon {
 }
 
 impl TestDaemon {
-    /// Start a new test daemon with isolated cache and state
+    /// Start a new test daemon with isolated cache and state (TCP mode)
     pub fn start() -> Self {
+        Self::start_with_mode(DaemonMode::Tcp)
+    }
+
+    /// Start a new test daemon with Unix socket (for Xcode tests)
+    pub fn start_with_socket() -> Self {
+        Self::start_with_mode(DaemonMode::UnixSocket)
+    }
+
+    fn start_with_mode(mode: DaemonMode) -> Self {
         let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
         let temp_dir = TempDir::new().expect("Failed to create temp dir");
         let cache_dir = temp_dir.path().join("cache");
@@ -56,20 +71,37 @@ impl TestDaemon {
         // Create state directory
         std::fs::create_dir_all(&state_dir).expect("Failed to create state dir");
 
-        // Create a test config file
+        // Create a test config file with optional socket
         let config_path = temp_dir.path().join("fabrik.toml");
-        std::fs::write(
-            &config_path,
-            format!(
-                r#"
+        let config_content = match mode {
+            DaemonMode::Tcp => {
+                format!(
+                    r#"
 [cache]
 dir = "{}"
 max_size = "1GB"
 "#,
-                cache_dir.display()
-            ),
-        )
-        .expect("Failed to write test config");
+                    cache_dir.display()
+                )
+            }
+            DaemonMode::UnixSocket => {
+                let socket_path = temp_dir.path().join("xcode.sock");
+                format!(
+                    r#"
+[cache]
+dir = "{}"
+max_size = "1GB"
+
+[daemon]
+socket = "{}"
+"#,
+                    cache_dir.display(),
+                    socket_path.display()
+                )
+            }
+        };
+
+        std::fs::write(&config_path, config_content).expect("Failed to write test config");
 
         // Compute config hash
         let config_hash = {
@@ -148,6 +180,21 @@ max_size = "1GB"
 
     pub fn grpc_url(&self) -> String {
         format!("grpc://127.0.0.1:{}", self.grpc_port)
+    }
+
+    /// Get Unix socket path (for Xcode tests)
+    /// Returns the socket path from daemon state
+    pub fn socket_path(&self) -> Option<PathBuf> {
+        let daemon_state_dir = self.state_dir.join(&self.config_hash);
+        let ports_file = daemon_state_dir.join("ports.json");
+
+        if let Ok(content) = std::fs::read_to_string(ports_file) {
+            if let Ok(ports) = serde_json::from_str::<serde_json::Value>(&content) {
+                return ports["unix_socket"].as_str().map(|s| PathBuf::from(s));
+            }
+        }
+
+        None
     }
 }
 

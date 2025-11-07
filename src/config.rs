@@ -26,6 +26,18 @@ pub struct FabrikConfig {
 
     #[serde(default)]
     pub runtime: RuntimeConfig,
+
+    #[serde(default)]
+    pub daemon: DaemonConfig,
+}
+
+/// Daemon configuration
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct DaemonConfig {
+    /// Unix socket path for Xcode integration (relative to project root)
+    /// If set, daemon will ONLY create Unix socket server (no TCP)
+    /// If not set, daemon creates TCP servers (HTTP + gRPC)
+    pub socket: Option<String>,
 }
 
 /// Local cache configuration
