@@ -51,7 +51,7 @@ That's it! Your builds will now use the cache automatically.
 
 ## 📚 Documentation
 
-**Full documentation is available at: [https://fabrik.dev](https://fabrik.dev)**
+**Full documentation is available at: [https://fabrik.tuist.dev](https://fabrik.tuist.dev)**
 
 Or read locally:
 - [Getting Started Guide](./docs/getting-started.md)
