@@ -78,6 +78,10 @@ impl TestDaemon {
 
         // Create a test config file with optional socket
         let config_path = temp_dir.path().join("fabrik.toml");
+
+        // Convert paths to forward slashes for TOML (Windows compatibility)
+        let cache_dir_str = cache_dir.display().to_string().replace('\\', "/");
+
         let config_content = match mode {
             DaemonMode::Tcp => {
                 format!(
@@ -86,11 +90,12 @@ impl TestDaemon {
 dir = "{}"
 max_size = "1GB"
 "#,
-                    cache_dir.display()
+                    cache_dir_str
                 )
             }
             DaemonMode::UnixSocket => {
                 let socket_path = temp_dir.path().join("xcode.sock");
+                let socket_path_str = socket_path.display().to_string().replace('\\', "/");
                 format!(
                     r#"
 [cache]
@@ -100,8 +105,7 @@ max_size = "1GB"
 [daemon]
 socket = "{}"
 "#,
-                    cache_dir.display(),
-                    socket_path.display()
+                    cache_dir_str, socket_path_str
                 )
             }
         };
