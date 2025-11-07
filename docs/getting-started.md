@@ -156,4 +156,4 @@ Each project gets its own isolated daemon with unique ports - no conflicts, no c
 
 - Follow your build system's integration guide (links above)
 - See [CLI Reference](./cli-reference.md) for all available commands
-- Read [Architecture](../CLAUDE.md) for how Fabrik works internally
+- Read [Architecture](/guide/architecture.md) for how Fabrik works internally

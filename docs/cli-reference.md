@@ -361,6 +361,6 @@ Configuration is loaded in this order (highest to lowest priority):
 
 ## See Also
 
-- [Build System Integration](./build-systems/) - Integration guides
-- [CLAUDE.md](../CLAUDE.md) - Architecture documentation
-- [README.md](../README.md) - Getting started guide
+- [Build System Integration](/build-systems/README) - Integration guides
+- [CLAUDE.md](/guide/architecture.md) - Architecture documentation
+- [README.md](/.md) - Getting started guide

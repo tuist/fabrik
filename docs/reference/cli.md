@@ -11,7 +11,7 @@ Fabrik uses an activation-based approach for managing build caches. Instead of w
 1. **Shell Integration** (`fabrik activate`) - Automatic daemon management for development
 2. **Explicit Execution** (`fabrik exec`) - Manual daemon management for CI/CD
 
-See the [Getting Started Guide](/getting-started) for detailed usage examples.
+See the [Getting Started Guide](/getting-started.md) for detailed usage examples.
 
 ## `fabrik activate`
 
@@ -295,7 +295,7 @@ metrics_bind = "0.0.0.0:9091"
 health_bind = "0.0.0.0:8888"
 ```
 
-See [CLAUDE.md](/CLAUDE.md#layer-2-regional-server-with-s3-upstream) for complete server setup.
+See [guide/architecture.md](/guide/architecture.md#layer-2-regional-server-with-s3-upstream) for complete server setup.
 
 ## `fabrik config`
 
