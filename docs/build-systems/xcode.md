@@ -4,11 +4,11 @@ Xcode integration guide for Fabrik. This assumes you've already [completed the g
 
 ## How It Works
 
-Xcode's compilation cache (Xcode 16+) requires a Unix socket path set via the `COMPILATION_CACHE_REMOTE_SERVICE_PATH` build setting. Fabrik creates a Unix socket when configured, which Xcode connects to for caching.
+Xcode's compilation cache (Xcode 16+) uses a Unix socket for communication with the cache server. Fabrik creates a Unix socket when configured via the `[daemon] socket` setting in `fabrik.toml`.
 
 ## Configuration
 
-Add socket configuration to your `fabrik.toml`:
+Configure the Unix socket path in `fabrik.toml`:
 
 ```toml
 # fabrik.toml
@@ -17,12 +17,39 @@ dir = ".fabrik/cache"
 max_size = "20GB"
 
 [daemon]
-socket = ".fabrik/xcode.sock"  # Relative path, will be gitignored
+socket = ".fabrik/xcode.sock"  # Relative to project root
 ```
 
-## Quick Start
+**Important:** When socket is configured, the daemon creates **ONLY** the Unix socket server (no HTTP/gRPC TCP servers).
 
-### For Command-Line Builds
+## Xcode Project Setup
+
+Set these build settings in your Xcode project. The socket path **must match** the path in `fabrik.toml`:
+
+### Option 1: Build Settings
+
+In your project's build settings:
+
+```
+COMPILATION_CACHE_ENABLE_CACHING = YES
+COMPILATION_CACHE_ENABLE_PLUGIN = YES
+COMPILATION_CACHE_REMOTE_SERVICE_PATH = $(SRCROOT)/.fabrik/xcode.sock
+```
+
+### Option 2: .xcconfig File
+
+Create or update your `.xcconfig`:
+
+```
+// Build.xcconfig
+COMPILATION_CACHE_ENABLE_CACHING = YES
+COMPILATION_CACHE_ENABLE_PLUGIN = YES
+COMPILATION_CACHE_REMOTE_SERVICE_PATH = $(SRCROOT)/.fabrik/xcode.sock
+```
+
+### Option 3: Command Line
+
+Pass settings when calling `xcodebuild`:
 
 ```bash
 cd ~/my-xcode-project
@@ -35,28 +62,24 @@ xcodebuild \
   COMPILATION_CACHE_REMOTE_SERVICE_PATH=.fabrik/xcode.sock
 ```
 
-### For Xcode GUI Builds
+## Quick Start
 
-Set these build settings in your project or scheme:
+Once configured, the daemon starts automatically when you navigate to your project:
 
-```
-COMPILATION_CACHE_ENABLE_CACHING = YES
-COMPILATION_CACHE_ENABLE_PLUGIN = YES
-COMPILATION_CACHE_REMOTE_SERVICE_PATH = $(SRCROOT)/.fabrik/xcode.sock
-```
+```bash
+cd ~/my-xcode-project
+# Daemon starts and creates .fabrik/xcode.sock
 
-Or add to your `.xcconfig`:
-
-```
-// Build.xcconfig
-COMPILATION_CACHE_ENABLE_CACHING = YES
-COMPILATION_CACHE_ENABLE_PLUGIN = YES
-COMPILATION_CACHE_REMOTE_SERVICE_PATH = $(SRCROOT)/.fabrik/xcode.sock
+xcodebuild -project MyApp.xcodeproj -scheme MyApp
+# Xcode connects to socket and uses cache
 ```
 
-## Important Notes
+## Gitignore
 
-1. **Socket path must match**: The path in `fabrik.toml` and Xcode build settings must be identical
-2. **Relative paths work**: Paths are resolved relative to the project root (where `fabrik.toml` is located)
-3. **Gitignore the socket**: Add `.fabrik/` to your `.gitignore`
-4. **Daemon creates only socket**: When socket is configured, daemon creates ONLY the Unix socket (no TCP servers)
+Add to your `.gitignore`:
+
+```
+.fabrik/
+```
+
+This ignores both the cache directory and the socket file.
