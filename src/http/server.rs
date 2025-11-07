@@ -30,11 +30,13 @@ struct AppState<S: Storage + Clone> {
 /// - PUT /cache/{hash} - Store artifact (Gradle) - raw string
 /// - GET /health - Health check
 pub struct HttpServer<S: Storage + Clone> {
+    #[allow(dead_code)]
     port: u16,
     storage: Arc<S>,
 }
 
 impl<S: Storage + Clone + 'static> HttpServer<S> {
+    #[allow(dead_code)]
     pub fn new(port: u16, storage: Arc<S>) -> Self {
         Self { port, storage }
     }
@@ -84,6 +86,7 @@ impl<S: Storage + Clone + 'static> HttpServer<S> {
     }
 
     /// Start the HTTP server
+    #[allow(dead_code)]
     pub async fn run(self) -> Result<()> {
         let port = self.port;
         let app = self.router();

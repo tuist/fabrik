@@ -33,6 +33,7 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 /// Daemon mode for testing
+#[allow(dead_code)]
 enum DaemonMode {
     Tcp,        // TCP mode: HTTP + gRPC servers
     UnixSocket, // Unix socket mode: For Xcode
@@ -43,21 +44,25 @@ enum DaemonMode {
 /// NO GLOBAL STATE - all state is in temporary directories
 pub struct TestDaemon {
     _temp_dir: TempDir,
+    #[allow(dead_code)]
     pub cache_dir: PathBuf,
     state_dir: PathBuf, // Isolated state directory for this test
     child: Child,
     pub http_port: u16,
+    #[allow(dead_code)]
     pub grpc_port: u16,
     config_hash: String,
 }
 
 impl TestDaemon {
     /// Start a new test daemon with isolated cache and state (TCP mode)
+    #[allow(dead_code)]
     pub fn start() -> Self {
         Self::start_with_mode(DaemonMode::Tcp)
     }
 
     /// Start a new test daemon with Unix socket (for Xcode tests)
+    #[allow(dead_code)]
     pub fn start_with_socket() -> Self {
         Self::start_with_mode(DaemonMode::UnixSocket)
     }
@@ -174,23 +179,26 @@ socket = "{}"
         }
     }
 
+    #[allow(dead_code)]
     pub fn http_url(&self) -> String {
         format!("http://127.0.0.1:{}", self.http_port)
     }
 
+    #[allow(dead_code)]
     pub fn grpc_url(&self) -> String {
         format!("grpc://127.0.0.1:{}", self.grpc_port)
     }
 
     /// Get Unix socket path (for Xcode tests)
     /// Returns the socket path from daemon state
+    #[allow(dead_code)]
     pub fn socket_path(&self) -> Option<PathBuf> {
         let daemon_state_dir = self.state_dir.join(&self.config_hash);
         let ports_file = daemon_state_dir.join("ports.json");
 
         if let Ok(content) = std::fs::read_to_string(ports_file) {
             if let Ok(ports) = serde_json::from_str::<serde_json::Value>(&content) {
-                return ports["unix_socket"].as_str().map(|s| PathBuf::from(s));
+                return ports["unix_socket"].as_str().map(PathBuf::from);
             }
         }
 

@@ -89,7 +89,7 @@ fn test_bazel_cache_with_daemon() {
 #[test]
 #[cfg_attr(target_os = "windows", ignore = "Bazel not well supported on Windows")]
 fn test_bazel_version_with_daemon() {
-    let daemon = TestDaemon::start();
+    let _daemon = TestDaemon::start();
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
@@ -120,7 +120,7 @@ fn test_bazel_version_with_daemon() {
 #[test]
 #[cfg_attr(target_os = "windows", ignore = "Bazel not well supported on Windows")]
 fn test_bazel_help_with_daemon() {
-    let daemon = TestDaemon::start();
+    let _daemon = TestDaemon::start();
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")

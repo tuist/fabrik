@@ -58,8 +58,8 @@ fn test_xcode_with_unix_socket() {
         .arg("generic/platform=iOS Simulator")
         .arg("-derivedDataPath")
         .arg(&derived_data)
-        .arg(format!("COMPILATION_CACHE_ENABLE_CACHING=YES"))
-        .arg(format!("COMPILATION_CACHE_ENABLE_PLUGIN=YES"))
+        .arg("COMPILATION_CACHE_ENABLE_CACHING=YES")
+        .arg("COMPILATION_CACHE_ENABLE_PLUGIN=YES")
         .arg(format!(
             "COMPILATION_CACHE_REMOTE_SERVICE_PATH={}",
             socket_path.display()
@@ -91,8 +91,8 @@ fn test_xcode_with_unix_socket() {
         .arg("generic/platform=iOS Simulator")
         .arg("-derivedDataPath")
         .arg(&derived_data)
-        .arg(format!("COMPILATION_CACHE_ENABLE_CACHING=YES"))
-        .arg(format!("COMPILATION_CACHE_ENABLE_PLUGIN=YES"))
+        .arg("COMPILATION_CACHE_ENABLE_CACHING=YES")
+        .arg("COMPILATION_CACHE_ENABLE_PLUGIN=YES")
         .arg(format!(
             "COMPILATION_CACHE_REMOTE_SERVICE_PATH={}",
             socket_path.display()

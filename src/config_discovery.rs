@@ -81,6 +81,7 @@ impl DaemonState {
         self.state_dir().join("ports.json")
     }
 
+    #[allow(dead_code)]
     pub fn env_file(&self) -> PathBuf {
         self.state_dir().join("env")
     }
@@ -156,7 +157,7 @@ impl DaemonState {
             PathBuf::new()
         };
 
-        let unix_socket = ports["unix_socket"].as_str().map(|s| PathBuf::from(s));
+        let unix_socket = ports["unix_socket"].as_str().map(PathBuf::from);
 
         Ok(Some(DaemonState {
             config_hash: config_hash.to_string(),
