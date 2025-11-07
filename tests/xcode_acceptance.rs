@@ -58,6 +58,9 @@ fn test_xcode_with_unix_socket() {
         .arg("generic/platform=iOS")
         .arg("-derivedDataPath")
         .arg(&derived_data)
+        .arg("CODE_SIGNING_ALLOWED=NO")
+        .arg("CODE_SIGNING_REQUIRED=NO")
+        .arg("CODE_SIGN_IDENTITY=")
         .arg("COMPILATION_CACHE_ENABLE_CACHING=YES")
         .arg("COMPILATION_CACHE_ENABLE_PLUGIN=YES")
         .arg(format!(
@@ -95,6 +98,9 @@ fn test_xcode_with_unix_socket() {
         .arg("generic/platform=iOS")
         .arg("-derivedDataPath")
         .arg(&derived_data)
+        .arg("CODE_SIGNING_ALLOWED=NO")
+        .arg("CODE_SIGNING_REQUIRED=NO")
+        .arg("CODE_SIGN_IDENTITY=")
         .arg("COMPILATION_CACHE_ENABLE_CACHING=YES")
         .arg("COMPILATION_CACHE_ENABLE_PLUGIN=YES")
         .arg(format!(
