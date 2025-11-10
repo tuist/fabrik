@@ -2,6 +2,9 @@
 /target
 *.pdb
 
+# Fabrik cache
+.fabrik/
+
 # Release artifacts
 /dist
 

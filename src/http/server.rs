@@ -1,12 +1,13 @@
 use anyhow::Result;
 use axum::{
     body::Bytes,
-    extract::{Path, State},
-    http::StatusCode,
+    extract::{Path, Query, State},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::{get, put},
     Router,
 };
+use serde::Deserialize;
 use std::sync::Arc;
 use tower_http::trace::TraceLayer;
 use tracing::{info, warn};
@@ -19,13 +20,23 @@ struct AppState<S: Storage + Clone> {
     storage: Arc<S>,
 }
 
+/// Query parameters for TurboRepo v8 API
+#[derive(Debug, Deserialize)]
+struct TurboRepoQuery {
+    #[serde(rename = "teamId")]
+    team_id: Option<String>,
+    slug: Option<String>,
+}
+
 /// HTTP cache server for Metro, Gradle, Nx, TurboRepo, etc.
 ///
 /// Implements a simple HTTP API:
 /// - GET /api/v1/artifacts/{hash} - Retrieve artifact (Metro) - hex-encoded
 /// - PUT /api/v1/artifacts/{hash} - Store artifact (Metro) - hex-encoded
-/// - GET /v1/cache/{hash} - Retrieve artifact (Nx, TurboRepo) - raw string
-/// - PUT /v1/cache/{hash} - Store artifact (Nx, TurboRepo) - raw string
+/// - GET /v8/artifacts/{hash}?slug=team&teamId=id - Retrieve artifact (TurboRepo v8)
+/// - PUT /v8/artifacts/{hash}?slug=team&teamId=id - Store artifact (TurboRepo v8)
+/// - GET /v1/cache/{hash} - Retrieve artifact (Nx) - raw string
+/// - PUT /v1/cache/{hash} - Store artifact (Nx) - raw string
 /// - GET /cache/{hash} - Retrieve artifact (Gradle) - raw string
 /// - PUT /cache/{hash} - Store artifact (Gradle) - raw string
 /// - GET /health - Health check
@@ -75,7 +86,10 @@ impl<S: Storage + Clone + 'static> HttpServer<S> {
             // Metro routes (hex-encoded)
             .route("/api/v1/artifacts/:hash", get(get_metro_artifact))
             .route("/api/v1/artifacts/:hash", put(put_metro_artifact))
-            // Nx, TurboRepo routes (raw string - numeric hashes)
+            // TurboRepo v8 routes (raw string hashes)
+            .route("/v8/artifacts/:hash", get(get_turborepo_artifact))
+            .route("/v8/artifacts/:hash", put(put_turborepo_artifact))
+            // Nx routes (raw string - numeric hashes)
             .route("/v1/cache/:hash", get(get_nx_artifact))
             .route("/v1/cache/:hash", put(put_nx_artifact))
             // Gradle routes (raw string)
@@ -267,6 +281,115 @@ async fn put_gradle_artifact<S: Storage + Clone>(
         }
         Err(e) => {
             warn!(build_system = "gradle", hash = %hash, error = %e, "Storage error");
+            (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
+        }
+    }
+}
+
+/// Get artifact handler for TurboRepo v8 API
+/// TurboRepo uses raw string hashes via /v8/artifacts/{hash}?slug=team&teamId=id
+async fn get_turborepo_artifact<S: Storage + Clone>(
+    Path(hash): Path<String>,
+    Query(params): Query<TurboRepoQuery>,
+    State(state): State<AppState<S>>,
+) -> Response {
+    // Use hash string directly as bytes (no hex decoding)
+    let hash_bytes = hash.as_bytes();
+
+    // Get from storage
+    match state.storage.get(hash_bytes) {
+        Ok(Some(data)) => {
+            info!(
+                build_system = "turborepo",
+                hash = %hash,
+                team_id = ?params.team_id,
+                slug = ?params.slug,
+                size = data.len(),
+                "Cache HIT"
+            );
+
+            // Return with x-artifact-tag header (empty for now, can be enhanced later)
+            let mut headers = HeaderMap::new();
+            headers.insert("x-artifact-tag", "".parse().unwrap());
+
+            (
+                StatusCode::OK,
+                headers,
+                [("Content-Type", "application/octet-stream")],
+                data,
+            )
+                .into_response()
+        }
+        Ok(None) => {
+            info!(
+                build_system = "turborepo",
+                hash = %hash,
+                team_id = ?params.team_id,
+                slug = ?params.slug,
+                "Cache MISS"
+            );
+            (StatusCode::NOT_FOUND, Vec::new()).into_response()
+        }
+        Err(e) => {
+            warn!(
+                build_system = "turborepo",
+                hash = %hash,
+                team_id = ?params.team_id,
+                slug = ?params.slug,
+                error = %e,
+                "Storage error"
+            );
+            (StatusCode::INTERNAL_SERVER_ERROR, Vec::new()).into_response()
+        }
+    }
+}
+
+/// Put artifact handler for TurboRepo v8 API
+/// TurboRepo uses raw string hashes via /v8/artifacts/{hash}?slug=team&teamId=id
+async fn put_turborepo_artifact<S: Storage + Clone>(
+    Path(hash): Path<String>,
+    Query(params): Query<TurboRepoQuery>,
+    headers: HeaderMap,
+    State(state): State<AppState<S>>,
+    body: Bytes,
+) -> Response {
+    // Extract optional headers
+    let artifact_tag = headers
+        .get("x-artifact-tag")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+    let artifact_duration = headers
+        .get("x-artifact-duration")
+        .and_then(|v| v.to_str().ok())
+        .map(String::from);
+
+    // Use hash string directly as bytes (no hex decoding)
+    let hash_bytes = hash.as_bytes();
+
+    // Store in cache
+    match state.storage.put(hash_bytes, &body) {
+        Ok(()) => {
+            info!(
+                build_system = "turborepo",
+                hash = %hash,
+                team_id = ?params.team_id,
+                slug = ?params.slug,
+                size = body.len(),
+                artifact_tag = ?artifact_tag,
+                artifact_duration = ?artifact_duration,
+                "Artifact stored"
+            );
+            (StatusCode::OK, "Stored").into_response()
+        }
+        Err(e) => {
+            warn!(
+                build_system = "turborepo",
+                hash = %hash,
+                team_id = ?params.team_id,
+                slug = ?params.slug,
+                error = %e,
+                "Storage error"
+            );
             (StatusCode::INTERNAL_SERVER_ERROR, format!("Error: {}", e)).into_response()
         }
     }

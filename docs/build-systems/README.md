@@ -17,7 +17,7 @@ The guides below focus on **build system-specific** configuration and tips.
 - **[Gradle](./gradle)** - Java, Kotlin, Android projects
 - **[Bazel](./bazel)** - Multi-language monorepos *(coming soon)*
 - **[Nx](./nx)** - JavaScript/TypeScript monorepos *(coming soon)*
-- **TurboRepo** - JavaScript/TypeScript monorepos *(coming soon)*
+- **[TurboRepo](./turborepo)** - JavaScript/TypeScript monorepos
 
 ### Platform-Specific
 
@@ -67,7 +67,9 @@ Fabrik exports these for different build tools:
 | `FABRIK_GRPC_URL` | Bazel, Buck2 | gRPC cache URL |
 | `GRADLE_BUILD_CACHE_URL` | Gradle | Gradle-specific cache URL |
 | `NX_SELF_HOSTED_REMOTE_CACHE_SERVER` | Nx | Nx-specific cache URL |
-| `TURBO_TOKEN` | TurboRepo | TurboRepo auth (future) |
+| `TURBO_API` | TurboRepo | TurboRepo cache server URL |
+| `TURBO_TOKEN` | TurboRepo | Auth token (auto-generated) |
+| `TURBO_TEAM` | TurboRepo | Team slug (auto-generated) |
 | `XCODE_CACHE_SERVER` | Xcode | Xcode cache URL |
 
 ## Example Configuration

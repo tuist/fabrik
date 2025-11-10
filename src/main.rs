@@ -26,7 +26,7 @@ async fn main() -> Result<()> {
     // Dispatch to appropriate command handler
     match cli.command {
         Commands::Activate(args) => commands::activate::run(args),
-        Commands::Exec(args) => commands::exec::run(args),
+        Commands::Exec(args) => commands::exec::run(args).await,
         Commands::Daemon(args) => commands::daemon::run(args).await,
         Commands::Deactivate(args) => commands::deactivate::run(args),
         Commands::Server(args) => commands::server::run(*args).await,
