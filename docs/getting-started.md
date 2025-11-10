@@ -132,6 +132,22 @@ Fabrik works with any build system that supports remote caching. Continue with t
       <div style="font-size: 0.875rem; color: var(--vp-c-text-2);">React Native bundler</div>
     </div>
   </a>
+
+  <a href="./cache/build-systems/turborepo" style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem; border: 1px solid var(--vp-c-divider); border-radius: 8px; text-decoration: none;">
+    <img src="/images/turborepo-icon.svg" style="width: 32px; height: 32px;" alt="TurboRepo">
+    <div>
+      <strong>TurboRepo</strong>
+      <div style="font-size: 0.875rem; color: var(--vp-c-text-2);">High-performance build system for monorepos</div>
+    </div>
+  </a>
+
+  <a href="./cache/scripts/" style="display: flex; align-items: center; gap: 0.75rem; padding: 1rem; border: 1px solid var(--vp-c-divider); border-radius: 8px; text-decoration: none;">
+    <div style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; font-size: 24px;">📜</div>
+    <div>
+      <strong>Scripts</strong>
+      <div style="font-size: 0.875rem; color: var(--vp-c-text-2);">Bash, Python, Node.js—any custom script</div>
+    </div>
+  </a>
 </div>
 
 [View all build systems →](./build-systems/README.md)

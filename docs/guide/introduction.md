@@ -35,12 +35,3 @@ Fabrik provides transparent workflow optimization across different environments,
 - 📜 **Custom Scripts**: Bash, Python, Node.js—any script with `fabrik run`
 - 🤖 **Agentic Workflows**: AI-driven builds, tests, and deployments
 
-## Architecture at a Glance
-
-Fabrik implements a multi-tier optimization strategy:
-
-1. 🔥 **Local Tier** - Build-local, ultra-fast, lowest latency
-2. 🌡️ **Shared Tier** - Team cache, dedicated instances
-3. ❄️ **Persistent Tier** - S3/cloud-backed permanent storage
-
-Cache misses automatically fall back to the next tier, and writes propagate through all configured layers.
