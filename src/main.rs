@@ -1,6 +1,7 @@
 mod api;
 mod bazel;
 mod cli;
+mod cli_utils;
 mod commands;
 mod config;
 mod config_discovery;

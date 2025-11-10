@@ -22,40 +22,45 @@ export default defineConfig({
         ],
       },
       {
-        text: "Build Systems",
+        text: "Cache",
         items: [
           {
-            text: '<span class="sidebar-icon-text"><img src="/images/bazel.svg" class="sidebar-icon" alt="Bazel">Bazel</span>',
-            link: "/build-systems/bazel",
+            text: "Build Systems",
+            items: [
+              {
+                text: '<span class="sidebar-icon-text"><img src="/images/bazel.svg" class="sidebar-icon" alt="Bazel">Bazel</span>',
+                link: "/cache/build-systems/bazel",
+              },
+              {
+                text: '<span class="sidebar-icon-text"><img src="/images/gradle.svg" class="sidebar-icon" alt="Gradle">Gradle</span>',
+                link: "/cache/build-systems/gradle",
+              },
+              {
+                text: '<span class="sidebar-icon-text"><img src="/images/metro.svg" class="sidebar-icon" alt="Metro">Metro</span>',
+                link: "/cache/build-systems/metro",
+              },
+              {
+                text: '<span class="sidebar-icon-text"><img src="/images/nx.svg" class="sidebar-icon" alt="Nx">Nx</span>',
+                link: "/cache/build-systems/nx",
+              },
+              {
+                text: '<span class="sidebar-icon-text"><img src="/images/turborepo-icon.svg" class="sidebar-icon" alt="TurboRepo">TurboRepo</span>',
+                link: "/cache/build-systems/turborepo",
+              },
+              {
+                text: '<span class="sidebar-icon-text"><img src="/images/xcode.png" class="sidebar-icon" alt="Xcode">Xcode</span>',
+                link: "/cache/build-systems/xcode",
+              },
+            ],
           },
           {
-            text: '<span class="sidebar-icon-text"><img src="/images/gradle.svg" class="sidebar-icon" alt="Gradle">Gradle</span>',
-            link: "/build-systems/gradle",
+            text: "Scripts",
+            items: [
+              { text: "Introduction", link: "/cache/scripts/" },
+              { text: "Configuration Reference", link: "/cache/scripts/reference" },
+              { text: "Examples", link: "/cache/scripts/examples" },
+            ],
           },
-          {
-            text: '<span class="sidebar-icon-text"><img src="/images/metro.svg" class="sidebar-icon" alt="Metro">Metro</span>',
-            link: "/build-systems/metro",
-          },
-          {
-            text: '<span class="sidebar-icon-text"><img src="/images/nx.svg" class="sidebar-icon" alt="Nx">Nx</span>',
-            link: "/build-systems/nx",
-          },
-          {
-            text: '<span class="sidebar-icon-text"><img src="/images/turborepo-icon.svg" class="sidebar-icon" alt="TurboRepo">TurboRepo</span>',
-            link: "/build-systems/turborepo",
-          },
-          {
-            text: '<span class="sidebar-icon-text"><img src="/images/xcode.png" class="sidebar-icon" alt="Xcode">Xcode</span>',
-            link: "/build-systems/xcode",
-          },
-        ],
-      },
-      {
-        text: "Script Caching",
-        items: [
-          { text: "Introduction", link: "/script-caching/" },
-          { text: "Configuration Reference", link: "/script-caching/reference" },
-          { text: "Examples", link: "/script-caching/examples" },
         ],
       },
       {

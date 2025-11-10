@@ -6,6 +6,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use crate::cli::RunArgs;
+use crate::cli_utils::fabrik_prefix;
 use crate::script::{
     annotations::parse_annotations,
     cache::{create_metadata, ScriptCache},
@@ -26,7 +27,7 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     // Parse annotations
     if args.verbose {
-        eprintln!("[fabrik] Parsing annotations from {}", script);
+        eprintln!("{} Parsing annotations from {}", fabrik_prefix(), script);
     }
 
     let mut annotations = parse_annotations(script_path)
@@ -39,14 +40,18 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     // Check if caching is disabled
     if annotations.cache_disabled || args.no_cache {
-        eprintln!("[fabrik] Caching disabled - executing script directly");
+        eprintln!(
+            "{} Caching disabled - executing script directly",
+            fabrik_prefix()
+        );
         return execute_script_no_cache(script_path, &annotations, &args.script_args, args.verbose);
     }
 
     // Resolve dependencies
     if args.verbose && !annotations.depends_on.is_empty() {
         eprintln!(
-            "[fabrik] Resolving {} dependencies...",
+            "{} Resolving {} dependencies...",
+            fabrik_prefix(),
             annotations.depends_on.len()
         );
     }
@@ -68,16 +73,25 @@ pub async fn run(args: &RunArgs) -> Result<()> {
         compute_cache_key(script_path, &annotations).context("Failed to compute cache key")?;
 
     if args.verbose {
-        eprintln!("[fabrik] Cache key: {}", cache_key);
+        eprintln!("{} Cache key: {}", fabrik_prefix(), cache_key);
     }
 
     if args.dry_run {
         eprintln!(
-            "[fabrik] Dry run - would check cache with key: {}",
+            "{} Dry run - would check cache with key: {}",
+            fabrik_prefix(),
             cache_key
         );
-        eprintln!("[fabrik] Inputs: {} globs", annotations.inputs.len());
-        eprintln!("[fabrik] Outputs: {} paths", annotations.outputs.len());
+        eprintln!(
+            "{} Inputs: {} globs",
+            fabrik_prefix(),
+            annotations.inputs.len()
+        );
+        eprintln!(
+            "{} Outputs: {} paths",
+            fabrik_prefix(),
+            annotations.outputs.len()
+        );
         return Ok(());
     }
 
@@ -91,14 +105,14 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     if args.clean {
         if args.verbose {
-            eprintln!("[fabrik] Cleaning cache for this script");
+            eprintln!("{} Cleaning cache for this script", fabrik_prefix());
         }
         cache.remove(&cache_key)?;
     }
 
     // Check cache
     if args.verbose {
-        eprintln!("[fabrik] Checking cache...");
+        eprintln!("{} Checking cache...", fabrik_prefix());
     }
 
     let start = Instant::now();
@@ -108,12 +122,15 @@ pub async fn run(args: &RunArgs) -> Result<()> {
         let duration = start.elapsed();
 
         if args.verbose {
-            eprintln!("[fabrik] Cache HIT ✓");
-            eprintln!("[fabrik] Restoring outputs from cache");
+            eprintln!("{} Cache HIT ✓", fabrik_prefix());
+            eprintln!("{} Restoring outputs from cache", fabrik_prefix());
             for output in &entry.metadata.outputs {
                 eprintln!(
-                    "[fabrik]   {} ({} bytes, {} files)",
-                    output.path, output.size_bytes, output.file_count
+                    "{}   {} ({} bytes, {} files)",
+                    fabrik_prefix(),
+                    output.path,
+                    output.size_bytes,
+                    output.file_count
                 );
             }
         }
@@ -135,7 +152,8 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
         // Compact single-line output
         eprintln!(
-            "Cache key: {} | HIT ✓ | {:.2}s (exit: {})",
+            "{} Cache key: {} | HIT ✓ | {:.2}s (exit: {})",
+            fabrik_prefix(),
             cache_key,
             duration.as_secs_f64(),
             entry.metadata.execution.exit_code
@@ -146,7 +164,7 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     // Cache miss
     if args.verbose {
-        eprintln!("[fabrik] Cache MISS ✗");
+        eprintln!("{} Cache MISS ✗", fabrik_prefix());
     }
 
     if args.cache_only {
@@ -155,7 +173,12 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     // Execute script
     if args.verbose {
-        eprintln!("[fabrik] Executing: {} {}", annotations.runtime, script);
+        eprintln!(
+            "{} Executing: {} {}",
+            fabrik_prefix(),
+            annotations.runtime,
+            script
+        );
     }
 
     let executor = ScriptExecutor::new(args.verbose);
@@ -175,7 +198,8 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     if args.verbose {
         eprintln!(
-            "[fabrik] Script completed with exit code: {}",
+            "{} Script completed with exit code: {}",
+            fabrik_prefix(),
             result.exit_code
         );
     }
@@ -183,7 +207,7 @@ pub async fn run(args: &RunArgs) -> Result<()> {
     // Archive outputs (only if successful)
     if result.exit_code == 0 {
         if args.verbose {
-            eprintln!("[fabrik] Archiving outputs...");
+            eprintln!("{} Archiving outputs...", fabrik_prefix());
         }
 
         let base_dir = script_path
@@ -204,11 +228,18 @@ pub async fn run(args: &RunArgs) -> Result<()> {
             .context("Failed to archive outputs")?;
 
         if args.verbose {
-            eprintln!("[fabrik] Archived {} outputs", archived_outputs.len());
+            eprintln!(
+                "{} Archived {} outputs",
+                fabrik_prefix(),
+                archived_outputs.len()
+            );
             for output in &archived_outputs {
                 eprintln!(
-                    "[fabrik]   {} ({} bytes, {} files)",
-                    output.path, output.size_bytes, output.file_count
+                    "{}   {} ({} bytes, {} files)",
+                    fabrik_prefix(),
+                    output.path,
+                    output.size_bytes,
+                    output.file_count
                 );
             }
         }
@@ -236,11 +267,12 @@ pub async fn run(args: &RunArgs) -> Result<()> {
             .context("Failed to store in cache")?;
 
         if args.verbose {
-            eprintln!("[fabrik] Cached as: {}", cache_key);
+            eprintln!("{} Cached as: {}", fabrik_prefix(), cache_key);
         }
     } else if args.verbose {
         eprintln!(
-            "[fabrik] Not caching (non-zero exit code: {})",
+            "{} Not caching (non-zero exit code: {})",
+            fabrik_prefix(),
             result.exit_code
         );
     }
@@ -249,7 +281,8 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     // Compact single-line output
     eprintln!(
-        "Cache key: {} | MISS ✗ | {:.2}s (exit: {})",
+        "{} Cache key: {} | MISS ✗ | {:.2}s (exit: {})",
+        fabrik_prefix(),
         cache_key,
         total_duration.as_secs_f64(),
         result.exit_code
@@ -272,10 +305,11 @@ fn execute_script_no_cache(
 
     if verbose {
         eprintln!(
-            "[fabrik] Execution time: {:.2}s",
+            "{} Execution time: {:.2}s",
+            fabrik_prefix(),
             result.duration.as_secs_f64()
         );
-        eprintln!("[fabrik] Exit code: {}", result.exit_code);
+        eprintln!("{} Exit code: {}", fabrik_prefix(), result.exit_code);
     }
 
     std::process::exit(result.exit_code);

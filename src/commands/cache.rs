@@ -5,6 +5,7 @@ use anyhow::{Context, Result};
 use std::path::Path;
 
 use crate::cli::{CacheArgs, CacheCommands};
+use crate::cli_utils::fabrik_prefix;
 use crate::script::{
     annotations::parse_annotations, cache::ScriptCache, cache_key::compute_cache_key,
 };
@@ -104,9 +105,9 @@ async fn status(cache: &ScriptCache, script_path: &str, verbose: bool) -> Result
 /// Clean cache for a script or all scripts
 async fn clean(cache: &ScriptCache, script_path: Option<&str>, all: bool) -> Result<()> {
     if all {
-        println!("Cleaning all script caches...");
+        println!("{} Cleaning all script caches...", fabrik_prefix());
         cache.clean_all().context("Failed to clean all caches")?;
-        println!("All script caches cleaned.");
+        println!("{} All script caches cleaned.", fabrik_prefix());
         return Ok(());
     }
 
@@ -127,12 +128,12 @@ async fn clean(cache: &ScriptCache, script_path: Option<&str>, all: bool) -> Res
     // Compute cache key
     let cache_key = compute_cache_key(path, &annotations).context("Failed to compute cache key")?;
 
-    println!("Cleaning cache for: {}", script_path);
-    println!("Cache key: {}", cache_key);
+    println!("{} Cleaning cache for: {}", fabrik_prefix(), script_path);
+    println!("{} Cache key: {}", fabrik_prefix(), cache_key);
 
     cache.remove(&cache_key)?;
 
-    println!("Cache cleaned.");
+    println!("{} Cache cleaned.", fabrik_prefix());
 
     Ok(())
 }
