@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: "Fabrik"
-  text: "Multi-Layer Build Cache Technology"
-  tagline: To build infrastructure for modern build systems
+  text: "The Kubernetes of Development Environments"
+  tagline: Vendor and environment-agnostic orchestration for builds, tests, and scripts
   actions:
     - theme: brand
       text: Get Started
@@ -14,12 +14,16 @@ hero:
       link: https://github.com/tuist/fabrik
 
 features:
-  - title: 🏗️ Layered Architecture
-    details: Three-tier caching design with automatic fallback from hot to warm to cold storage, ensuring minimal latency at every level of your build infrastructure
-  - title: 🔧 Multi Build System Support
-    details: Seamlessly integrates with all modern build systems that support caching - from Gradle and Bazel to Nx, TurboRepo, and sccache
-  - title: 🚀 High Performance
-    details: Built in Rust with RocksDB and locally-mounted volumes for maximum speed, delivering sub-10ms cache hits on your build nodes
+  - title: 🌐 Vendor Agnostic
+    details: Universal orchestration layer that works with any build system, test runner, or CI platform without vendor lock-in
+  - title: 🏢 Environment Agnostic
+    details: Seamlessly operates across local development, CI/CD pipelines, and cloud environments with zero configuration changes
+  - title: 🤖 AI-Ready Infrastructure
+    details: Optimized for agentic coding workflows and automated development, handling the explosive growth in code generation and builds
+  - title: 🔥 Transparent Optimization
+    details: Intelligent caching with automatic fallback across storage tiers, ensuring optimal performance without manual intervention
+  - title: 🔧 Universal Compatibility
+    details: Supports Gradle, Bazel, Nx, TurboRepo, Xcode, and custom scripts—if it builds, tests, or runs, Fabrik can optimize it
   - title: 💎 Open Source
-    details: MPL-2.0 licensed and fully transparent, allowing you to build, customize, and deploy your own build cache infrastructure
+    details: MPL-2.0 licensed and fully transparent, giving you complete freedom to deploy, customize, and extend your workflow infrastructure
 ---

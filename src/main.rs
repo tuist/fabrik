@@ -1,12 +1,14 @@
 mod api;
 mod bazel;
 mod cli;
+mod cli_utils;
 mod commands;
 mod config;
 mod config_discovery;
 mod http;
 mod logging;
 mod merger;
+mod script;
 mod storage;
 mod xcode;
 
@@ -34,5 +36,7 @@ async fn main() -> Result<()> {
         Commands::Health(args) => commands::health::run(args),
         Commands::Doctor(args) => commands::doctor::run(args),
         Commands::Init(args) => commands::init::run(args),
+        Commands::Run(args) => commands::run::run(&args).await,
+        Commands::Cache(args) => commands::cache::cache(&args).await,
     }
 }

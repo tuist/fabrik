@@ -897,6 +897,138 @@ fabrik config <validate|generate|show> [OPTIONS]
 fabrik health [OPTIONS]
 ```
 
+**`fabrik run`** - Execute scripts with content-addressed caching
+```bash
+fabrik run [OPTIONS] <SCRIPT> [-- <SCRIPT_ARGS>...]
+```
+Executes scripts (bash, node, etc.) with automatic caching based on KDL annotations in the script file.
+
+**`fabrik cache`** - Manage script cache
+```bash
+fabrik cache <status|clean|list|stats> [OPTIONS]
+```
+Inspect and manage the script cache (status, clean, list entries, view statistics).
+
+### Script Cache Feature
+
+Fabrik provides **content-addressed caching for arbitrary scripts** (bash, node, python, etc.) using KDL annotations embedded in the script file itself. This enables caching for any scripted build steps, not just build system artifacts.
+
+**Key Features:**
+- **Content-addressed**: Cache keyed by script content + inputs + environment variables
+- **KDL annotations**: Declare inputs, outputs, env vars, dependencies directly in script comments
+- **Automatic invalidation**: Cache invalidates when inputs, env vars, or script content changes
+- **Output restoration**: Cached outputs are automatically restored on cache hit
+- **Dependency resolution**: Scripts can depend on other scripts with automatic execution ordering
+- **Cross-platform**: Works with any runtime (bash, node, python, ruby, etc.)
+
+**Example Script:**
+```bash
+#!/usr/bin/env -S fabrik run bash
+#FABRIK input "src/**/*.ts"
+#FABRIK input "package.json"
+#FABRIK output "dist/"
+#FABRIK env "NODE_ENV"
+#FABRIK depends "./build-deps.sh" use-outputs=true
+
+# Build TypeScript project
+npm run build
+```
+
+**KDL Annotation Reference:**
+- `#FABRIK input "glob"` - Track input files (supports globs, invalidates cache when files change)
+- `#FABRIK input "file" hash=mtime|size|content` - Specify hash method (default: content)
+- `#FABRIK output "path"` - Declare output paths to archive/restore (files or directories)
+- `#FABRIK env "VAR_NAME"` - Track environment variable (invalidates cache when value changes)
+- `#FABRIK depends "script.sh"` - Declare dependency on another script
+- `#FABRIK depends "script.sh" use-outputs=true` - Add dependency outputs as inputs
+- `#FABRIK cache disable` - Disable caching for this script
+- `#FABRIK cache ttl="7d"` - Set cache expiration (e.g., "2h", "7d", "30d")
+- `#FABRIK cache key="custom"` - Override cache key computation
+- `#FABRIK runtime node` - Override runtime (defaults to shebang)
+- `#FABRIK runtime-arg "--max-old-space-size=4096"` - Pass argument to runtime
+- `#FABRIK runtime-version` - Include runtime version in cache key
+- `#FABRIK exec cwd="subdir"` - Set working directory for execution
+- `#FABRIK exec timeout="5m"` - Set execution timeout
+- `#FABRIK exec shell` - Execute via shell (enables shell features)
+
+**CLI Usage:**
+```bash
+# Run script with caching
+fabrik run build.sh
+
+# Pass arguments to script
+fabrik run build.sh -- --production --verbose
+
+# Disable caching for this run
+fabrik run --no-cache build.sh
+
+# Dry run (show cache key without executing)
+fabrik run --dry-run build.sh
+
+# Force clean and re-execute
+fabrik run --clean build.sh
+
+# Verbose output (show cache operations)
+fabrik run --verbose build.sh
+
+# Check cache status
+fabrik cache status build.sh
+
+# Clean cache for specific script
+fabrik cache clean build.sh
+
+# List all cached scripts
+fabrik cache list
+
+# View cache statistics
+fabrik cache stats
+```
+
+**Output Format:**
+```
+Cache key: script-49597b2a298253b8 | HIT ✓ | 0.00s (exit: 0)
+Cache key: script-49597b2a298253b8 | MISS ✗ | 2.45s (exit: 0)
+```
+
+**How It Works:**
+1. **Parse annotations**: Extract inputs, outputs, env vars from script comments
+2. **Compute cache key**: Hash script content + input files + env var values + runtime version
+3. **Check cache**: Look up cache key in local RocksDB storage
+4. **Cache hit**: Restore outputs from archive, exit with cached exit code
+5. **Cache miss**: Execute script, capture output, archive results, store in cache
+6. **Dependency resolution**: Recursively resolve and execute dependencies first
+
+**Cache Key Computation:**
+```
+cache_key = SHA256(
+    script_content +
+    runtime + runtime_version +
+    hash(input_files) +
+    env_var_values +
+    custom_cache_key
+)
+```
+
+**Use Cases:**
+- Cache TypeScript compilation (`tsc`)
+- Cache test runs when source hasn't changed
+- Cache Docker image builds
+- Cache code generation steps
+- Cache asset processing (image optimization, etc.)
+- Cache dependency installation (when package manifest unchanged)
+- Chain build steps with dependencies (build → test → deploy)
+
+**Comparison to Build System Caches:**
+
+| Feature | Build System Cache (Gradle/Bazel) | Script Cache |
+|---------|-----------------------------------|--------------|
+| **Scope** | Build system specific | Any script/runtime |
+| **Configuration** | Build tool config files | KDL annotations in script |
+| **Cache key** | Build tool determines | User controls via annotations |
+| **Outputs** | Build tool tracks | User declares |
+| **Dependencies** | Build tool graph | User declares |
+| **Portability** | Tied to build tool | Works anywhere |
+
 ### Daemon Architecture (Activation-Based)
 
 **Design Philosophy:**
@@ -1495,3 +1627,4 @@ This document will evolve as the project matures. Update both CLAUDE.md and PLAN
 **Workflow**: As you complete tasks in PLAN.md, update the "Current Phase" and mark tasks as done. If architectural decisions change, update both CLAUDE.md and the "Notes & Decisions" section in PLAN.md.
 - Keep the documentation up to date whenever you change something adding or removing pages, or adjusting the content on existing ones. Make sure the navigation of the site is well designed such that's easy to navigate.
 - Ensure cargo format and clippy pass before consider the work done
+- All the logs should be prefixed with [fabrik] consistently throughout the CLI
