@@ -2,6 +2,63 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.8.1] - 2025-11-10
+
+### Refactor
+
+- Extract TurboRepo token/team generation to shared functions ([6472058](64720586fa2d0e1699db32405b32c8d3b301a9a9))
+- Make build tool helpers generic for all build systems ([1d06386](1d0638694559f8c0eca5adabeca07a8d852c0606))
+
+## [0.8.0] - 2025-11-07
+
+### 🐛 Bug Fixes
+
+- Resolve all clippy warnings for CI ([3bdce0d](3bdce0d94650f1fcd24862cda6a020ce079567ae))
+- Add platform guards for Unix socket support (Windows compatibility) ([0410468](0410468fa9cf4b98a528bb755fa0a06fa967fe4d))
+- Escape Windows backslashes in TOML paths for tests ([10c96cf](10c96cfa5310fa1f356c141cd95ca7b6b3f5edf5))
+- Make Xcode build test gracefully skip on missing SDK in CI ([89bd6d2](89bd6d275761ecb343b72038515a4f52f7c2bb78))
+
+### 📚 Documentation
+
+- Add comprehensive user-facing guide for activation workflow ([a23f8b3](a23f8b3ef96cf66a62480b868867d1f36ad01b56))
+- Update CLI reference for activation-based workflow ([1f9a077](1f9a077f75b74ce60d18d0dc5887af4922b8ea6c))
+- Update Bazel, Gradle, and Nx for activation-based workflow ([29beee8](29beee86627a85b6fd4978e0c7d1020fa8d71cc7))
+- Update Metro and Xcode for activation-based workflow ([f735840](f735840a2cebde1937f208b35e927274020f4b3f))
+- Finalize activation-based documentation updates ([3b4397b](3b4397b7a08747323e151c8dd9addf857d4ac007))
+- Remove redundant setup instructions from build system guides ([f973460](f973460be92984e7b7fa1e937003a15a2441ca9e))
+- Remove setup instructions from all build system guides ([0b6ee1b](0b6ee1bb14beb2acc61d95fed2948f64577ffbde))
+- Add 'Other Build Systems' section to all build system guides ([bc7b7ec](bc7b7ec168edf6263e13a88bc740e849e94d5c5b))
+- Completely rewrite getting-started.md per requirements ([80402de](80402de7e4c1b9ab6234f3e6dd72970139ed5133))
+- Use real build system icons in getting-started.md ([20e53ee](20e53ee27b3c4be47422f11ef2735dfcc52fe61a))
+- Clarify Bazel .bazelrc doesn't support env var expansion ([c704a86](c704a869f5e90f61c62573a7b0046fe5fabd2bae))
+- Simplify Bazel page - remove redundant sections ([1054153](1054153d0117aeef71f2a47c8e169a2c76179799))
+- Remove 'Other Build Systems' and 'See Also' sections from all build system pages ([1617423](1617423513dba012446dd17f6c95194cebb705aa))
+- Simplify Gradle page to match Bazel simplification ([c2d8a3a](c2d8a3af67076dd34b0b0d14eb9e786d70e404c3))
+- Update development section to use mise exec for acceptance tests ([2b4587c](2b4587c09675d4753ab1e1fed9b117fa3cbd8cbe))
+- Simplify Metro, Nx, and Xcode pages to match minimal pattern ([39295d2](39295d2723b55836e889efc5729e75a3484b21d1))
+- Update Xcode integration to clarify Unix socket limitation ([e2cd3c0](e2cd3c0e1560ca6669a8c0258ee061ee82dda694))
+- Update Xcode integration with Unix socket configuration ([3fe156f](3fe156fe3dfc0824cd3c2caa0105af172d807f40))
+
+### 🚀 Features
+
+- Add activation-based daemon architecture (mise-inspired) ([b00b3d0](b00b3d02728448dccef13bd36aadb3aaf8374835))
+- Add Unix socket support for Xcode integration ([a1bad76](a1bad769be946c0015e85a3d6159db5d043c175b))
+- Implement activate and deactivate commands (partial) ([823a321](823a3216db63df94dc80bc490d690d937c92d08c))
+- Implement daemon spawning and state management ([82f2856](82f28568d38a261ffa43ef45faf56ae62845e4e6))
+- Implement activation-based daemon with dynamic port allocation ([6a41ecd](6a41ecd1fcd3a3eb55c74ecfab8e178e64f3972f))
+- Add doctor command and comprehensive documentation ([c4cee46](c4cee460bffd5677f0739c86624d34ae75ed714e))
+- Add fabrik init command and rename config to fabrik.toml ([6e8648a](6e8648a68f794aca7e41e02717a1b47eda549489))
+- Add test isolation with FABRIK_STATE_DIR and fix daemon port binding ([4e4c657](4e4c657a029e6231068e9ad8ea3e7dbdd6d299b0))
+- Implement Unix socket support for Xcode integration ([b8ddcff](b8ddcff176be030de209df042adb8420f5927077))
+
+### 🚜 Refactor
+
+- Remove wrapper commands in favor of activation-based approach ([c6a2f5c](c6a2f5c16340464a33b83f933443cb5e5dd751f7))
+
+### 🧪 Testing
+
+- Temporarily skip acceptance tests during activation migration ([de65349](de6534929923955fa20f0013fdedba98ce7008fd))
+
 ## [0.7.0] - 2025-11-01
 
 ### 🐛 Bug Fixes
