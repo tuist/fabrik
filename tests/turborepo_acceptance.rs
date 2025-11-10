@@ -187,11 +187,15 @@ fn test_turborepo_http_endpoints() {
         .read_to_string(&mut response)
         .expect("Failed to read response");
 
+    // Check for success status codes
+    let has_success = response.contains("200 OK") || response.contains("201");
     assert!(
-        response.contains("200 OK") || response.contains("201"),
-        "PUT should succeed: {}",
-        response
+        has_success,
+        "PUT should succeed but got unexpected response (check logs for details)"
     );
+    if !has_success {
+        println!("Response was: {}", response);
+    }
 
     println!("✅ PUT succeeded");
 
@@ -265,11 +269,15 @@ fn test_turborepo_cache_miss() {
         .read_to_string(&mut response)
         .expect("Failed to read response");
 
+    // Check for 404 status code
+    let has_404 = response.contains("404");
     assert!(
-        response.contains("404"),
-        "Should return 404 for missing artifact: {}",
-        response
+        has_404,
+        "Should return 404 for missing artifact but got unexpected response (check logs for details)"
     );
+    if !has_404 {
+        println!("Response was: {}", response);
+    }
 
     println!("✅ Cache miss handled correctly (404)");
 }
