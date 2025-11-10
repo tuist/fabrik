@@ -41,6 +41,10 @@ export default defineConfig({
             link: "/build-systems/nx",
           },
           {
+            text: '<span class="sidebar-icon-text"><img src="/images/turborepo-icon.svg" class="sidebar-icon" alt="TurboRepo">TurboRepo</span>',
+            link: "/build-systems/turborepo",
+          },
+          {
             text: '<span class="sidebar-icon-text"><img src="/images/xcode.png" class="sidebar-icon" alt="Xcode">Xcode</span>',
             link: "/build-systems/xcode",
           },

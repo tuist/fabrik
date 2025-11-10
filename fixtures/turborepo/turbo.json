@@ -1,0 +1,12 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "remoteCache": {
+    "enabled": true
+  },
+  "tasks": {
+    "build": {
+      "outputs": ["dist/**"],
+      "cache": true
+    }
+  }
+}

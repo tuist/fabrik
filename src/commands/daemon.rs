@@ -261,24 +261,15 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         info!("Received Ctrl+C, shutting down gracefully...");
     }
 
-    // Gracefully wait for all servers to finish with a timeout
-    info!("Waiting for servers to shutdown...");
-    let shutdown_timeout = tokio::time::Duration::from_secs(5);
-
+    // Abort all server tasks immediately
+    // Note: In the future, we should implement graceful shutdown for axum and tonic servers
+    info!("Shutting down servers...");
     for handle in handles {
-        match tokio::time::timeout(shutdown_timeout, handle).await {
-            Ok(Ok(Ok(()))) => {}
-            Ok(Ok(Err(e))) => {
-                tracing::warn!("Server shutdown error: {}", e);
-            }
-            Ok(Err(e)) => {
-                tracing::warn!("Server task error: {}", e);
-            }
-            Err(_) => {
-                tracing::warn!("Server shutdown timeout");
-            }
-        }
+        handle.abort();
     }
+
+    // Give them a moment to cleanup
+    tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
 
     // Cleanup daemon state
     if let Some(state) = state_opt {
