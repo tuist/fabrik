@@ -1,12 +1,12 @@
 # Fabrik
 
-Open-source, multi-layer build cache infrastructure for modern build tools.
+Vendor and environment-agnostic technology to optimize developer, CI, and agentic workflows.
 
 ## 🎯 What is Fabrik?
 
-Fabrik is a **technology to build** transparent, high-performance caching infrastructure for any build tool with remote caching capabilities. It provides a three-tier caching hierarchy (hot, warm, cold) that transparently accelerates builds across local development, CI/CD, and team environments.
+Fabrik is **the Kubernetes of development environments**—a universal orchestration layer that optimizes builds, tests, and scripts across any environment. Whether you're running locally, in CI, or powering agentic workflows, Fabrik provides transparent caching and execution optimization without locking you into specific vendors or platforms.
 
-**Think of it as:** The narrow waist between build tools and cache infrastructure—a minimal, universal interface that any build tool can plug into, and any storage backend can support.
+**Think of it as:** The narrow waist between your workflows and infrastructure—a minimal, universal interface that any build tool, test runner, or script can plug into, and any storage backend or execution environment can support.
 
 ## 🚀 Quick Start
 
@@ -61,23 +61,14 @@ Or read locally:
 
 ## ✨ Key Features
 
-- 🔥 **Transparent Caching**: Three-tier hierarchy with automatic fallback
-- 🔧 **Universal Compatibility**: Supports Gradle, Bazel, Nx, TurboRepo, sccache, BuildKit, and more
+- 🌐 **Vendor Agnostic**: Works with any build system, test runner, or CI platform
+- 🏢 **Environment Agnostic**: Seamless operation across local dev, CI/CD, and cloud environments
+- 🤖 **AI-Ready**: Optimized for agentic coding workflows and automated development
+- 🔥 **Transparent Optimization**: Intelligent caching with automatic fallback across storage tiers
+- 🔧 **Universal Compatibility**: Supports Gradle, Bazel, Nx, TurboRepo, Xcode, and custom scripts
 - ⚡ **High Performance**: Built in Rust with RocksDB for ultra-low latency (<10ms p99)
-- 🎯 **Zero Configuration**: Automatically detects CI environments
-- 🌍 **Multi-Region**: Deploy dedicated instances in your preferred regions
-- 🔒 **Secure**: JWT-based authentication
-- 💎 **Open Source**: MPL-2.0 licensed
-
-## 🏗️ Architecture
-
-Fabrik implements a three-tier caching strategy:
-
-1. **🔥 Hot Cache** - Local/CI, ultra-fast (<5ms)
-2. **🌡️ Warm Cache** - Shared team cache (~20ms)
-3. **❄️ Cold Cache** - S3-backed permanent storage (~100ms)
-
-Cache misses automatically fall back to the next layer. Writes propagate through all layers.
+- 🎯 **Zero Configuration**: Automatically adapts to your environment
+- 💎 **Open Source**: MPL-2.0 licensed—deploy anywhere, customize freely
 
 ## 🤝 Contributing
 

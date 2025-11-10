@@ -1,43 +1,46 @@
 # Introduction
 
-Fabrik is an open-source, multi-layer build cache technology designed for modern build systems.
+Fabrik is an open-source, vendor and environment-agnostic technology that optimizes developer, CI, and agentic workflows.
 
 ## Why Fabrik?
 
-The landscape of software development is transforming rapidly. With the rise of agentic coding and AI-assisted development, the amount of code we're producing is growing exponentially. As codebases expand, sharing compile artifacts across environments has become more critical than ever.
+The landscape of software development is transforming rapidly. With the rise of agentic coding and AI-assisted development, the amount of code we're producing is growing exponentially. Development workflows—builds, tests, scripts—are running more frequently across more diverse environments than ever before.
 
-Modern build systems—Gradle, Bazel, Nx, TurboRepo—are being designed with caching capabilities built-in. They understand the value of reusing work across builds, teams, and CI pipelines. But having the capability isn't enough. These build systems need **infrastructure** to unlock their full potential.
+Modern development tools are powerful, but they're often locked into specific vendors, cloud platforms, or execution environments. Teams find themselves constrained by tooling choices, unable to optimize across their entire workflow, or forced to rebuild infrastructure when switching platforms.
 
-That's where Fabrik comes in. Fabrik is the technology to build the cache infrastructure that gives build systems their superpowers. It acts as the [**narrow waist**](https://en.wikipedia.org/wiki/Hourglass_model) between build systems and cache infrastructure—a minimal, universal interface that any build system can plug into, and any storage backend can support.
+That's where Fabrik comes in. **Fabrik is the Kubernetes of development environments**—a universal orchestration layer that sits between your workflows and infrastructure. It acts as the [**narrow waist**](https://en.wikipedia.org/wiki/Hourglass_model) between your tools and your infrastructure—a minimal, universal interface that any build tool, test runner, or script can plug into, and any storage backend or execution environment can support.
 
 ## What is Fabrik?
 
-Fabrik is a technology to build transparent, high-performance caching infrastructure for modern build systems. It can be deployed and customized to optimize build performance across different environments. It's built with Rust for maximum speed and reliability.
+Fabrik is a technology to build transparent, high-performance workflow optimization for builds, tests, and scripts across any environment. Whether you're running locally, in GitHub Actions, GitLab CI, or a custom cloud setup, Fabrik provides intelligent caching and execution without vendor lock-in. It's built with Rust for maximum speed and reliability.
 
 ## Key Features
 
-- 🔥 **Transparent Caching**: Three-tier caching hierarchy (hot, warm, cold) with automatic fallback
-- 🔧 **Universal Support**: Works with Gradle, Bazel, Nx, Metro, Xcode, and more
+- 🌐 **Vendor Agnostic**: Works with any build system, test runner, or CI platform
+- 🏢 **Environment Agnostic**: Seamless operation across local dev, CI/CD, and cloud environments
+- 🤖 **AI-Ready**: Optimized for agentic coding workflows and automated development
+- 🔥 **Transparent Optimization**: Intelligent caching with automatic fallback across storage tiers
+- 🔧 **Universal Compatibility**: Supports Gradle, Bazel, Nx, TurboRepo, Xcode, and custom scripts
 - ⚡ **High Performance**: Built in Rust with RocksDB for ultra-low latency (<10ms p99)
-- 🎯 **Shell Activation**: Mise-inspired workflow - activate once, works everywhere
-- 🌍 **Multi-Region**: Deploy dedicated instances in your preferred regions
-- 🔒 **Secure**: JWT-based authentication with zero-latency validation
-- 💎 **Open Source**: MPL-2.0 licensed for transparency and customization
+- 🎯 **Zero Configuration**: Automatically adapts to your environment
+- 💎 **Open Source**: MPL-2.0 licensed—deploy anywhere, customize freely
 
 ## Use Cases
 
-Fabrik provides a transparent, high-performance caching hierarchy to optimize build performance across different environments, supporting:
+Fabrik provides transparent workflow optimization across different environments, supporting:
 
-- 🏗️ **Build Systems**: Gradle, Bazel, Nx
+- 🏗️ **Build Systems**: Gradle, Bazel, Nx, TurboRepo
 - 📦 **JavaScript Bundlers**: Metro (React Native)
 - 🍎 **Apple Development**: Xcode (Unix socket support)
+- 📜 **Custom Scripts**: Bash, Python, Node.js—any script with `fabrik run`
+- 🤖 **Agentic Workflows**: AI-driven builds, tests, and deployments
 
 ## Architecture at a Glance
 
-Fabrik implements a three-tier caching strategy:
+Fabrik implements a multi-tier optimization strategy:
 
-1. 🔥 **Hot Cache** - Build-local, ultra-fast, lowest latency
-2. 🌡️ **Warm Cache** - Shared team cache, dedicated instances
-3. ❄️ **Cold Cache** - S3-backed permanent storage
+1. 🔥 **Local Tier** - Build-local, ultra-fast, lowest latency
+2. 🌡️ **Shared Tier** - Team cache, dedicated instances
+3. ❄️ **Persistent Tier** - S3/cloud-backed permanent storage
 
 Cache misses automatically fall back to the next tier, and writes propagate through all configured layers.
