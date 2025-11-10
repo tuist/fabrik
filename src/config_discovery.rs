@@ -209,13 +209,14 @@ impl DaemonState {
                 // TurboRepo
                 exports.push(format!("set -gx TURBO_API {}", http_url));
                 // Auto-generate TURBO_TEAM if not set
-                exports.push(
-                    "test -z \"$TURBO_TEAM\"; and set -gx TURBO_TEAM fabrik-local".to_string(),
-                );
+                exports.push(format!(
+                    "test -z \"$TURBO_TEAM\"; and set -gx TURBO_TEAM {}",
+                    default_turbo_team()
+                ));
                 // Auto-generate TURBO_TOKEN if not set
                 exports.push(format!(
-                    "test -z \"$TURBO_TOKEN\"; and set -gx TURBO_TOKEN fabrik-local-{}",
-                    self.pid
+                    "test -z \"$TURBO_TOKEN\"; and set -gx TURBO_TOKEN {}",
+                    generate_turbo_token()
                 ));
             }
             _ => {
@@ -247,18 +248,38 @@ impl DaemonState {
                 // TurboRepo
                 exports.push(format!("export TURBO_API={}", http_url));
                 // Auto-generate TURBO_TEAM if not already set
-                exports
-                    .push("[ -z \"$TURBO_TEAM\" ] && export TURBO_TEAM=fabrik-local".to_string());
+                exports.push(format!(
+                    "[ -z \"$TURBO_TEAM\" ] && export TURBO_TEAM={}",
+                    default_turbo_team()
+                ));
                 // Auto-generate TURBO_TOKEN if not already set
                 exports.push(format!(
-                    "[ -z \"$TURBO_TOKEN\" ] && export TURBO_TOKEN=fabrik-local-{}",
-                    self.pid
+                    "[ -z \"$TURBO_TOKEN\" ] && export TURBO_TOKEN={}",
+                    generate_turbo_token()
                 ));
             }
         }
 
         exports.join("\n")
     }
+}
+
+/// Generate a unique token for TurboRepo local development
+/// Uses PID XOR timestamp for uniqueness across process restarts
+pub fn generate_turbo_token() -> String {
+    format!(
+        "fabrik-local-{:x}",
+        std::process::id()
+            ^ (std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_secs() as u32)
+    )
+}
+
+/// Default team name for TurboRepo local development
+pub fn default_turbo_team() -> &'static str {
+    "fabrik-local"
 }
 
 /// Check if a process is running

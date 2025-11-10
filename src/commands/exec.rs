@@ -13,6 +13,7 @@ use crate::bazel::{
 };
 use crate::cli::ExecArgs;
 use crate::config::FabrikConfig;
+use crate::config_discovery::{default_turbo_team, generate_turbo_token};
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
 use crate::storage;
@@ -103,23 +104,14 @@ pub async fn run(args: ExecArgs) -> Result<()> {
         // Auto-generate TURBO_TEAM if not already set
         // TurboRepo requires a team to enable remote caching
         if std::env::var("TURBO_TEAM").is_err() {
-            env_vars.insert("TURBO_TEAM".to_string(), "fabrik-local".to_string());
+            env_vars.insert("TURBO_TEAM".to_string(), default_turbo_team().to_string());
             info!("Auto-generated TURBO_TEAM for local development");
         }
 
         // Auto-generate TURBO_TOKEN if not already set
         // This enables remote caching without requiring manual token configuration
         if std::env::var("TURBO_TOKEN").is_err() {
-            // Generate a simple local token using process ID and timestamp
-            let token = format!(
-                "fabrik-local-{:x}",
-                std::process::id()
-                    ^ (std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .unwrap()
-                        .as_secs() as u32)
-            );
-            env_vars.insert("TURBO_TOKEN".to_string(), token);
+            env_vars.insert("TURBO_TOKEN".to_string(), generate_turbo_token());
             info!("Auto-generated TURBO_TOKEN for local development");
         }
 
