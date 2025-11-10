@@ -427,8 +427,9 @@ pub struct InitArgs {
 
 #[derive(Parser, Debug)]
 pub struct RunArgs {
-    /// Script file to execute
-    pub script: String,
+    /// Runtime and script file (either "script.sh" or "bash script.sh")
+    #[arg(required = true)]
+    pub positional_args: Vec<String>,
 
     /// Arguments to pass to the script (after --)
     #[arg(last = true)]
@@ -461,6 +462,26 @@ pub struct RunArgs {
     /// Local cache directory
     #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
     pub config_cache_dir: Option<String>,
+}
+
+impl RunArgs {
+    /// Parse positional args to extract optional runtime and script path
+    pub fn parse_runtime_and_script(&self) -> (Option<String>, String) {
+        match self.positional_args.len() {
+            0 => panic!("No positional args provided"), // Should never happen due to clap validation
+            1 => {
+                // Just script: fabrik run script.sh
+                (None, self.positional_args[0].clone())
+            }
+            _ => {
+                // Runtime + script: fabrik run bash script.sh
+                (
+                    Some(self.positional_args[0].clone()),
+                    self.positional_args[1].clone(),
+                )
+            }
+        }
+    }
 }
 
 #[derive(Parser, Debug)]

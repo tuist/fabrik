@@ -17,19 +17,25 @@ use crate::script::{
 use crate::storage::default_cache_dir;
 
 pub async fn run(args: &RunArgs) -> Result<()> {
-    let script_path = Path::new(&args.script);
+    let (cli_runtime, script) = args.parse_runtime_and_script();
+    let script_path = Path::new(&script);
 
     if !script_path.exists() {
-        anyhow::bail!("Script not found: {}", args.script);
+        anyhow::bail!("Script not found: {}", script);
     }
 
     // Parse annotations
     if args.verbose {
-        eprintln!("[fabrik] Parsing annotations from {}", args.script);
+        eprintln!("[fabrik] Parsing annotations from {}", script);
     }
 
     let mut annotations = parse_annotations(script_path)
-        .with_context(|| format!("Failed to parse script annotations: {}", args.script))?;
+        .with_context(|| format!("Failed to parse script annotations: {}", script))?;
+
+    // Apply runtime priority: CLI arg > directive > shebang
+    if let Some(runtime) = cli_runtime {
+        annotations.runtime = runtime;
+    }
 
     // Check if caching is disabled
     if annotations.cache_disabled || args.no_cache {
@@ -149,10 +155,7 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 
     // Execute script
     if args.verbose {
-        eprintln!(
-            "[fabrik] Executing: {} {}",
-            annotations.runtime, args.script
-        );
+        eprintln!("[fabrik] Executing: {} {}", annotations.runtime, script);
     }
 
     let executor = ScriptExecutor::new(args.verbose);

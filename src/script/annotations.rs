@@ -70,15 +70,20 @@ pub fn parse_annotations(script_path: &Path) -> Result<ScriptAnnotations> {
 
     let (runtime, runtime_args) = parse_shebang(shebang)?;
 
-    // Detect comment prefix based on runtime
-    let prefix = match runtime.as_str() {
-        "bash" | "sh" | "zsh" | "python3" | "python" | "ruby" | "perl" => "#FABRIK",
-        "node" | "deno" | "bun" | "ts-node" => "//FABRIK",
-        _ => {
-            return Err(anyhow!(
+    // Detect comment prefix based on runtime (if provided)
+    // If runtime is empty, try both prefixes
+    let prefixes = if runtime.is_empty() {
+        vec!["#FABRIK", "//FABRIK"]
+    } else {
+        match runtime.as_str() {
+            "bash" | "sh" | "zsh" | "python3" | "python" | "ruby" | "perl" => vec!["#FABRIK"],
+            "node" | "deno" | "bun" | "ts-node" => vec!["//FABRIK"],
+            _ => {
+                return Err(anyhow!(
                 "Unsupported runtime: {}. Supported: bash, sh, zsh, python3, ruby, node, deno, bun",
                 runtime
             ))
+            }
         }
     };
 
@@ -86,8 +91,12 @@ pub fn parse_annotations(script_path: &Path) -> Result<ScriptAnnotations> {
     let mut kdl_lines = Vec::new();
     for line in lines {
         let trimmed = line.trim();
-        if let Some(directive) = trimmed.strip_prefix(prefix) {
-            kdl_lines.push(directive.trim());
+        // Try all prefixes
+        for prefix in &prefixes {
+            if let Some(directive) = trimmed.strip_prefix(prefix) {
+                kdl_lines.push(directive.trim());
+                break; // Found a match, move to next line
+            }
         }
     }
 
@@ -109,12 +118,21 @@ pub fn parse_annotations(script_path: &Path) -> Result<ScriptAnnotations> {
             .with_context(|| format!("Failed to parse directive: {}", node.name()))?;
     }
 
+    // Validate that runtime is set (from shebang, directive, or will be from CLI)
+    if annotations.runtime.is_empty() {
+        return Err(anyhow!(
+            "Runtime not specified. Add runtime to shebang (#!/usr/bin/env -S fabrik run bash), \
+             use #FABRIK runtime directive, or pass as CLI arg (fabrik run bash script.sh)"
+        ));
+    }
+
     Ok(annotations)
 }
 
 /// Parse shebang line to extract runtime and args
 ///
 /// Example: #!/usr/bin/env -S fabrik run bash -x
+/// Or: #!/usr/bin/env -S fabrik run  (runtime comes from #FABRIK runtime directive)
 fn parse_shebang(line: &str) -> Result<(String, Vec<String>)> {
     if !line.starts_with("#!") {
         return Err(anyhow!("Missing shebang (must start with #!)"));
@@ -126,25 +144,26 @@ fn parse_shebang(line: &str) -> Result<(String, Vec<String>)> {
     let fabrik_idx = parts
         .iter()
         .position(|&p| p == "fabrik")
-        .ok_or_else(|| anyhow!("Shebang must contain 'fabrik run <runtime>'"))?;
+        .ok_or_else(|| anyhow!("Shebang must contain 'fabrik run'"))?;
 
     let run_idx = fabrik_idx + 1;
     if parts.get(run_idx) != Some(&"run") {
-        return Err(anyhow!("Shebang must be 'fabrik run <runtime>'"));
+        return Err(anyhow!("Shebang must be 'fabrik run [runtime]'"));
     }
 
     let runtime_idx = run_idx + 1;
-    let runtime = parts
-        .get(runtime_idx)
-        .ok_or_else(|| anyhow!("Missing runtime in shebang (e.g., bash, node, python3)"))?
-        .to_string();
 
-    let runtime_args = parts[(runtime_idx + 1)..]
-        .iter()
-        .map(|s| s.to_string())
-        .collect();
-
-    Ok((runtime, runtime_args))
+    // Runtime is optional - can be specified via #FABRIK runtime directive
+    if let Some(runtime) = parts.get(runtime_idx) {
+        let runtime_args = parts[(runtime_idx + 1)..]
+            .iter()
+            .map(|s| s.to_string())
+            .collect();
+        Ok((runtime.to_string(), runtime_args))
+    } else {
+        // No runtime in shebang - will come from directive or CLI arg
+        Ok((String::new(), Vec::new()))
+    }
 }
 
 /// Parse a single KDL node into annotations
@@ -211,12 +230,29 @@ fn parse_kdl_node(annotations: &mut ScriptAnnotations, node: &KdlNode) -> Result
         }
 
         "runtime" => {
+            // Get runtime name if specified as positional argument
+            if let Some(runtime_name) = get_positional_string(node, 0) {
+                annotations.runtime = runtime_name;
+            }
+
             if let Some(include) = node
                 .get("include-version")
                 .and_then(|e| e.value().as_bool())
             {
                 annotations.runtime_version = include;
             }
+        }
+
+        "runtime-arg" => {
+            // Add runtime argument
+            if let Some(arg) = get_positional_string(node, 0) {
+                annotations.runtime_args.push(arg);
+            }
+        }
+
+        "runtime-version" => {
+            // Shorthand for including runtime version in cache key
+            annotations.runtime_version = true;
         }
 
         "exec" => {
