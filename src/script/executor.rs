@@ -2,6 +2,7 @@
 ///
 /// Handles spawning the runtime, capturing output, monitoring timeout, and handling exit codes.
 use anyhow::{Context, Result};
+use std::io::IsTerminal;
 use std::path::Path;
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -94,9 +95,18 @@ impl ScriptExecutor {
             }
         }
 
-        // Capture output
-        cmd.stdout(Stdio::piped());
-        cmd.stderr(Stdio::piped());
+        // Check if stdout/stderr are TTYs - if so, inherit them for colors
+        let use_tty = std::io::stdout().is_terminal() && std::io::stderr().is_terminal();
+
+        if use_tty {
+            // Inherit stdout/stderr to preserve colors and interactivity
+            cmd.stdout(Stdio::inherit());
+            cmd.stderr(Stdio::inherit());
+        } else {
+            // Capture output when piped (e.g., in tests or when output is redirected)
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
+        }
 
         if self.verbose {
             eprintln!("[fabrik] Command: {:?}", cmd);
@@ -129,12 +139,19 @@ impl ScriptExecutor {
             ));
         }
 
-        // Capture output
-        let output = child
-            .wait_with_output()
-            .context("Failed to capture output")?;
-
         let exit_code = status.code().unwrap_or(-1);
+
+        // Capture output only if we piped it
+        let (stdout, stderr) = if use_tty {
+            // Output was inherited, nothing to capture
+            (Vec::new(), Vec::new())
+        } else {
+            // Output was piped, capture it
+            let output = child
+                .wait_with_output()
+                .context("Failed to capture output")?;
+            (output.stdout, output.stderr)
+        };
 
         if self.verbose {
             eprintln!(
@@ -147,8 +164,8 @@ impl ScriptExecutor {
         Ok(ExecutionResult {
             exit_code,
             duration,
-            stdout: output.stdout,
-            stderr: output.stderr,
+            stdout,
+            stderr,
         })
     }
 
