@@ -53,14 +53,23 @@ fn test_turborepo_cache_with_daemon() {
         let output = Command::new("npm")
             .arg("install")
             .current_dir(&fixture_path)
-            .output()
-            .expect("Failed to execute npm install");
+            .output();
 
-        if !output.status.success() {
-            println!("⚠️  npm install failed:");
-            println!("{}", String::from_utf8_lossy(&output.stderr));
-            println!("Skipping TurboRepo test");
-            return;
+        match output {
+            Ok(output) if output.status.success() => {
+                // npm install succeeded
+            }
+            Ok(output) => {
+                println!("⚠️  npm install failed:");
+                println!("{}", String::from_utf8_lossy(&output.stderr));
+                println!("Skipping TurboRepo test");
+                return;
+            }
+            Err(e) => {
+                println!("⚠️  npm not found or failed to execute: {}", e);
+                println!("Skipping TurboRepo test (npm not available)");
+                return;
+            }
         }
     }
 
