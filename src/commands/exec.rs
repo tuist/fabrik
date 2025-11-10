@@ -13,7 +13,7 @@ use crate::bazel::{
 };
 use crate::cli::ExecArgs;
 use crate::config::FabrikConfig;
-use crate::config_discovery::populate_turbo_env_vars;
+use crate::config_discovery::populate_build_tool_env_vars;
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
 use crate::storage;
@@ -95,9 +95,13 @@ pub async fn run(args: ExecArgs) -> Result<()> {
             format!("grpc://127.0.0.1:{}", grpc_port),
         );
 
-        // TurboRepo-specific env vars
-        let turbo_vars = populate_turbo_env_vars(format!("http://127.0.0.1:{}", http_port));
-        for (key, value) in turbo_vars {
+        // Build tool environment variables (Gradle, Nx, Xcode, TurboRepo, etc.)
+        let build_tool_vars = populate_build_tool_env_vars(
+            format!("http://127.0.0.1:{}", http_port),
+            format!("grpc://127.0.0.1:{}", grpc_port),
+            None, // exec mode doesn't use unix sockets
+        );
+        for (key, value) in build_tool_vars {
             if key == "TURBO_TEAM" || key == "TURBO_TOKEN" {
                 info!("Auto-generated {} for local development", key);
             }

@@ -182,6 +182,7 @@ impl DaemonState {
 
         match shell {
             "fish" => {
+                // Fabrik-specific variables
                 exports.push(format!("set -gx FABRIK_HTTP_URL {}", http_url));
                 exports.push(format!("set -gx FABRIK_GRPC_URL {}", grpc_url));
                 exports.push(format!("set -gx FABRIK_CONFIG_HASH {}", self.config_hash));
@@ -192,25 +193,16 @@ impl DaemonState {
                     exports.push(format!("set -gx FABRIK_UNIX_SOCKET {}", socket.display()));
                 }
 
-                // Convenience variables for build tools
-                exports.push(format!("set -gx GRADLE_BUILD_CACHE_URL {}", http_url));
-                exports.push(format!(
-                    "set -gx NX_SELF_HOSTED_REMOTE_CACHE_SERVER {}",
-                    http_url
+                // Build tool variables
+                exports.extend(generate_build_tool_shell_exports(
+                    &http_url,
+                    self.unix_socket.as_deref(),
+                    "fish",
                 ));
-
-                // Xcode uses Unix socket if available, otherwise HTTP
-                if let Some(ref socket) = self.unix_socket {
-                    exports.push(format!("set -gx XCODE_CACHE_SERVER {}", socket.display()));
-                } else {
-                    exports.push(format!("set -gx XCODE_CACHE_SERVER {}", http_url));
-                }
-
-                // TurboRepo
-                exports.extend(generate_turbo_shell_exports(&http_url, "fish"));
             }
             _ => {
                 // bash/zsh
+                // Fabrik-specific variables
                 exports.push(format!("export FABRIK_HTTP_URL={}", http_url));
                 exports.push(format!("export FABRIK_GRPC_URL={}", grpc_url));
                 exports.push(format!("export FABRIK_CONFIG_HASH={}", self.config_hash));
@@ -221,22 +213,12 @@ impl DaemonState {
                     exports.push(format!("export FABRIK_UNIX_SOCKET={}", socket.display()));
                 }
 
-                // Convenience variables for build tools
-                exports.push(format!("export GRADLE_BUILD_CACHE_URL={}", http_url));
-                exports.push(format!(
-                    "export NX_SELF_HOSTED_REMOTE_CACHE_SERVER={}",
-                    http_url
+                // Build tool variables
+                exports.extend(generate_build_tool_shell_exports(
+                    &http_url,
+                    self.unix_socket.as_deref(),
+                    "bash",
                 ));
-
-                // Xcode uses Unix socket if available, otherwise HTTP
-                if let Some(ref socket) = self.unix_socket {
-                    exports.push(format!("export XCODE_CACHE_SERVER={}", socket.display()));
-                } else {
-                    exports.push(format!("export XCODE_CACHE_SERVER={}", http_url));
-                }
-
-                // TurboRepo
-                exports.extend(generate_turbo_shell_exports(&http_url, "bash"));
             }
         }
 
@@ -262,20 +244,52 @@ pub fn default_turbo_team() -> &'static str {
     "fabrik-local"
 }
 
-/// Populate TurboRepo environment variables
-/// Returns a HashMap with TURBO_API, TURBO_TEAM, and TURBO_TOKEN
-/// Only sets TURBO_TEAM and TURBO_TOKEN if they're not already in the environment
-pub fn populate_turbo_env_vars(http_url: String) -> std::collections::HashMap<String, String> {
+/// Populate all build tool environment variables
+/// Returns a HashMap with environment variables for Gradle, Nx, Xcode, TurboRepo, etc.
+pub fn populate_build_tool_env_vars(
+    http_url: String,
+    grpc_url: String,
+    unix_socket: Option<std::path::PathBuf>,
+) -> std::collections::HashMap<String, String> {
     let mut env_vars = std::collections::HashMap::new();
 
-    // Always set TURBO_API
-    env_vars.insert("TURBO_API".to_string(), http_url);
+    // Generic Fabrik URLs
+    env_vars.insert("FABRIK_HTTP_URL".to_string(), http_url.clone());
+    env_vars.insert("FABRIK_GRPC_URL".to_string(), grpc_url);
 
+    // Unix socket for Xcode (if available)
+    if let Some(ref socket) = unix_socket {
+        env_vars.insert(
+            "FABRIK_UNIX_SOCKET".to_string(),
+            socket.display().to_string(),
+        );
+    }
+
+    // Gradle
+    env_vars.insert("GRADLE_BUILD_CACHE_URL".to_string(), http_url.clone());
+
+    // Nx
+    env_vars.insert(
+        "NX_SELF_HOSTED_REMOTE_CACHE_SERVER".to_string(),
+        http_url.clone(),
+    );
+
+    // Xcode (prefer Unix socket if available)
+    if let Some(socket) = unix_socket {
+        env_vars.insert(
+            "XCODE_CACHE_SERVER".to_string(),
+            socket.display().to_string(),
+        );
+    } else {
+        env_vars.insert("XCODE_CACHE_SERVER".to_string(), http_url.clone());
+    }
+
+    // TurboRepo
+    env_vars.insert("TURBO_API".to_string(), http_url);
     // Auto-generate TURBO_TEAM if not already set
     if std::env::var("TURBO_TEAM").is_err() {
         env_vars.insert("TURBO_TEAM".to_string(), default_turbo_team().to_string());
     }
-
     // Auto-generate TURBO_TOKEN if not already set
     if std::env::var("TURBO_TOKEN").is_err() {
         env_vars.insert("TURBO_TOKEN".to_string(), generate_turbo_token());
@@ -284,21 +298,39 @@ pub fn populate_turbo_env_vars(http_url: String) -> std::collections::HashMap<St
     env_vars
 }
 
-/// Generate shell export statements for TurboRepo environment variables
+/// Generate shell export statements for all build tool environment variables
 /// For use in shell activation hooks
-fn generate_turbo_shell_exports(http_url: &str, shell: &str) -> Vec<String> {
+fn generate_build_tool_shell_exports(
+    http_url: &str,
+    unix_socket: Option<&std::path::Path>,
+    shell: &str,
+) -> Vec<String> {
     let mut exports = Vec::new();
 
     match shell {
         "fish" => {
-            // Always export TURBO_API
+            // Gradle
+            exports.push(format!("set -gx GRADLE_BUILD_CACHE_URL {}", http_url));
+
+            // Nx
+            exports.push(format!(
+                "set -gx NX_SELF_HOSTED_REMOTE_CACHE_SERVER {}",
+                http_url
+            ));
+
+            // Xcode (prefer Unix socket if available)
+            if let Some(socket) = unix_socket {
+                exports.push(format!("set -gx XCODE_CACHE_SERVER {}", socket.display()));
+            } else {
+                exports.push(format!("set -gx XCODE_CACHE_SERVER {}", http_url));
+            }
+
+            // TurboRepo
             exports.push(format!("set -gx TURBO_API {}", http_url));
-            // Conditionally export TURBO_TEAM
             exports.push(format!(
                 "test -z \"$TURBO_TEAM\"; and set -gx TURBO_TEAM {}",
                 default_turbo_team()
             ));
-            // Conditionally export TURBO_TOKEN (generate at shell runtime)
             exports.push(format!(
                 "test -z \"$TURBO_TOKEN\"; and set -gx TURBO_TOKEN {}",
                 generate_turbo_token()
@@ -306,14 +338,28 @@ fn generate_turbo_shell_exports(http_url: &str, shell: &str) -> Vec<String> {
         }
         _ => {
             // bash/zsh
-            // Always export TURBO_API
+            // Gradle
+            exports.push(format!("export GRADLE_BUILD_CACHE_URL={}", http_url));
+
+            // Nx
+            exports.push(format!(
+                "export NX_SELF_HOSTED_REMOTE_CACHE_SERVER={}",
+                http_url
+            ));
+
+            // Xcode (prefer Unix socket if available)
+            if let Some(socket) = unix_socket {
+                exports.push(format!("export XCODE_CACHE_SERVER={}", socket.display()));
+            } else {
+                exports.push(format!("export XCODE_CACHE_SERVER={}", http_url));
+            }
+
+            // TurboRepo
             exports.push(format!("export TURBO_API={}", http_url));
-            // Conditionally export TURBO_TEAM
             exports.push(format!(
                 "[ -z \"$TURBO_TEAM\" ] && export TURBO_TEAM={}",
                 default_turbo_team()
             ));
-            // Conditionally export TURBO_TOKEN (generate at shell runtime)
             exports.push(format!(
                 "[ -z \"$TURBO_TOKEN\" ] && export TURBO_TOKEN={}",
                 generate_turbo_token()
