@@ -190,6 +190,8 @@ impl ScriptExecutor {
         child: &mut std::process::Child,
         timeout: Duration,
     ) -> Result<(std::process::ExitStatus, bool)> {
+        use std::os::windows::io::AsRawHandle;
+        use std::os::windows::process::ExitStatusExt;
         use std::thread;
         use winapi::um::processthreadsapi::TerminateProcess;
         use winapi::um::winnt::HANDLE;
