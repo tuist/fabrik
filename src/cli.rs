@@ -66,6 +66,12 @@ pub enum Commands {
 
     /// Initialize Fabrik configuration for a project
     Init(InitArgs),
+
+    /// Run script with caching
+    Run(RunArgs),
+
+    /// Manage script cache
+    Cache(CacheArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -417,4 +423,85 @@ pub struct InitArgs {
     /// Upstream cache URL
     #[arg(long)]
     pub upstream_url: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct RunArgs {
+    /// Script file to execute
+    pub script: String,
+
+    /// Arguments to pass to the script (after --)
+    #[arg(last = true)]
+    pub script_args: Vec<String>,
+
+    /// Force execution without checking cache
+    #[arg(long)]
+    pub no_cache: bool,
+
+    /// Show what would happen without executing
+    #[arg(long)]
+    pub dry_run: bool,
+
+    /// Verbose output
+    #[arg(short, long)]
+    pub verbose: bool,
+
+    /// Fail if cache miss (for CI validation)
+    #[arg(long)]
+    pub cache_only: bool,
+
+    /// Remove cached outputs before running
+    #[arg(long)]
+    pub clean: bool,
+
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+
+    /// Local cache directory
+    #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
+    pub config_cache_dir: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct CacheArgs {
+    #[command(subcommand)]
+    pub command: CacheCommands,
+
+    /// Local cache directory
+    #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
+    pub config_cache_dir: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheCommands {
+    /// Check cache status for a script
+    Status {
+        /// Script file path
+        script: String,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Clean cache for a script
+    Clean {
+        /// Script file path (omit to clean all)
+        script: Option<String>,
+
+        /// Clean all script caches
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// List all cached scripts
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show cache statistics
+    Stats,
 }

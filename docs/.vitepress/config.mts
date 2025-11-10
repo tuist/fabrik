@@ -51,6 +51,14 @@ export default defineConfig({
         ],
       },
       {
+        text: "Script Caching",
+        items: [
+          { text: "Introduction", link: "/script-caching/" },
+          { text: "Configuration Reference", link: "/script-caching/reference" },
+          { text: "Examples", link: "/script-caching/examples" },
+        ],
+      },
+      {
         text: "Reference",
         items: [
           { text: "CLI Commands", link: "/reference/cli" },
