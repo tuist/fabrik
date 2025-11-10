@@ -207,17 +207,7 @@ impl DaemonState {
                 }
 
                 // TurboRepo
-                exports.push(format!("set -gx TURBO_API {}", http_url));
-                // Auto-generate TURBO_TEAM if not set
-                exports.push(format!(
-                    "test -z \"$TURBO_TEAM\"; and set -gx TURBO_TEAM {}",
-                    default_turbo_team()
-                ));
-                // Auto-generate TURBO_TOKEN if not set
-                exports.push(format!(
-                    "test -z \"$TURBO_TOKEN\"; and set -gx TURBO_TOKEN {}",
-                    generate_turbo_token()
-                ));
+                exports.extend(generate_turbo_shell_exports(&http_url, "fish"));
             }
             _ => {
                 // bash/zsh
@@ -246,17 +236,7 @@ impl DaemonState {
                 }
 
                 // TurboRepo
-                exports.push(format!("export TURBO_API={}", http_url));
-                // Auto-generate TURBO_TEAM if not already set
-                exports.push(format!(
-                    "[ -z \"$TURBO_TEAM\" ] && export TURBO_TEAM={}",
-                    default_turbo_team()
-                ));
-                // Auto-generate TURBO_TOKEN if not already set
-                exports.push(format!(
-                    "[ -z \"$TURBO_TOKEN\" ] && export TURBO_TOKEN={}",
-                    generate_turbo_token()
-                ));
+                exports.extend(generate_turbo_shell_exports(&http_url, "bash"));
             }
         }
 
@@ -280,6 +260,68 @@ pub fn generate_turbo_token() -> String {
 /// Default team name for TurboRepo local development
 pub fn default_turbo_team() -> &'static str {
     "fabrik-local"
+}
+
+/// Populate TurboRepo environment variables
+/// Returns a HashMap with TURBO_API, TURBO_TEAM, and TURBO_TOKEN
+/// Only sets TURBO_TEAM and TURBO_TOKEN if they're not already in the environment
+pub fn populate_turbo_env_vars(http_url: String) -> std::collections::HashMap<String, String> {
+    let mut env_vars = std::collections::HashMap::new();
+
+    // Always set TURBO_API
+    env_vars.insert("TURBO_API".to_string(), http_url);
+
+    // Auto-generate TURBO_TEAM if not already set
+    if std::env::var("TURBO_TEAM").is_err() {
+        env_vars.insert("TURBO_TEAM".to_string(), default_turbo_team().to_string());
+    }
+
+    // Auto-generate TURBO_TOKEN if not already set
+    if std::env::var("TURBO_TOKEN").is_err() {
+        env_vars.insert("TURBO_TOKEN".to_string(), generate_turbo_token());
+    }
+
+    env_vars
+}
+
+/// Generate shell export statements for TurboRepo environment variables
+/// For use in shell activation hooks
+fn generate_turbo_shell_exports(http_url: &str, shell: &str) -> Vec<String> {
+    let mut exports = Vec::new();
+
+    match shell {
+        "fish" => {
+            // Always export TURBO_API
+            exports.push(format!("set -gx TURBO_API {}", http_url));
+            // Conditionally export TURBO_TEAM
+            exports.push(format!(
+                "test -z \"$TURBO_TEAM\"; and set -gx TURBO_TEAM {}",
+                default_turbo_team()
+            ));
+            // Conditionally export TURBO_TOKEN (generate at shell runtime)
+            exports.push(format!(
+                "test -z \"$TURBO_TOKEN\"; and set -gx TURBO_TOKEN {}",
+                generate_turbo_token()
+            ));
+        }
+        _ => {
+            // bash/zsh
+            // Always export TURBO_API
+            exports.push(format!("export TURBO_API={}", http_url));
+            // Conditionally export TURBO_TEAM
+            exports.push(format!(
+                "[ -z \"$TURBO_TEAM\" ] && export TURBO_TEAM={}",
+                default_turbo_team()
+            ));
+            // Conditionally export TURBO_TOKEN (generate at shell runtime)
+            exports.push(format!(
+                "[ -z \"$TURBO_TOKEN\" ] && export TURBO_TOKEN={}",
+                generate_turbo_token()
+            ));
+        }
+    }
+
+    exports
 }
 
 /// Check if a process is running
