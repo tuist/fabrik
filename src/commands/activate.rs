@@ -184,6 +184,9 @@ fn output_unset_env_vars(shell: &str) {
             println!("set -e GRADLE_BUILD_CACHE_URL 2>/dev/null");
             println!("set -e NX_SELF_HOSTED_REMOTE_CACHE_SERVER 2>/dev/null");
             println!("set -e XCODE_CACHE_SERVER 2>/dev/null");
+            println!("set -e TURBO_API 2>/dev/null");
+            println!("set -e TURBO_TEAM 2>/dev/null");
+            println!("set -e TURBO_TOKEN 2>/dev/null");
         }
         _ => {
             println!("unset FABRIK_HTTP_URL");
@@ -194,6 +197,9 @@ fn output_unset_env_vars(shell: &str) {
             println!("unset GRADLE_BUILD_CACHE_URL");
             println!("unset NX_SELF_HOSTED_REMOTE_CACHE_SERVER");
             println!("unset XCODE_CACHE_SERVER");
+            println!("unset TURBO_API");
+            println!("unset TURBO_TEAM");
+            println!("unset TURBO_TOKEN");
         }
     }
 }

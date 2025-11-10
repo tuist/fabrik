@@ -205,6 +205,18 @@ impl DaemonState {
                 } else {
                     exports.push(format!("set -gx XCODE_CACHE_SERVER {}", http_url));
                 }
+
+                // TurboRepo
+                exports.push(format!("set -gx TURBO_API {}", http_url));
+                // Auto-generate TURBO_TEAM if not set
+                exports.push(
+                    "test -z \"$TURBO_TEAM\"; and set -gx TURBO_TEAM fabrik-local".to_string(),
+                );
+                // Auto-generate TURBO_TOKEN if not set
+                exports.push(format!(
+                    "test -z \"$TURBO_TOKEN\"; and set -gx TURBO_TOKEN fabrik-local-{}",
+                    self.pid
+                ));
             }
             _ => {
                 // bash/zsh
@@ -231,6 +243,17 @@ impl DaemonState {
                 } else {
                     exports.push(format!("export XCODE_CACHE_SERVER={}", http_url));
                 }
+
+                // TurboRepo
+                exports.push(format!("export TURBO_API={}", http_url));
+                // Auto-generate TURBO_TEAM if not already set
+                exports
+                    .push("[ -z \"$TURBO_TEAM\" ] && export TURBO_TEAM=fabrik-local".to_string());
+                // Auto-generate TURBO_TOKEN if not already set
+                exports.push(format!(
+                    "[ -z \"$TURBO_TOKEN\" ] && export TURBO_TOKEN=fabrik-local-{}",
+                    self.pid
+                ));
             }
         }
 
