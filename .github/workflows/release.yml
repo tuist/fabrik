@@ -174,15 +174,17 @@ jobs:
         run: |
           cargo install cross --git https://github.com/cross-rs/cross
 
-      - name: Build binary (Linux cross-compile)
+      - name: Build binary and libraries (Linux cross-compile)
         if: runner.os == 'Linux'
         run: |
           cross build --release --target ${{ matrix.target }}
+          cross build --release --lib --target ${{ matrix.target }}
 
-      - name: Build binary (macOS/Windows)
+      - name: Build binary and libraries (macOS/Windows)
         if: runner.os != 'Linux'
         run: |
           cargo build --release --target ${{ matrix.target }}
+          cargo build --release --lib --target ${{ matrix.target }}
 
       - name: Create archives
         shell: bash
@@ -193,36 +195,72 @@ jobs:
 
           cd target/$TARGET/release
 
-          # Determine binary name
+          # Determine binary and library names based on platform
           if [[ "$TARGET" == *"windows"* ]]; then
             BINARY="fabrik.exe"
+            SHARED_LIB="fabrik.dll"
+            STATIC_LIB="fabrik.lib"
+          elif [[ "$TARGET" == *"darwin"* ]]; then
+            BINARY="fabrik"
+            SHARED_LIB="libfabrik.dylib"
+            STATIC_LIB="libfabrik.a"
           else
             BINARY="fabrik"
+            SHARED_LIB="libfabrik.so"
+            STATIC_LIB="libfabrik.a"
           fi
 
           # Create a staging directory
           mkdir -p ../../../dist
           DIST_DIR="../../../dist"
 
+          # Create temporary directory for archive contents
+          TEMP_DIR=$(mktemp -d)
+          mkdir -p "$TEMP_DIR/bin" "$TEMP_DIR/lib" "$TEMP_DIR/include"
+
+          # Copy files
+          cp "$BINARY" "$TEMP_DIR/bin/"
+          [[ -f "$SHARED_LIB" ]] && cp "$SHARED_LIB" "$TEMP_DIR/lib/"
+          [[ -f "$STATIC_LIB" ]] && cp "$STATIC_LIB" "$TEMP_DIR/lib/"
+          cp ../../../include/fabrik.h "$TEMP_DIR/include/"
+
+          # Create README for the archive
+          cat > "$TEMP_DIR/README.txt" << 'EOF'
+          Fabrik - Multi-layer build cache infrastructure
+
+          This archive contains:
+          - bin/fabrik(.exe): CLI tool
+          - lib/libfabrik.*: C library (shared and/or static)
+          - include/fabrik.h: C header file
+
+          For documentation, visit: https://github.com/tuist/fabrik
+
+          C API Documentation: https://github.com/tuist/fabrik/blob/main/docs/c-api.md
+          EOF
+
           # Create archives based on format
+          cd "$TEMP_DIR"
           for FORMAT in $ARCHIVE_FORMATS; do
             ARCHIVE_NAME="fabrik-${VERSION}-${TARGET}"
 
             case $FORMAT in
               tar.gz)
-                tar czf "${DIST_DIR}/${ARCHIVE_NAME}.tar.gz" "$BINARY"
+                tar czf "${DIST_DIR}/${ARCHIVE_NAME}.tar.gz" *
                 ;;
               tar.xz)
-                tar cJf "${DIST_DIR}/${ARCHIVE_NAME}.tar.xz" "$BINARY"
+                tar cJf "${DIST_DIR}/${ARCHIVE_NAME}.tar.xz" *
                 ;;
               tar.zst)
-                tar --zstd -cf "${DIST_DIR}/${ARCHIVE_NAME}.tar.zst" "$BINARY"
+                tar --zstd -cf "${DIST_DIR}/${ARCHIVE_NAME}.tar.zst" *
                 ;;
               zip)
-                7z a "${DIST_DIR}/${ARCHIVE_NAME}.zip" "$BINARY"
+                7z a "${DIST_DIR}/${ARCHIVE_NAME}.zip" *
                 ;;
             esac
           done
+
+          # Cleanup
+          rm -rf "$TEMP_DIR"
 
       - name: Generate checksums
         shell: bash

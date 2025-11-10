@@ -2,6 +2,7 @@
 // This allows integration tests and external code to use Fabrik's modules
 
 pub mod bazel;
+pub mod capi; // C API (FFI) for external integrations
 pub mod cli_utils;
 pub mod config_discovery;
 pub mod logging;

@@ -24,5 +24,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &["proto"],
         )?;
 
+    // Generate C header file using cbindgen
+    let crate_dir = std::env::var("CARGO_MANIFEST_DIR")?;
+    let output_file = std::path::Path::new(&crate_dir)
+        .join("include")
+        .join("fabrik.h");
+
+    // Create include directory if it doesn't exist
+    if let Some(parent) = output_file.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    cbindgen::Builder::new()
+        .with_crate(&crate_dir)
+        .with_config(cbindgen::Config::from_file("cbindgen.toml")?)
+        .generate()
+        .map_err(|e| format!("Unable to generate bindings: {:?}", e))?
+        .write_to_file(&output_file);
+
+    println!("cargo:rerun-if-changed=src/capi/mod.rs");
+    println!("cargo:rerun-if-changed=cbindgen.toml");
+
     Ok(())
 }

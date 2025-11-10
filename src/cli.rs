@@ -525,4 +525,74 @@ pub enum CacheCommands {
 
     /// Show cache statistics
     Stats,
+
+    /// Get an artifact from the cache by hash
+    Get {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Output file path
+        #[arg(short, long)]
+        output: String,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Put an artifact into the cache
+    Put {
+        /// Input file path
+        input: String,
+
+        /// Content hash (SHA256) - if not provided, will be computed
+        #[arg(long)]
+        hash: Option<String>,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Check if an artifact exists in the cache
+    Exists {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Delete an artifact from the cache
+    Delete {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Force deletion without confirmation
+        #[arg(short, long)]
+        force: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show information about a cached artifact
+    Info {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
 }
