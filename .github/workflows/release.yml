@@ -212,7 +212,7 @@ jobs:
 
           # Create a staging directory
           mkdir -p ../../../dist
-          DIST_DIR="../../../dist"
+          DIST_DIR="$(pwd)/../../../dist"
 
           # Create temporary directory for archive contents
           TEMP_DIR=$(mktemp -d)
