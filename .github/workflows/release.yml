@@ -323,33 +323,9 @@ jobs:
           build-args: |
             VERSION=${{ needs.check-release.outputs.new_version }}
 
-  npm-publish:
-    name: Publish to NPM
-    needs: [check-release, build]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: jdx/mise-action@v2
-        with:
-          experimental: true
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Configure NPM authentication
-        run: |
-          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_TOKEN }}" > ~/.npmrc
-
-      - name: Publish to NPM
-        run: |
-          cd packages/metro
-          npm version ${{ needs.check-release.outputs.new_version }} --no-git-tag-version
-          npm publish --access public
-
   create-release:
     name: Create GitHub Release
-    needs: [check-release, build, docker, npm-publish]
+    needs: [check-release, build, docker]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
