@@ -15,7 +15,7 @@ use tempfile::TempDir;
 /// Skip test if Bazel is not installed
 macro_rules! skip_if_no_bazel {
     () => {
-        if which::which("bazel").is_err() {
+        if ::which::which("bazel").is_err() {
             eprintln!("Bazel not installed - skipping test");
             return;
         }
