@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{% if title %}{{ title }} | {% endif %}Fabrik - Multi-Layer Build Cache Infrastructure</title>
+  <meta name="description" content="{{ description or 'Fabrik is the foundational infrastructure for build caching, designed to be deployed and managed as a service by Tuist.' }}">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <nav class="navbar">
+    <div class="container">
+      <div class="nav-content">
+        <a href="/" class="logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.9"/>
+            <rect x="3" y="13" width="7" height="7" rx="1" fill="currentColor" opacity="0.7"/>
+            <rect x="13" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.5"/>
+            <rect x="13" y="13" width="7" height="7" rx="1" fill="currentColor" opacity="0.3"/>
+          </svg>
+          <span>Fabrik</span>
+        </a>
+        <div class="nav-links">
+          <a href="/#features">Features</a>
+          <a href="/docs">Documentation</a>
+          <a href="/architecture">Architecture</a>
+          <a href="https://github.com/tuist/fabrik" target="_blank">GitHub</a>
+        </div>
+        <div class="nav-cta">
+          <a href="https://tuist.io" class="btn btn-primary">Get Started</a>
+        </div>
+      </div>
+    </div>
+  </nav>
+
+  <main>
+    {{ content | safe }}
+  </main>
+
+  <footer class="footer">
+    <div class="container">
+      <div class="footer-content">
+        <div class="footer-section">
+          <div class="logo">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect x="3" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.9"/>
+              <rect x="3" y="13" width="7" height="7" rx="1" fill="currentColor" opacity="0.7"/>
+              <rect x="13" y="3" width="7" height="7" rx="1" fill="currentColor" opacity="0.5"/>
+              <rect x="13" y="13" width="7" height="7" rx="1" fill="currentColor" opacity="0.3"/>
+            </svg>
+            <span>Fabrik</span>
+          </div>
+          <p class="footer-tagline">Multi-layer build cache infrastructure</p>
+        </div>
+        <div class="footer-links">
+          <div class="footer-column">
+            <h4>Product</h4>
+            <a href="/#features">Features</a>
+            <a href="/architecture">Architecture</a>
+            <a href="/docs">Documentation</a>
+          </div>
+          <div class="footer-column">
+            <h4>Resources</h4>
+            <a href="https://github.com/tuist/fabrik">GitHub</a>
+            <a href="https://tuist.io">Tuist</a>
+            <a href="https://github.com/tuist/fabrik/issues">Issues</a>
+          </div>
+          <div class="footer-column">
+            <h4>Company</h4>
+            <a href="https://tuist.io/about">About</a>
+            <a href="https://tuist.io/blog">Blog</a>
+            <a href="https://tuist.io/contact">Contact</a>
+          </div>
+        </div>
+      </div>
+      <div class="footer-bottom">
+        <p>&copy; 2025 Tuist. Built with Fabrik.</p>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/js/main.js"></script>
+</body>
+</html>

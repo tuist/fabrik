@@ -12,24 +12,13 @@ use std::path::PathBuf;
 use std::process::Command;
 use tempfile::TempDir;
 
-/// Skip test if Bazel is not installed
-macro_rules! skip_if_no_bazel {
-    () => {
-        if ::which::which("bazel").is_err() {
-            eprintln!("Bazel not installed - skipping test");
-            return;
-        }
-    };
-}
-
 #[test]
+#[ignore = "Requires Bazel to be installed - run with: cargo test --test bazel_integration_test -- --ignored"]
 #[cfg_attr(
     target_os = "windows",
     ignore = "Bazel has directory creation issues on Windows CI"
 )]
 fn test_bazel_cache_with_daemon() {
-    skip_if_no_bazel!();
-
     // Start a test daemon
     let daemon = TestDaemon::start();
 
@@ -99,10 +88,9 @@ fn test_bazel_cache_with_daemon() {
 }
 
 #[test]
+#[ignore = "Requires Bazel to be installed - run with: cargo test --test bazel_integration_test -- --ignored"]
 #[cfg_attr(target_os = "windows", ignore = "Bazel not well supported on Windows")]
 fn test_bazel_version_with_daemon() {
-    skip_if_no_bazel!();
-
     let _daemon = TestDaemon::start();
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
@@ -132,10 +120,9 @@ fn test_bazel_version_with_daemon() {
 }
 
 #[test]
+#[ignore = "Requires Bazel to be installed - run with: cargo test --test bazel_integration_test -- --ignored"]
 #[cfg_attr(target_os = "windows", ignore = "Bazel not well supported on Windows")]
 fn test_bazel_help_with_daemon() {
-    skip_if_no_bazel!();
-
     let _daemon = TestDaemon::start();
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))

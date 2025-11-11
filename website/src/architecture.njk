@@ -1,0 +1,223 @@
+---
+layout: base.njk
+title: Architecture
+description: Learn about Fabrik's multi-layer caching architecture and design principles.
+---
+
+<section class="hero" style="padding-bottom: var(--spacing-2xl);">
+  <div class="container">
+    <div class="hero-content">
+      <span class="section-badge">Architecture</span>
+      <h1 style="font-size: 3rem; margin-bottom: var(--spacing-md);">
+        The narrow waist of development environments
+      </h1>
+      <p class="hero-description">
+        Fabrik provides a universal orchestration layer between your workflows and infrastructure—a minimal interface that any tool can plug into.
+      </p>
+    </div>
+  </div>
+</section>
+
+<section class="features" style="padding-top: 0;">
+  <div class="container">
+    <div class="section-header">
+      <h2 class="section-title">Design Philosophy</h2>
+      <p class="section-description">
+        Think of Fabrik as the Kubernetes of development environments—universal, vendor-agnostic, and environment-agnostic.
+      </p>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+            <path d="M2 17l10 5 10-5"></path>
+            <path d="M2 12l10 5 10-5"></path>
+          </svg>
+        </div>
+        <h3 class="feature-title">Three-Layer Caching</h3>
+        <p class="feature-description">
+          From local cache to regional servers to permanent storage, each layer transparently falls back to the next on cache miss.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="16 18 22 12 16 6"></polyline>
+            <polyline points="8 6 2 12 8 18"></polyline>
+          </svg>
+        </div>
+        <h3 class="feature-title">Protocol Architecture</h3>
+        <p class="feature-description">
+          Build tool adapters (Gradle, Bazel, Nx) at Layer 1, unified Fabrik protocol for inter-layer communication.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="2" y1="12" x2="22" y2="12"></line>
+            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+          </svg>
+        </div>
+        <h3 class="feature-title">Multi-Tenancy</h3>
+        <p class="feature-description">
+          Each customer gets dedicated Fabrik instances at Layer 2, similar to Supabase's Postgres provisioning model.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+          </svg>
+        </div>
+        <h3 class="feature-title">Content Addressing</h3>
+        <p class="feature-description">
+          Artifacts identified by content hash (SHA256) for natural deduplication and cache efficiency.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+            <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+          </svg>
+        </div>
+        <h3 class="feature-title">JWT Authentication</h3>
+        <p class="feature-description">
+          Zero-latency token validation using RS256 asymmetric cryptography with local public key verification.
+        </p>
+      </div>
+
+      <div class="feature-card">
+        <div class="feature-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="12" x2="2" y2="12"></line>
+            <path d="M5.45 5.11L2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path>
+            <line x1="6" y1="16" x2="6.01" y2="16"></line>
+            <line x1="10" y1="16" x2="10.01" y2="16"></line>
+          </svg>
+        </div>
+        <h3 class="feature-title">RocksDB Storage</h3>
+        <p class="feature-description">
+          Embedded key-value store with built-in LFU/LRU eviction policies for efficient local caching.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="architecture">
+  <div class="container">
+    <div class="section-header">
+      <h2 class="section-title">Layer Details</h2>
+    </div>
+
+    <div class="architecture-diagram">
+      <div class="layers">
+        <div class="layer">
+          <div class="layer-title">Layer 1: Local Cache (CI Environments)</div>
+          <div class="layer-description">
+            <p style="margin-bottom: var(--spacing-sm);">
+              Fabrik instance bound to build process lifecycle. Deployed automatically in CI environments using mounted volumes.
+            </p>
+            <p style="color: var(--text-tertiary); font-size: 0.875rem;">
+              <strong>Storage:</strong> RocksDB with mounted volumes<br>
+              <strong>Eviction:</strong> LFU/LRU based on frequency<br>
+              <strong>Latency:</strong> &lt;5ms p99<br>
+              <strong>Lifecycle:</strong> Starts/stops with build process
+            </p>
+          </div>
+          <div class="layer-meta">
+            <span>Closest to build</span>
+            <span>Lowest latency</span>
+            <span>Ephemeral</span>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-title">Layer 2: Regional Cache (Customer-Dedicated)</div>
+          <div class="layer-description">
+            <p style="margin-bottom: var(--spacing-sm);">
+              Dedicated Fabrik instance deployed by Tuist for each customer/project, similar to Supabase's model.
+            </p>
+            <p style="color: var(--text-tertiary); font-size: 0.875rem;">
+              <strong>Storage:</strong> RocksDB with persistent volumes<br>
+              <strong>Deployment:</strong> Per-customer in preferred region<br>
+              <strong>Latency:</strong> ~20ms p99<br>
+              <strong>Sharing:</strong> Across team's machines
+            </p>
+          </div>
+          <div class="layer-meta">
+            <span>Multi-region</span>
+            <span>Dedicated per customer</span>
+            <span>Long-running</span>
+          </div>
+        </div>
+
+        <div class="layer">
+          <div class="layer-title">Layer 3: Tuist Server (Default/Fallback)</div>
+          <div class="layer-description">
+            <p style="margin-bottom: var(--spacing-sm);">
+              Always available, managed by Tuist. S3-backed permanent storage with no eviction policy.
+            </p>
+            <p style="color: var(--text-tertiary); font-size: 0.875rem;">
+              <strong>Storage:</strong> S3 with customer-specific prefixes<br>
+              <strong>Eviction:</strong> None (permanent retention)<br>
+              <strong>Sharing:</strong> Multiple customers per bucket (isolated by key prefix)<br>
+              <strong>Availability:</strong> Always available
+            </p>
+          </div>
+          <div class="layer-meta">
+            <span>S3-backed</span>
+            <span>Permanent</span>
+            <span>Multi-tenant</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="features">
+  <div class="container">
+    <div class="section-header">
+      <h2 class="section-title">Relationship to Tuist</h2>
+      <p class="section-description" style="font-size: 1.25rem; color: var(--text-primary); font-style: italic; margin-top: var(--spacing-md);">
+        "Postgres is to Supabase what Fabrik is to Tuist"
+      </p>
+    </div>
+
+    <div class="code-block" style="max-width: 800px; margin: var(--spacing-2xl) auto;">
+      <pre style="color: var(--text-primary);">Just as Supabase deploys and manages Postgres databases for customers,
+Tuist deploys and manages Fabrik instances to provide build cache as a service.
+
+Fabrik is tenant-agnostic infrastructure;
+Tuist handles all customer logic, billing, and orchestration.</pre>
+    </div>
+  </div>
+</section>
+
+<section class="cta-section">
+  <div class="container">
+    <div class="cta-content">
+      <h2>Want to learn more?</h2>
+      <p>
+        Read the full technical documentation to understand how Fabrik works under the hood.
+      </p>
+      <div class="hero-actions">
+        <a href="/docs" class="btn btn-primary btn-large">
+          Read the Docs
+        </a>
+        <a href="https://github.com/tuist/fabrik" class="btn btn-secondary btn-large">
+          View Source Code
+        </a>
+      </div>
+    </div>
+  </div>
+</section>

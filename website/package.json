@@ -1,0 +1,16 @@
+{
+  "name": "fabrik-website",
+  "version": "1.0.0",
+  "description": "Marketing website for Fabrik - Multi-Layer Build Cache Infrastructure",
+  "scripts": {
+    "start": "eleventy --serve",
+    "build": "eleventy",
+    "clean": "rm -rf _site"
+  },
+  "keywords": ["fabrik", "build-cache", "tuist"],
+  "author": "Tuist",
+  "license": "MIT",
+  "devDependencies": {
+    "@11ty/eleventy": "^2.0.1"
+  }
+}
