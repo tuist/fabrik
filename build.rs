@@ -35,9 +35,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::create_dir_all(parent)?;
     }
 
+    let cbindgen_config = std::path::Path::new(&crate_dir).join("cbindgen.toml");
     cbindgen::Builder::new()
         .with_crate(&crate_dir)
-        .with_config(cbindgen::Config::from_file("cbindgen.toml")?)
+        .with_config(cbindgen::Config::from_file(&cbindgen_config)?)
         .generate()
         .map_err(|e| format!("Unable to generate bindings: {:?}", e))?
         .write_to_file(&output_file);
