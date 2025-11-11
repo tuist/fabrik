@@ -13,6 +13,7 @@ use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
+#[ignore = "Requires Gradle to be installed - run with: cargo test --test gradle_acceptance -- --ignored"]
 fn test_gradle_cache_with_daemon() {
     // Start a test daemon
     let daemon = TestDaemon::start();
@@ -91,6 +92,7 @@ fn test_gradle_cache_with_daemon() {
 }
 
 #[test]
+#[ignore = "Requires Gradle to be installed - run with: cargo test --test gradle_acceptance -- --ignored"]
 fn test_gradle_version_with_daemon() {
     let daemon = TestDaemon::start();
 
@@ -120,6 +122,7 @@ fn test_gradle_version_with_daemon() {
 }
 
 #[test]
+#[ignore = "Requires Gradle to be installed - run with: cargo test --test gradle_acceptance -- --ignored"]
 fn test_gradle_tasks_with_daemon() {
     let daemon = TestDaemon::start();
 
