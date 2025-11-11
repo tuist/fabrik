@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.0] - 2025-11-11
+
+### 🐛 Bug Fixes
+
+- Pin home crate to 0.5.11 to avoid edition 2024 requirement ([6a14676](6a14676eca8af59e1eb611bad39097a666ecff33))
+- Use absolute path for DIST_DIR in release workflow ([50f24c2](50f24c2d0fdc19851bd660f2ce44d8f4474588b6))
+- Use absolute path for cbindgen.toml in Docker build ([79b5287](79b5287541c220a13d35ff0f5e92c3f2108d14fe))
+- Remove non-existent npm-publish job from release workflow ([ee3a647](ee3a647ed967f0b244477a7b7ad6cf62d706a62f))
+- Copy cbindgen.toml to Docker build context ([bf34178](bf34178a13d26792dee381d7258fff92aa227a20))
+
+### 🚀 Features
+
+- Add cache CRUD interface with CLI and C FFI library ([c5efa41](c5efa41fe08bf8e10991d4899e15360c63d771df))
+
 ## [0.8.1] - 2025-11-10
 
 ### Refactor
