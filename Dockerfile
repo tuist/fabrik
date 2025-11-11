@@ -50,6 +50,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 
 COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
+COPY cbindgen.toml ./
 COPY proto ./proto
 COPY src ./src
 RUN cargo chef prepare --recipe-path recipe.json
@@ -94,6 +95,7 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry,sharing=locked \
 # Copy source code
 COPY Cargo.toml Cargo.lock ./
 COPY build.rs ./
+COPY cbindgen.toml ./
 COPY proto ./proto
 COPY src ./src
 
