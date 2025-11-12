@@ -1,4 +1,5 @@
 pub mod activate;
+pub mod auth;
 pub mod cache;
 pub mod config;
 pub mod daemon;
