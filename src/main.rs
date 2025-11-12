@@ -1,4 +1,5 @@
 mod api;
+mod auth;
 mod bazel;
 mod cli;
 mod cli_utils;
@@ -39,5 +40,24 @@ async fn main() -> Result<()> {
         Commands::Run(args) => commands::run::run(&args).await,
         Commands::Cas(args) => commands::cas::run(&args).await,
         Commands::Kv(args) => commands::kv::run(&args).await,
+        Commands::Auth(args) => {
+            use cli::AuthCommand;
+            use config::FabrikConfig;
+
+            // Load config
+            let config = if let Some(config_path) = &args.config {
+                FabrikConfig::from_file(config_path)?
+            } else {
+                FabrikConfig::default()
+            };
+
+            // Dispatch to auth subcommand
+            match args.command {
+                AuthCommand::Login => commands::auth::login(config).await,
+                AuthCommand::Logout => commands::auth::logout(config).await,
+                AuthCommand::Status => commands::auth::status(config).await,
+                AuthCommand::Token => commands::auth::token(config).await,
+            }
+        }
     }
 }

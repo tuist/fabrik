@@ -75,6 +75,9 @@ pub enum Commands {
 
     /// Key-Value storage operations (Action Cache)
     Kv(KvArgs),
+
+    /// Authentication management
+    Auth(AuthArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -707,4 +710,33 @@ pub enum KvCommand {
         #[arg(long)]
         json: bool,
     },
+}
+
+// ============================================================================
+// Auth Commands
+// ============================================================================
+
+#[derive(Parser, Debug)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    pub command: AuthCommand,
+
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AuthCommand {
+    /// Login with OAuth2
+    Login,
+
+    /// Logout and delete stored tokens
+    Logout,
+
+    /// Check authentication status
+    Status,
+
+    /// Show current access token (for debugging)
+    Token,
 }
