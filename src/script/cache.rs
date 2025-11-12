@@ -215,6 +215,7 @@ impl ScriptCache {
     }
 
     /// Clean all cache entries
+    #[allow(dead_code)]
     pub fn clean_all(&self) -> Result<()> {
         if self.cache_dir.exists() {
             fs::remove_dir_all(&self.cache_dir).with_context(|| {

@@ -382,6 +382,218 @@ fabrik health --url https://cache.example.com:8888/health
 fabrik health --timeout 10s
 ```
 
+## `fabrik run`
+
+Execute scripts with automatic caching based on KDL annotations.
+
+### Usage
+
+```bash
+# Execute script with caching
+fabrik run <SCRIPT> [-- SCRIPT_ARGS...]
+
+# Script management operations
+fabrik run --status <SCRIPT>    # Check cache status
+fabrik run --list               # List all cached scripts
+fabrik run --stats              # Show cache statistics
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--status` | Check cache status for a script |
+| `--list` | List all cached scripts |
+| `--stats` | Show script cache statistics |
+| `--no-cache` | Force execution without checking cache |
+| `--clean` | Remove cached outputs before running |
+| `--dry-run` | Show what would happen without executing |
+| `--cache-only` | Fail if cache miss (for CI validation) |
+| `--verbose`, `-v` | Verbose output |
+
+### Examples
+
+```bash
+# Execute script with caching
+fabrik run build.sh
+
+# Check cache status
+fabrik run --status build.sh
+
+# List all cached scripts
+fabrik run --list
+
+# Show cache statistics
+fabrik run --stats
+
+# Force re-execution
+fabrik run --no-cache build.sh
+
+# Clean cache and re-run
+fabrik run --clean build.sh
+```
+
+See [Script Cache Documentation](/docs/cache/scripts/) for details on KDL annotations and script caching.
+
+## `fabrik cas`
+
+Content-Addressed Storage operations for blob storage.
+
+CAS operations work with content hashes (SHA256) to store and retrieve arbitrary binary data.
+
+### Commands
+
+```bash
+# Get a blob by hash
+fabrik cas get <HASH> [--output <FILE>]
+
+# Store a file (returns hash)
+fabrik cas put <FILE> [--hash <EXPECTED_HASH>]
+
+# Check if blob exists
+fabrik cas exists <HASH>
+
+# Delete a blob
+fabrik cas delete <HASH> [--force]
+
+# Show blob information
+fabrik cas info <HASH>
+
+# List all blobs
+fabrik cas list [--verbose]
+
+# Show storage statistics
+fabrik cas stats
+```
+
+### Examples
+
+```bash
+# Store a file in CAS
+fabrik cas put myfile.bin
+# Output: abc123def456... (hash)
+
+# Retrieve blob by hash
+fabrik cas get abc123def456... --output restored.bin
+
+# Check if blob exists
+fabrik cas exists abc123def456...
+
+# Get blob information
+fabrik cas info abc123def456...
+
+# List all blobs
+fabrik cas list --verbose
+
+# Show CAS statistics
+fabrik cas stats
+
+# Delete a blob
+fabrik cas delete abc123def456... --force
+```
+
+### JSON Output
+
+Most commands support `--json` flag for machine-readable output:
+
+```bash
+fabrik cas put file.bin --json
+# {"hash":"abc123...","size_bytes":1024,"success":true}
+
+fabrik cas get abc123... --output file.bin --json
+# {"hash":"abc123...","output_path":"file.bin","size_bytes":1024,"success":true}
+```
+
+## `fabrik kv`
+
+Key-Value storage operations for action cache and metadata.
+
+KV operations use arbitrary string keys (not content hashes) to store and retrieve data.
+
+### Commands
+
+```bash
+# Get value by key
+fabrik kv get <KEY> [--output <FILE>]
+
+# Store key-value pair
+fabrik kv put <KEY> <VALUE>
+fabrik kv put <KEY> --file <FILE>
+
+# Check if key exists
+fabrik kv exists <KEY>
+
+# Delete key-value pair
+fabrik kv delete <KEY> [--force]
+
+# List all keys
+fabrik kv list [--prefix <PREFIX>]
+
+# Show storage statistics
+fabrik kv stats
+```
+
+### Examples
+
+```bash
+# Store a value
+fabrik kv put build-result "success"
+
+# Store from file
+fabrik kv put build-metadata --file metadata.json
+
+# Retrieve value
+fabrik kv get build-result
+
+# Retrieve to file
+fabrik kv get build-metadata --output metadata.json
+
+# Check if key exists
+fabrik kv exists build-result
+
+# List all keys
+fabrik kv list
+
+# List keys with prefix
+fabrik kv list --prefix build-
+
+# Show KV statistics
+fabrik kv stats
+
+# Delete a key
+fabrik kv delete build-result --force
+```
+
+### JSON Output
+
+All commands support `--json` flag:
+
+```bash
+fabrik kv put mykey "myvalue" --json
+# {"key":"mykey","value_bytes":7,"success":true}
+
+fabrik kv list --json
+# [{"key":"build-result"},{"key":"build-metadata"}]
+
+fabrik kv stats --json
+# {"total_keys":10,"total_bytes":5242880}
+```
+
+### Use Cases
+
+**Action Cache**: Store build results keyed by input hash
+```bash
+# Bazel/Gradle-style action cache
+INPUT_HASH=$(sha256sum inputs.txt | cut -d' ' -f1)
+fabrik kv put "action:$INPUT_HASH" --file result.json
+```
+
+**Build Metadata**: Store timestamps, versions, etc.
+```bash
+fabrik kv put "last-build-time" "$(date -Iseconds)"
+fabrik kv put "app-version" "1.2.3"
+```
+
 ## Global Options
 
 Available for all commands:

@@ -70,8 +70,11 @@ pub enum Commands {
     /// Run script with caching
     Run(RunArgs),
 
-    /// Manage script cache
-    Cache(CacheArgs),
+    /// Content-Addressed Storage operations (CAS)
+    Cas(CasArgs),
+
+    /// Key-Value storage operations (Action Cache)
+    Kv(KvArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -428,13 +431,27 @@ pub struct InitArgs {
 #[derive(Parser, Debug)]
 pub struct RunArgs {
     /// Runtime and script file (either "script.sh" or "bash script.sh")
-    #[arg(required = true)]
+    /// Omit to use --status, --list, or --stats
     pub positional_args: Vec<String>,
 
     /// Arguments to pass to the script (after --)
     #[arg(last = true)]
     pub script_args: Vec<String>,
 
+    // Script management operations (mutually exclusive with execution)
+    /// Check cache status for a script
+    #[arg(long, group = "operation")]
+    pub status: bool,
+
+    /// List all cached scripts
+    #[arg(long, group = "operation")]
+    pub list: bool,
+
+    /// Show cache statistics
+    #[arg(long, group = "operation")]
+    pub stats: bool,
+
+    // Execution options
     /// Force execution without checking cache
     #[arg(long)]
     pub no_cache: bool,
@@ -484,10 +501,14 @@ impl RunArgs {
     }
 }
 
+// ============================================================================
+// CAS (Content-Addressed Storage) Commands
+// ============================================================================
+
 #[derive(Parser, Debug)]
-pub struct CacheArgs {
+pub struct CasArgs {
     #[command(subcommand)]
-    pub command: CacheCommands,
+    pub command: CasCommand,
 
     /// Local cache directory
     #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
@@ -495,45 +516,15 @@ pub struct CacheArgs {
 }
 
 #[derive(Subcommand, Debug)]
-pub enum CacheCommands {
-    /// Check cache status for a script
-    Status {
-        /// Script file path
-        script: String,
-
-        /// Verbose output
-        #[arg(short, long)]
-        verbose: bool,
-    },
-
-    /// Clean cache for a script
-    Clean {
-        /// Script file path (omit to clean all)
-        script: Option<String>,
-
-        /// Clean all script caches
-        #[arg(long)]
-        all: bool,
-    },
-
-    /// List all cached scripts
-    List {
-        /// Show detailed information
-        #[arg(short, long)]
-        verbose: bool,
-    },
-
-    /// Show cache statistics
-    Stats,
-
-    /// Get an artifact from the cache by hash
+pub enum CasCommand {
+    /// Get a blob from the cache by content hash
     Get {
-        /// Content hash (SHA256) of the artifact
+        /// Content hash (SHA256) of the blob
         hash: String,
 
         /// Output file path
         #[arg(short, long)]
-        output: String,
+        output: Option<String>,
 
         /// Verbose output
         #[arg(short, long)]
@@ -544,12 +535,12 @@ pub enum CacheCommands {
         json: bool,
     },
 
-    /// Put an artifact into the cache
+    /// Put a file into the cache (returns content hash)
     Put {
         /// Input file path
-        input: String,
+        file: String,
 
-        /// Content hash (SHA256) - if not provided, will be computed
+        /// Verify against provided hash
         #[arg(long)]
         hash: Option<String>,
 
@@ -562,9 +553,9 @@ pub enum CacheCommands {
         json: bool,
     },
 
-    /// Check if an artifact exists in the cache
+    /// Check if a blob exists in the cache
     Exists {
-        /// Content hash (SHA256) of the artifact
+        /// Content hash (SHA256) of the blob
         hash: String,
 
         /// Output as JSON
@@ -572,9 +563,9 @@ pub enum CacheCommands {
         json: bool,
     },
 
-    /// Delete an artifact from the cache
+    /// Delete a blob from the cache
     Delete {
-        /// Content hash (SHA256) of the artifact
+        /// Content hash (SHA256) of the blob
         hash: String,
 
         /// Force deletion without confirmation
@@ -586,11 +577,132 @@ pub enum CacheCommands {
         json: bool,
     },
 
-    /// Show information about a cached artifact
+    /// Show information about a cached blob
     Info {
-        /// Content hash (SHA256) of the artifact
+        /// Content hash (SHA256) of the blob
         hash: String,
 
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List all cached blobs
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show CAS storage statistics
+    Stats {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+// ============================================================================
+// KV (Key-Value) Storage Commands
+// ============================================================================
+
+#[derive(Parser, Debug)]
+pub struct KvArgs {
+    #[command(subcommand)]
+    pub command: KvCommand,
+
+    /// Local cache directory
+    #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
+    pub config_cache_dir: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum KvCommand {
+    /// Get a value by key
+    Get {
+        /// Key to retrieve
+        key: String,
+
+        /// Output file path (if omitted, prints to stdout)
+        #[arg(short, long)]
+        output: Option<String>,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Put a key-value pair
+    Put {
+        /// Key to store
+        key: String,
+
+        /// Value (string) - mutually exclusive with --file
+        #[arg(group = "input")]
+        value: Option<String>,
+
+        /// Read value from file - mutually exclusive with value
+        #[arg(long, group = "input")]
+        file: Option<String>,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Check if a key exists
+    Exists {
+        /// Key to check
+        key: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Delete a key-value pair
+    Delete {
+        /// Key to delete
+        key: String,
+
+        /// Force deletion without confirmation
+        #[arg(short, long)]
+        force: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// List all keys (optionally filtered by prefix)
+    List {
+        /// Optional key prefix filter
+        #[arg(long)]
+        prefix: Option<String>,
+
+        /// Show detailed information
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show KV storage statistics
+    Stats {
         /// Output as JSON
         #[arg(long)]
         json: bool,

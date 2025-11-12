@@ -37,6 +37,7 @@ async fn main() -> Result<()> {
         Commands::Doctor(args) => commands::doctor::run(args),
         Commands::Init(args) => commands::init::run(args),
         Commands::Run(args) => commands::run::run(&args).await,
-        Commands::Cache(args) => commands::cache::cache(&args).await,
+        Commands::Cas(args) => commands::cas::run(&args).await,
+        Commands::Kv(args) => commands::kv::run(&args).await,
     }
 }
