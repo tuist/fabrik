@@ -170,15 +170,15 @@ pub struct TokenAuthConfig {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuth2Config {
     /// OAuth2 server URL (e.g., "https://tuist.dev")
-    pub server_url: String,
+    pub url: String,
 
     /// Client ID
     pub client_id: String,
 
-    /// Authorization endpoint (optional, will be inferred from server_url if not provided)
+    /// Authorization endpoint (optional, will be inferred from url if not provided)
     pub authorization_endpoint: Option<String>,
 
-    /// Token endpoint (optional, will be inferred from server_url if not provided)
+    /// Token endpoint (optional, will be inferred from url if not provided)
     pub token_endpoint: Option<String>,
 
     /// Device authorization endpoint (optional, for device code flow)

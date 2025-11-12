@@ -77,12 +77,12 @@ Secure authentication with automatic token refresh. Best for interactive use and
 provider = "oauth2"
 
 [auth.oauth2]
-server_url = "https://tuist.dev"
+url = "https://tuist.dev"
 client_id = "fabrik-cli"
 scopes = "cache:read cache:write"
 storage = "keychain"  # or "file" or "memory"
 
-# Optional: Custom endpoints (defaults use server_url)
+# Optional: Custom endpoints (defaults use url)
 authorization_endpoint = "https://tuist.dev/oauth/authorize"
 token_endpoint = "https://tuist.dev/oauth/token"
 device_authorization_endpoint = "https://tuist.dev/oauth/device/code"
@@ -131,75 +131,6 @@ Token refresh is:
 - **Transparent**: Happens automatically without user intervention
 - **Efficient**: Proactive refresh prevents request delays
 
-## Common Workflows
-
-### Local Development with OAuth2
-
-```bash
-# One-time setup
-fabrik auth login
-fabrik activate bash
-
-# Daily use (token automatically refreshed)
-cd ~/project
-gradle build  # Uses cached credentials automatically
-```
-
-### CI/CD with Token Authentication
-
-**GitHub Actions:**
-```yaml
-- name: Build with cache
-  env:
-    FABRIK_AUTH_TOKEN: ${{ secrets.FABRIK_TOKEN }}
-  run: fabrik exec gradle build
-```
-
-**GitLab CI:**
-```yaml
-build:
-  script:
-    - fabrik exec gradle build
-  variables:
-    FABRIK_AUTH_TOKEN: $CI_FABRIK_TOKEN
-```
-
-### Switching Between Environments
-
-Use different configs for development and CI:
-
-**`.fabrik.toml` (development):**
-```toml
-[cache]
-dir = ".fabrik/cache"
-
-[[upstream]]
-url = "grpc://cache.tuist.dev:7070"
-
-[auth]
-provider = "oauth2"
-
-[auth.oauth2]
-server_url = "https://tuist.dev"
-client_id = "fabrik-cli"
-storage = "keychain"
-```
-
-**`.fabrik-ci.toml` (CI):**
-```toml
-[cache]
-dir = "/tmp/fabrik-cache"
-
-[[upstream]]
-url = "grpc://cache.tuist.dev:7070"
-
-[auth]
-provider = "token"
-
-[auth.token]
-env_var = "FABRIK_AUTH_TOKEN"
-```
-
 ## CLI Commands
 
 ### Check Authentication Status
@@ -246,118 +177,3 @@ For token-based authentication:
 ```
 [fabrik] Token-based authentication doesn't require logout
 ```
-
-## Troubleshooting
-
-### "Token expired" Error
-
-```bash
-# Check token status
-fabrik auth status
-
-# Re-authenticate
-fabrik auth logout
-fabrik auth login
-```
-
-### "No authentication provider configured" Error
-
-```bash
-# Verify configuration
-fabrik config show
-
-# Ensure [auth] section exists
-fabrik config validate .fabrik.toml
-```
-
-### Token Not Found in Environment/File
-
-```bash
-# Verify environment variable
-echo $FABRIK_AUTH_TOKEN
-
-# Verify file exists and is readable
-cat ~/.fabrik/token
-ls -la ~/.fabrik/token
-
-# Check file permissions (should be 600)
-chmod 600 ~/.fabrik/token
-```
-
-### OAuth2 Device Flow Not Working
-
-```bash
-# Verify server URL is correct
-fabrik config show
-
-# Check network connectivity
-curl -I https://tuist.dev
-
-# Try with verbose logging
-RUST_LOG=debug fabrik auth login
-```
-
-## Security Best Practices
-
-### Token Storage
-
-✅ **Do:**
-- Store tokens in environment variables or secure files
-- Use OAuth2 keychain storage for local development
-- Set file permissions to `600` (owner read/write only)
-- Use separate tokens for different environments
-
-❌ **Don't:**
-- Hardcode tokens in configuration files committed to git
-- Share tokens between team members
-- Use production tokens in development
-- Log tokens to stdout/stderr
-
-### CI/CD
-
-✅ **Do:**
-- Use CI/CD platform secrets management (GitHub Secrets, GitLab CI Variables)
-- Rotate tokens regularly
-- Use scoped tokens with minimal permissions
-- Set token expiry for CI tokens
-
-❌ **Don't:**
-- Print tokens in build logs
-- Store tokens in source control
-- Reuse personal tokens in CI
-
-### OAuth2
-
-✅ **Do:**
-- Use keychain storage on trusted machines
-- Review authorized applications periodically
-- Logout when done on shared machines
-
-❌ **Don't:**
-- Skip device authorization step
-- Ignore token expiry warnings
-- Use memory storage for long-term sessions
-
-## Environment Variables
-
-### Authentication
-
-| Variable | Description | Example |
-|----------|-------------|---------|
-| `FABRIK_AUTH_TOKEN` | Token for authentication | `sk_test_abc123...` |
-| `TUIST_TOKEN` | Shorthand for auth token | `sk_test_abc123...` |
-| `TUIST_CONFIG_AUTH_TOKEN` | Full form for auth token | `sk_test_abc123...` |
-
-### AWS Credentials (for S3 upstream)
-
-| Variable | Description |
-|----------|-------------|
-| `AWS_ACCESS_KEY_ID` | AWS access key |
-| `AWS_SECRET_ACCESS_KEY` | AWS secret key |
-| `AWS_REGION` | AWS region |
-
-## Next Steps
-
-- [CLI Reference](/reference/cli#fabrik-auth) - Complete auth command reference
-- [Configuration File](/reference/config-file) - Full auth configuration options
-- [Getting Started](/getting-started) - Set up your first project with auth

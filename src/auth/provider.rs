@@ -69,17 +69,17 @@ impl OAuth2ClientWrapper {
             authorization_endpoint: oauth2_config
                 .authorization_endpoint
                 .clone()
-                .unwrap_or_else(|| format!("{}/oauth/authorize", oauth2_config.server_url)),
+                .unwrap_or_else(|| format!("{}/oauth/authorize", oauth2_config.url)),
             token_endpoint: oauth2_config
                 .token_endpoint
                 .clone()
-                .unwrap_or_else(|| format!("{}/oauth/token", oauth2_config.server_url)),
+                .unwrap_or_else(|| format!("{}/oauth/token", oauth2_config.url)),
             redirect_uri: "http://127.0.0.1:8080/callback".to_string(),
             scope: Some(oauth2_config.scopes.clone()),
             device_authorization_endpoint: oauth2_config
                 .device_authorization_endpoint
                 .clone()
-                .or_else(|| Some(format!("{}/oauth/device/code", oauth2_config.server_url))),
+                .or_else(|| Some(format!("{}/oauth/device/code", oauth2_config.url))),
         };
 
         // Create storage backend and OAuth client based on configuration
@@ -284,7 +284,7 @@ impl AuthProvider {
             .ok_or(AuthenticationError::ConfigError(
                 "OAuth2 configuration not found".to_string(),
             ))?;
-        let token_key = format!("{}:fabrik", oauth2_config.server_url);
+        let token_key = format!("{}:fabrik", oauth2_config.url);
 
         // Get valid token with automatic refresh (80% threshold for proactive refresh)
         match wrapper.get_token_with_refresh(&token_key)? {
@@ -316,7 +316,7 @@ impl AuthProvider {
         let token = wrapper.authorize_device()?;
 
         // Save token
-        let token_key = format!("{}:fabrik", oauth2_config.server_url);
+        let token_key = format!("{}:fabrik", oauth2_config.url);
         wrapper.save_token(&token_key, token)?;
 
         tracing::info!("[fabrik] Successfully authenticated");
@@ -343,7 +343,7 @@ impl AuthProvider {
                             "OAuth2 configuration not found".to_string(),
                         ))?;
 
-                let token_key = format!("{}:fabrik", oauth2_config.server_url);
+                let token_key = format!("{}:fabrik", oauth2_config.url);
                 wrapper.delete_token(&token_key)?;
 
                 tracing::info!("[fabrik] Successfully logged out");
@@ -394,7 +394,7 @@ impl AuthProvider {
                             "OAuth2 configuration not found".to_string(),
                         ))?;
 
-                let token_key = format!("{}:fabrik", oauth2_config.server_url);
+                let token_key = format!("{}:fabrik", oauth2_config.url);
 
                 // Try to get token
                 match wrapper.get_token(&token_key)? {

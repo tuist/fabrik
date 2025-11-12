@@ -454,12 +454,12 @@ Secure authentication with automatic token refresh. Best for interactive use and
 provider = "oauth2"
 
 [auth.oauth2]
-server_url = "https://tuist.dev"
+url = "https://tuist.dev"
 client_id = "fabrik-cli"
 scopes = "cache:read cache:write"
 storage = "keychain"  # or "file" or "memory"
 
-# Optional: Custom endpoints (defaults use server_url)
+# Optional: Custom endpoints (defaults use url)
 authorization_endpoint = "https://tuist.dev/oauth/authorize"
 token_endpoint = "https://tuist.dev/oauth/token"
 device_authorization_endpoint = "https://tuist.dev/oauth/device/code"
@@ -554,7 +554,7 @@ gradle build  # Uses cached credentials
 provider = "oauth2"
 
 [auth.oauth2]
-server_url = "https://tuist.dev"
+url = "https://tuist.dev"
 client_id = "fabrik-cli"
 storage = "keychain"
 ```

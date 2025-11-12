@@ -43,11 +43,21 @@ async fn main() -> Result<()> {
             use cli::AuthCommand;
             use config::FabrikConfig;
 
-            // Load config
+            // Load config (with discovery)
             let config = if let Some(config_path) = &args.config {
                 FabrikConfig::from_file(config_path)?
             } else {
-                FabrikConfig::default()
+                // Try to discover config by traversing up directory tree
+                match config_discovery::discover_config(&std::env::current_dir()?)? {
+                    Some(config_path) => {
+                        tracing::info!("[fabrik] Using config: {}", config_path.display());
+                        FabrikConfig::from_file(&config_path)?
+                    }
+                    None => {
+                        tracing::warn!("[fabrik] No configuration file found, using defaults");
+                        FabrikConfig::default()
+                    }
+                }
             };
 
             // Dispatch to auth subcommand
