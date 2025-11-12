@@ -382,6 +382,234 @@ fabrik health --url https://cache.example.com:8888/health
 fabrik health --timeout 10s
 ```
 
+## `fabrik auth`
+
+Manage authentication for connecting to remote cache servers.
+
+Fabrik supports two authentication methods:
+- **Token-based**: Simple token authentication (hardcoded, environment variable, or file)
+- **OAuth2 with PKCE**: Device code flow for secure, user-friendly authentication
+
+### Commands
+
+```bash
+# Login with OAuth2 device code flow
+fabrik auth login [--config <PATH>]
+
+# Check authentication status
+fabrik auth status [--config <PATH>]
+
+# Show current access token (for debugging)
+fabrik auth token [--config <PATH>]
+
+# Logout and delete stored tokens
+fabrik auth logout [--config <PATH>]
+```
+
+### Authentication Methods
+
+#### Token-Based Authentication
+
+Simple authentication using a static token. Best for CI/CD or when OAuth2 is not available.
+
+**Configuration:**
+
+```toml
+[auth]
+provider = "token"
+
+[auth.token]
+# Option 1: Hardcoded (not recommended for production)
+value = "your-token-here"
+
+# Option 2: Environment variable (recommended)
+env_var = "FABRIK_AUTH_TOKEN"
+
+# Option 3: File path (recommended for local development)
+file = "~/.fabrik/token"
+```
+
+**Usage:**
+
+```bash
+# Set token via environment variable
+export FABRIK_AUTH_TOKEN="your-token-here"
+
+# Or store in file
+echo "your-token-here" > ~/.fabrik/token
+chmod 600 ~/.fabrik/token
+
+# Check status
+fabrik auth status
+```
+
+#### OAuth2 with PKCE Authentication
+
+Secure authentication with automatic token refresh. Best for interactive use and development workflows.
+
+**Configuration:**
+
+```toml
+[auth]
+provider = "oauth2"
+
+[auth.oauth2]
+server_url = "https://tuist.dev"
+client_id = "fabrik-cli"
+scopes = "cache:read cache:write"
+storage = "keychain"  # or "file" or "memory"
+
+# Optional: Custom endpoints (defaults use server_url)
+authorization_endpoint = "https://tuist.dev/oauth/authorize"
+token_endpoint = "https://tuist.dev/oauth/token"
+device_authorization_endpoint = "https://tuist.dev/oauth/device/code"
+```
+
+**Storage Backends:**
+- `keychain` - Uses OS credential manager (macOS Keychain, Windows Credential Manager, Linux Secret Service)
+- `file` - Stores tokens in `~/.fabrik/oauth-tokens/` (cross-process safe with file locking)
+- `memory` - In-memory only (tokens lost on daemon restart)
+
+### Examples
+
+#### Login Flow
+
+```bash
+# Login with OAuth2
+fabrik auth login --config .fabrik.toml
+
+# Output:
+# [fabrik] Starting OAuth2 device code flow
+# [fabrik] Please visit: https://tuist.dev/activate
+# [fabrik] Enter code: ABCD-EFGH
+# [fabrik] Waiting for authorization...
+# ✓ Successfully authenticated!
+```
+
+#### Check Authentication Status
+
+```bash
+fabrik auth status
+
+# Output for OAuth2:
+# Authentication Status: ✓ Authenticated
+# Provider: oauth2
+# Token: abc12345...xyz9
+# Expires: 2025-11-13 12:00:00 UTC
+# Time remaining: 23h 45m
+
+# Output for token:
+# Authentication Status: ✓ Authenticated
+# Provider: token
+# Token: sk_test_...abc9
+```
+
+#### Get Current Token (for debugging)
+
+```bash
+# Show raw token (useful for debugging or manual API calls)
+fabrik auth token
+# eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+#### Logout
+
+```bash
+fabrik auth logout
+# ✓ Successfully logged out
+
+# For token-based auth:
+# [fabrik] Token-based authentication doesn't require logout
+```
+
+### Common Workflows
+
+#### Local Development with OAuth2
+
+```bash
+# One-time setup
+fabrik auth login
+fabrik activate bash
+
+# Daily use (token automatically refreshed)
+cd ~/project
+gradle build  # Uses cached credentials
+```
+
+#### CI/CD with Token
+
+```yaml
+# .github/workflows/build.yml
+- name: Build with cache
+  env:
+    FABRIK_AUTH_TOKEN: ${{ secrets.FABRIK_TOKEN }}
+  run: fabrik exec gradle build
+```
+
+#### Switching Between Environments
+
+```toml
+# .fabrik.toml (development)
+[auth]
+provider = "oauth2"
+
+[auth.oauth2]
+server_url = "https://tuist.dev"
+client_id = "fabrik-cli"
+storage = "keychain"
+```
+
+```toml
+# .fabrik-ci.toml (CI)
+[auth]
+provider = "token"
+
+[auth.token]
+env_var = "FABRIK_AUTH_TOKEN"
+```
+
+### Token Refresh
+
+OAuth2 tokens are automatically refreshed when:
+- Token has 20% or less of its lifetime remaining (80% threshold)
+- A request is made with an expired token
+
+Token refresh is:
+- **Cross-process safe**: Uses file locking to prevent concurrent refreshes
+- **Transparent**: Happens automatically without user intervention
+- **Efficient**: Proactive refresh prevents request delays
+
+### Troubleshooting
+
+**"Token expired" error:**
+```bash
+# Check token status
+fabrik auth status
+
+# Re-authenticate
+fabrik auth logout
+fabrik auth login
+```
+
+**"No authentication provider configured" error:**
+```bash
+# Verify configuration
+fabrik config show
+
+# Ensure [auth] section exists
+fabrik config validate .fabrik.toml
+```
+
+**Token not found in environment/file:**
+```bash
+# Verify environment variable
+echo $FABRIK_AUTH_TOKEN
+
+# Verify file exists and is readable
+cat ~/.fabrik/token
+ls -la ~/.fabrik/token
+```
+
 ## Global Options
 
 Available for all commands:
