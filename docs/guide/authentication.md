@@ -46,26 +46,6 @@ chmod 600 ~/.fabrik/token
 fabrik auth status
 ```
 
-#### CI/CD Example
-
-```yaml
-# .github/workflows/build.yml
-name: Build with Cache
-
-on: [push]
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Build with Fabrik cache
-        env:
-          FABRIK_AUTH_TOKEN: ${{ secrets.FABRIK_TOKEN }}
-        run: fabrik exec gradle build
-```
-
 ### OAuth2 with PKCE Authentication
 
 Secure authentication with automatic token refresh. Best for interactive use and development workflows.
@@ -130,50 +110,3 @@ Token refresh is:
 - **Cross-process safe**: Uses file locking to prevent concurrent refreshes
 - **Transparent**: Happens automatically without user intervention
 - **Efficient**: Proactive refresh prevents request delays
-
-## CLI Commands
-
-### Check Authentication Status
-
-```bash
-fabrik auth status
-```
-
-**Output for OAuth2:**
-```
-Authentication Status: ✓ Authenticated
-Provider: oauth2
-Token: abc12345...xyz9
-Expires: 2025-11-13 12:00:00 UTC
-Time remaining: 23h 45m
-```
-
-**Output for Token:**
-```
-Authentication Status: ✓ Authenticated
-Provider: token
-Token: sk_test_...abc9
-```
-
-### Show Current Token
-
-Get the raw access token for debugging or manual API calls:
-
-```bash
-fabrik auth token
-# eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
-```
-
-### Logout
-
-Delete stored tokens:
-
-```bash
-fabrik auth logout
-# ✓ Successfully logged out
-```
-
-For token-based authentication:
-```
-[fabrik] Token-based authentication doesn't require logout
-```
