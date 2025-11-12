@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.1] - 2025-11-12
+
+### 🚜 Refactor
+
+- Separate CAS and KV commands, improve CLI organization (#11) ([43b82de](43b82de1e95296ab6910ecb0c43521891d422aff))
+
 ## [0.9.0] - 2025-11-11
 
 ### 🐛 Bug Fixes
