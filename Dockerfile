@@ -6,7 +6,7 @@
 # ============================================================================
 # Stage 1: Chef Planner (generates dependency recipe)
 # ============================================================================
-FROM rust:1.83-bookworm AS chef
+FROM rust:1.91-bookworm AS chef
 
 # Install cargo-chef from pre-built binary (much faster than compiling from source)
 # This saves 15-20 minutes of build time
