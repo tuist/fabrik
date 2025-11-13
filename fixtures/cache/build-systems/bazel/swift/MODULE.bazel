@@ -3,5 +3,5 @@ module(
     version = "0.1.0",
 )
 
-bazel_dep(name = "rules_swift", version = "2.2.1")
+bazel_dep(name = "rules_swift", version = "2.9.0")
 bazel_dep(name = "apple_support", version = "1.24.4")
