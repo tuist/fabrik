@@ -263,32 +263,30 @@ impl AuthProvider {
         }
     }
 
-    /// Get token from token configuration (value, env var, or file)
+    /// Get token from token configuration (env var or file) or convention-based env vars
     fn get_token_from_config(&self) -> Result<String, AuthenticationError> {
-        let token_config = self
-            .config
-            .token
-            .as_ref()
-            .ok_or(AuthenticationError::ConfigError(
-                "Token provider selected but no token configuration provided".to_string(),
-            ))?;
+        // If token config is provided, check custom env var or file first
+        if let Some(token_config) = &self.config.token {
+            // Try custom environment variable if specified
+            if let Some(env_var) = &token_config.env_var {
+                return std::env::var(env_var)
+                    .map_err(|_| AuthenticationError::EnvVarError(env_var.clone()));
+            }
 
-        // Try value first (hardcoded token)
-        if let Some(value) = &token_config.value {
-            return Ok(value.clone());
+            // Try file
+            if let Some(file_path) = &token_config.file {
+                return std::fs::read_to_string(file_path)
+                    .map(|s| s.trim().to_string())
+                    .map_err(|e| AuthenticationError::FileError(format!("{}: {}", file_path, e)));
+            }
         }
 
-        // Try environment variable
-        if let Some(env_var) = &token_config.env_var {
-            return std::env::var(env_var)
-                .map_err(|_| AuthenticationError::EnvVarError(env_var.clone()));
+        // Fall back to convention-based environment variables (FABRIK_TOKEN, TUIST_TOKEN)
+        if let Ok(token) = std::env::var("FABRIK_TOKEN") {
+            return Ok(token);
         }
-
-        // Try file
-        if let Some(file_path) = &token_config.file {
-            return std::fs::read_to_string(file_path)
-                .map(|s| s.trim().to_string())
-                .map_err(|e| AuthenticationError::FileError(format!("{}: {}", file_path, e)));
+        if let Ok(token) = std::env::var("TUIST_TOKEN") {
+            return Ok(token);
         }
 
         Err(AuthenticationError::TokenNotFound)
@@ -349,11 +347,9 @@ impl AuthProvider {
 
         // Save token (also needs to run in blocking context)
         let wrapper_for_save = self.oauth2_wrapper.as_ref().unwrap().clone();
-        tokio::task::spawn_blocking(move || {
-            wrapper_for_save.save_token(&token_key, token)
-        })
-        .await
-        .map_err(|e| AuthenticationError::OAuth2Error(format!("Task join error: {}", e)))??;
+        tokio::task::spawn_blocking(move || wrapper_for_save.save_token(&token_key, token))
+            .await
+            .map_err(|e| AuthenticationError::OAuth2Error(format!("Task join error: {}", e)))??;
 
         tracing::info!("[fabrik] Successfully authenticated");
 

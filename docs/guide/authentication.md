@@ -15,32 +15,59 @@ Fabrik supports two authentication methods for connecting to remote cache server
 
 Simple authentication using a static token. Best for CI/CD pipelines or when OAuth2 is not available.
 
-#### Configuration
+#### Zero-Configuration (Convention-Based)
+
+Fabrik automatically checks for tokens in standard environment variables:
+
+```bash
+# Option 1: Use FABRIK_TOKEN (no config needed!)
+export FABRIK_TOKEN="your-token-here"
+
+# Option 2: Use TUIST_TOKEN (no config needed!)
+export TUIST_TOKEN="your-token-here"
+
+# Verify authentication
+fabrik auth status
+```
+
+**Minimal config:**
+```toml
+[auth]
+provider = "token"
+# That's it! Uses FABRIK_TOKEN or TUIST_TOKEN automatically
+```
+
+#### Custom Configuration
+
+Override the default behavior if needed:
 
 ```toml
 [auth]
 provider = "token"
 
 [auth.token]
-# Option 1: Hardcoded (not recommended for production)
-value = "your-token-here"
+# Option 1: Custom environment variable
+env_var = "MY_CUSTOM_TOKEN_VAR"
 
-# Option 2: Environment variable (recommended)
-env_var = "FABRIK_AUTH_TOKEN"
-
-# Option 3: File path (recommended for local development)
+# Option 2: File path (recommended for local development)
 file = "~/.fabrik/token"
 ```
 
-#### Usage
+#### Usage Examples
 
 ```bash
-# Set token via environment variable
-export FABRIK_AUTH_TOKEN="your-token-here"
+# Zero-config: Just set the env var
+export FABRIK_TOKEN="your-token-here"
+fabrik daemon  # Works automatically!
 
-# Or store in file
+# Custom env var
+export MY_CUSTOM_TOKEN_VAR="your-token-here"
+fabrik daemon --config fabrik.toml  # Uses custom env var from config
+
+# File-based token
 echo "your-token-here" > ~/.fabrik/token
 chmod 600 ~/.fabrik/token
+fabrik daemon --config fabrik.toml  # Reads from file
 
 # Verify authentication
 fabrik auth status

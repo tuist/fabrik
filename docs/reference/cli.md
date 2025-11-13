@@ -412,30 +412,50 @@ fabrik auth logout [--config <PATH>]
 
 Simple authentication using a static token. Best for CI/CD or when OAuth2 is not available.
 
-**Configuration:**
+**Zero-Configuration (Recommended):**
+
+Fabrik automatically checks for tokens in standard environment variables:
+
+```bash
+# Just set FABRIK_TOKEN or TUIST_TOKEN (no config needed!)
+export FABRIK_TOKEN="your-token-here"
+# or
+export TUIST_TOKEN="your-token-here"
+
+# Check status
+fabrik auth status
+```
+
+**Minimal config:**
+```toml
+[auth]
+provider = "token"
+# That's it! Uses FABRIK_TOKEN or TUIST_TOKEN automatically
+```
+
+**Custom Configuration:**
+
+Override the default behavior if needed:
 
 ```toml
 [auth]
 provider = "token"
 
 [auth.token]
-# Option 1: Hardcoded (not recommended for production)
-value = "your-token-here"
+# Option 1: Custom environment variable
+env_var = "MY_CUSTOM_TOKEN_VAR"
 
-# Option 2: Environment variable (recommended)
-env_var = "FABRIK_AUTH_TOKEN"
-
-# Option 3: File path (recommended for local development)
+# Option 2: File path
 file = "~/.fabrik/token"
 ```
 
-**Usage:**
+**Usage with custom config:**
 
 ```bash
-# Set token via environment variable
-export FABRIK_AUTH_TOKEN="your-token-here"
+# Custom env var
+export MY_CUSTOM_TOKEN_VAR="your-token-here"
 
-# Or store in file
+# Or file-based
 echo "your-token-here" > ~/.fabrik/token
 chmod 600 ~/.fabrik/token
 
