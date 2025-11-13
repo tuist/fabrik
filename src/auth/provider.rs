@@ -37,6 +37,7 @@ impl From<schlussel::error::OAuthError> for AuthenticationError {
 }
 
 /// OAuth client wrapper that works with different storage backends
+#[derive(Clone)]
 enum OAuth2ClientWrapper {
     Keychain {
         client: Arc<OAuthClient<SecureStorage>>,
@@ -322,19 +323,37 @@ impl AuthProvider {
             .as_ref()
             .ok_or(AuthenticationError::ConfigError(
                 "OAuth2 provider not configured".to_string(),
-            ))?;
+            ))?
+            .clone();
 
         tracing::info!("[fabrik] Starting OAuth2 device code flow");
 
-        // Start device code flow (opens browser and polls for completion)
-        let token = wrapper.authorize_device()?;
+        let oauth2_url = self.oauth2_url.clone();
 
-        // Save token
-        let token_key = format!(
-            "{}:fabrik",
-            self.oauth2_url.as_ref().expect("OAuth2 URL should be set")
-        );
-        wrapper.save_token(&token_key, token)?;
+        // Run blocking OAuth operations in a separate thread to avoid
+        // "Cannot drop a runtime in a context where blocking is not allowed" errors
+        let (token, token_key) = tokio::task::spawn_blocking(move || {
+            // Start device code flow (opens browser and polls for completion)
+            let token = wrapper.authorize_device()?;
+
+            // Prepare token key
+            let token_key = format!(
+                "{}:fabrik",
+                oauth2_url.as_ref().expect("OAuth2 URL should be set")
+            );
+
+            Ok::<_, AuthenticationError>((token, token_key))
+        })
+        .await
+        .map_err(|e| AuthenticationError::OAuth2Error(format!("Task join error: {}", e)))??;
+
+        // Save token (also needs to run in blocking context)
+        let wrapper_for_save = self.oauth2_wrapper.as_ref().unwrap().clone();
+        tokio::task::spawn_blocking(move || {
+            wrapper_for_save.save_token(&token_key, token)
+        })
+        .await
+        .map_err(|e| AuthenticationError::OAuth2Error(format!("Task join error: {}", e)))??;
 
         tracing::info!("[fabrik] Successfully authenticated");
 
