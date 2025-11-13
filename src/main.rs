@@ -12,6 +12,7 @@ mod merger;
 mod script;
 mod storage;
 mod xcode;
+mod xdg;
 
 use anyhow::Result;
 use clap::Parser;

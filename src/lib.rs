@@ -10,6 +10,7 @@ pub mod config_discovery;
 pub mod logging;
 pub mod script;
 pub mod storage;
+pub mod xdg;
 
 // Re-export commonly used types
 pub use auth::AuthProvider;

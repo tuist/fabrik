@@ -4,6 +4,8 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+use crate::xdg;
+
 /// Discovers Fabrik configuration by traversing up the directory tree
 pub fn discover_config(start_dir: &Path) -> Result<Option<PathBuf>> {
     let mut current = start_dir.to_path_buf();
@@ -62,10 +64,8 @@ impl DaemonState {
     fn state_base_dir() -> PathBuf {
         if let Ok(state_dir) = std::env::var("FABRIK_STATE_DIR") {
             PathBuf::from(state_dir)
-        } else if let Some(home) = dirs::home_dir() {
-            home.join(".fabrik/daemons")
         } else {
-            PathBuf::from("/tmp/fabrik/daemons")
+            xdg::daemon_state_dir()
         }
     }
 

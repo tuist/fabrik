@@ -108,6 +108,9 @@ impl OAuth2ClientWrapper {
                 })
             }
             "file" => {
+                // TODO: Update schlussel to support custom base directory for XDG compliance
+                // For now, FileStorage::new("fabrik") uses its default path
+                // Ideally it should use: crate::xdg::oauth_tokens_dir()
                 let storage = Arc::new(
                     FileStorage::new("fabrik")
                         .map_err(|e| anyhow::anyhow!("Failed to create file storage: {}", e))?,
