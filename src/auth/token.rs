@@ -22,8 +22,8 @@ impl TokenManager {
 
     /// Initialize with authentication configuration
     #[allow(dead_code)]
-    pub async fn init(&self, config: AuthConfig) -> Result<()> {
-        let provider = AuthProvider::new(config)?;
+    pub async fn init(&self, config: AuthConfig, root_url: Option<String>) -> Result<()> {
+        let provider = AuthProvider::new(config, root_url)?;
         let mut lock = self.provider.write().await;
         *lock = Some(provider);
         Ok(())

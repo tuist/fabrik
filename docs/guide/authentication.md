@@ -53,19 +53,24 @@ Secure authentication with automatic token refresh. Best for interactive use and
 #### Configuration
 
 ```toml
+# Service URL (used for OAuth2, service discovery, etc.)
+url = "https://tuist.dev"
+
 [auth]
 provider = "oauth2"
 
 [auth.oauth2]
-url = "https://tuist.dev"
 client_id = "fabrik-cli"
 scopes = "cache:read cache:write"
 storage = "keychain"  # or "file" or "memory"
 
+# Optional: Override service URL for OAuth2 specifically
+# url = "https://custom-auth.example.com"
+
 # Optional: Custom endpoints (defaults use url)
-authorization_endpoint = "https://tuist.dev/oauth/authorize"
-token_endpoint = "https://tuist.dev/oauth/token"
-device_authorization_endpoint = "https://tuist.dev/oauth/device/code"
+# authorization_endpoint = "https://tuist.dev/oauth/authorize"
+# token_endpoint = "https://tuist.dev/oauth/token"
+# device_authorization_endpoint = "https://tuist.dev/oauth/device/code"
 ```
 
 #### Storage Backends

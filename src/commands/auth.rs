@@ -8,8 +8,8 @@ use crate::config::FabrikConfig;
 pub async fn login(config: FabrikConfig) -> Result<()> {
     tracing::info!("[fabrik] Authenticating with OAuth2");
 
-    let provider =
-        AuthProvider::new(config.auth).context("Failed to initialize authentication provider")?;
+    let provider = AuthProvider::new(config.auth, config.url)
+        .context("Failed to initialize authentication provider")?;
 
     provider.login().await.context("Authentication failed")?;
 
@@ -20,8 +20,8 @@ pub async fn login(config: FabrikConfig) -> Result<()> {
 
 /// Logout (delete stored token)
 pub async fn logout(config: FabrikConfig) -> Result<()> {
-    let provider =
-        AuthProvider::new(config.auth).context("Failed to initialize authentication provider")?;
+    let provider = AuthProvider::new(config.auth, config.url)
+        .context("Failed to initialize authentication provider")?;
 
     provider.logout().await.context("Logout failed")?;
 
@@ -32,8 +32,8 @@ pub async fn logout(config: FabrikConfig) -> Result<()> {
 
 /// Check authentication status
 pub async fn status(config: FabrikConfig) -> Result<()> {
-    let provider =
-        AuthProvider::new(config.auth).context("Failed to initialize authentication provider")?;
+    let provider = AuthProvider::new(config.auth, config.url)
+        .context("Failed to initialize authentication provider")?;
 
     match provider.status().await {
         Ok(status) => {
@@ -78,8 +78,8 @@ pub async fn status(config: FabrikConfig) -> Result<()> {
 
 /// Show current access token (for debugging)
 pub async fn token(config: FabrikConfig) -> Result<()> {
-    let provider =
-        AuthProvider::new(config.auth).context("Failed to initialize authentication provider")?;
+    let provider = AuthProvider::new(config.auth, config.url)
+        .context("Failed to initialize authentication provider")?;
 
     match provider.get_token().await {
         Ok(token) => {

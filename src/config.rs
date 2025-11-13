@@ -6,6 +6,10 @@ use std::path::Path;
 /// Complete Fabrik configuration (loaded from TOML file)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FabrikConfig {
+    /// Service URL (e.g., "https://tuist.dev") - used for authentication, service discovery, etc.
+    #[serde(default)]
+    pub url: Option<String>,
+
     #[serde(default)]
     pub cache: CacheConfig,
 
@@ -169,8 +173,8 @@ pub struct TokenAuthConfig {
 /// OAuth2 with PKCE configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OAuth2Config {
-    /// OAuth2 server URL (e.g., "https://tuist.dev")
-    pub url: String,
+    /// OAuth2 server URL (optional, will use root config.url if not provided)
+    pub url: Option<String>,
 
     /// Client ID
     pub client_id: String,

@@ -59,27 +59,35 @@ enum OAuth2ClientWrapper {
 pub struct AuthProvider {
     config: AuthConfig,
     oauth2_wrapper: Option<OAuth2ClientWrapper>,
+    oauth2_url: Option<String>, // Resolved OAuth2 URL (from oauth2.url or root url)
 }
 
 impl OAuth2ClientWrapper {
-    fn create(oauth2_config: &OAuth2Config) -> Result<Self> {
+    fn create(oauth2_config: &OAuth2Config, root_url: Option<String>) -> Result<Self> {
+        // Use oauth2-specific URL if provided, otherwise use root URL
+        let base_url = oauth2_config.url.clone().or(root_url).ok_or_else(|| {
+            anyhow::anyhow!(
+                "OAuth2 URL not configured. Set either 'url' at root level or 'auth.oauth2.url'"
+            )
+        })?;
+
         // Build OAuth configuration
         let oauth_config = OAuthConfig {
             client_id: oauth2_config.client_id.clone(),
             authorization_endpoint: oauth2_config
                 .authorization_endpoint
                 .clone()
-                .unwrap_or_else(|| format!("{}/oauth/authorize", oauth2_config.url)),
+                .unwrap_or_else(|| format!("{}/oauth/authorize", base_url)),
             token_endpoint: oauth2_config
                 .token_endpoint
                 .clone()
-                .unwrap_or_else(|| format!("{}/oauth/token", oauth2_config.url)),
+                .unwrap_or_else(|| format!("{}/oauth/token", base_url)),
             redirect_uri: "http://127.0.0.1:8080/callback".to_string(),
             scope: Some(oauth2_config.scopes.clone()),
             device_authorization_endpoint: oauth2_config
                 .device_authorization_endpoint
                 .clone()
-                .or_else(|| Some(format!("{}/oauth/device/code", oauth2_config.url))),
+                .or_else(|| Some(format!("{}/oauth/device/code", base_url))),
         };
 
         // Create storage backend and OAuth client based on configuration
@@ -208,22 +216,40 @@ impl OAuth2ClientWrapper {
 
 impl AuthProvider {
     /// Create a new authentication provider from configuration
-    pub fn new(config: AuthConfig) -> Result<Self> {
-        let oauth2_wrapper = if matches!(config.provider, Some(ConfigAuthProvider::OAuth2)) {
+    pub fn new(config: AuthConfig, root_url: Option<String>) -> Result<Self> {
+        let (oauth2_wrapper, oauth2_url) = if matches!(
+            config.provider,
+            Some(ConfigAuthProvider::OAuth2)
+        ) {
             let oauth2_config = config.oauth2.as_ref().ok_or_else(|| {
                 AuthenticationError::ConfigError(
                     "OAuth2 provider selected but no oauth2 configuration provided".to_string(),
                 )
             })?;
 
-            Some(OAuth2ClientWrapper::create(oauth2_config)?)
+            // Resolve the effective OAuth2 URL
+            let resolved_url = oauth2_config
+                .url
+                .clone()
+                .or(root_url.clone())
+                .ok_or_else(|| {
+                    AuthenticationError::ConfigError(
+                        "OAuth2 URL not configured. Set either 'url' at root level or 'auth.oauth2.url'".to_string(),
+                    )
+                })?;
+
+            (
+                Some(OAuth2ClientWrapper::create(oauth2_config, root_url)?),
+                Some(resolved_url),
+            )
         } else {
-            None
+            (None, None)
         };
 
         Ok(Self {
             config,
             oauth2_wrapper,
+            oauth2_url,
         })
     }
 
@@ -277,14 +303,10 @@ impl AuthProvider {
             ))?;
 
         // Get token key (use server URL as key)
-        let oauth2_config = self
-            .config
-            .oauth2
-            .as_ref()
-            .ok_or(AuthenticationError::ConfigError(
-                "OAuth2 configuration not found".to_string(),
-            ))?;
-        let token_key = format!("{}:fabrik", oauth2_config.url);
+        let token_key = format!(
+            "{}:fabrik",
+            self.oauth2_url.as_ref().expect("OAuth2 URL should be set")
+        );
 
         // Get valid token with automatic refresh (80% threshold for proactive refresh)
         match wrapper.get_token_with_refresh(&token_key)? {
@@ -302,21 +324,16 @@ impl AuthProvider {
                 "OAuth2 provider not configured".to_string(),
             ))?;
 
-        let oauth2_config = self
-            .config
-            .oauth2
-            .as_ref()
-            .ok_or(AuthenticationError::ConfigError(
-                "OAuth2 configuration not found".to_string(),
-            ))?;
-
         tracing::info!("[fabrik] Starting OAuth2 device code flow");
 
         // Start device code flow (opens browser and polls for completion)
         let token = wrapper.authorize_device()?;
 
         // Save token
-        let token_key = format!("{}:fabrik", oauth2_config.url);
+        let token_key = format!(
+            "{}:fabrik",
+            self.oauth2_url.as_ref().expect("OAuth2 URL should be set")
+        );
         wrapper.save_token(&token_key, token)?;
 
         tracing::info!("[fabrik] Successfully authenticated");
@@ -335,15 +352,10 @@ impl AuthProvider {
                             "OAuth2 provider not configured".to_string(),
                         ))?;
 
-                let oauth2_config =
-                    self.config
-                        .oauth2
-                        .as_ref()
-                        .ok_or(AuthenticationError::ConfigError(
-                            "OAuth2 configuration not found".to_string(),
-                        ))?;
-
-                let token_key = format!("{}:fabrik", oauth2_config.url);
+                let token_key = format!(
+                    "{}:fabrik",
+                    self.oauth2_url.as_ref().expect("OAuth2 URL should be set")
+                );
                 wrapper.delete_token(&token_key)?;
 
                 tracing::info!("[fabrik] Successfully logged out");
@@ -386,15 +398,10 @@ impl AuthProvider {
                             "OAuth2 provider not configured".to_string(),
                         ))?;
 
-                let oauth2_config =
-                    self.config
-                        .oauth2
-                        .as_ref()
-                        .ok_or(AuthenticationError::ConfigError(
-                            "OAuth2 configuration not found".to_string(),
-                        ))?;
-
-                let token_key = format!("{}:fabrik", oauth2_config.url);
+                let token_key = format!(
+                    "{}:fabrik",
+                    self.oauth2_url.as_ref().expect("OAuth2 URL should be set")
+                );
 
                 // Try to get token
                 match wrapper.get_token(&token_key)? {
