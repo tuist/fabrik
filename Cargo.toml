@@ -44,8 +44,8 @@ bytes = "1"
 which = "6"
 # Pin home to avoid edition 2024 requirement
 home = "=0.5.11"
-# Use local schlussel for testing fixes
-schlussel = { path = "../schlussel" }
+# Use schlussel PR branch with async runtime fix
+schlussel = { git = "https://github.com/tuist/schlussel", branch = "fix/async-runtime-drop-panics" }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal"] }

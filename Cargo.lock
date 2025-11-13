@@ -2044,6 +2044,7 @@ dependencies = [
 [[package]]
 name = "schlussel"
 version = "0.2.3"
+source = "git+https://github.com/tuist/schlussel?branch=fix%2Fasync-runtime-drop-panics#aa515f4c704eed46d568e72f7c88f8f53ee183a7"
 dependencies = [
  "base64",
  "dirs",
