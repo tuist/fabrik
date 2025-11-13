@@ -44,7 +44,7 @@ bytes = "1"
 which = "6"
 # Pin home to avoid edition 2024 requirement
 home = "=0.5.11"
-schlussel = { git = "https://github.com/tuist/schlussel" }
+schlussel = { git = "https://github.com/tuist/schlussel", branch = "feat/xdg-base-directory-support" }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["signal"] }
