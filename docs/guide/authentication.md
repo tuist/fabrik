@@ -17,14 +17,11 @@ Simple authentication using a static token. Best for CI/CD pipelines or when OAu
 
 #### Zero-Configuration (Convention-Based)
 
-Fabrik automatically checks for tokens in standard environment variables:
+Fabrik automatically checks for tokens in the standard environment variable:
 
 ```bash
-# Option 1: Use FABRIK_TOKEN (no config needed!)
+# Use FABRIK_TOKEN (no config needed!)
 export FABRIK_TOKEN="your-token-here"
-
-# Option 2: Use TUIST_TOKEN (no config needed!)
-export TUIST_TOKEN="your-token-here"
 
 # Verify authentication
 fabrik auth status
@@ -34,7 +31,7 @@ fabrik auth status
 ```toml
 [auth]
 provider = "token"
-# That's it! Uses FABRIK_TOKEN or TUIST_TOKEN automatically
+# That's it! Uses FABRIK_TOKEN automatically
 ```
 
 #### Custom Configuration

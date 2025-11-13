@@ -160,7 +160,7 @@ pub enum AuthProvider {
 /// Token-based authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TokenAuthConfig {
-    /// Environment variable containing the token (defaults to FABRIK_TOKEN or TUIST_TOKEN if not specified)
+    /// Environment variable containing the token (defaults to FABRIK_TOKEN if not specified)
     pub env_var: Option<String>,
 
     /// Path to file containing the token

@@ -281,11 +281,8 @@ impl AuthProvider {
             }
         }
 
-        // Fall back to convention-based environment variables (FABRIK_TOKEN, TUIST_TOKEN)
+        // Fall back to convention-based environment variable (FABRIK_TOKEN)
         if let Ok(token) = std::env::var("FABRIK_TOKEN") {
-            return Ok(token);
-        }
-        if let Ok(token) = std::env::var("TUIST_TOKEN") {
             return Ok(token);
         }
 

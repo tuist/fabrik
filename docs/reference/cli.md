@@ -414,13 +414,11 @@ Simple authentication using a static token. Best for CI/CD or when OAuth2 is not
 
 **Zero-Configuration (Recommended):**
 
-Fabrik automatically checks for tokens in standard environment variables:
+Fabrik automatically checks for the token in the standard environment variable:
 
 ```bash
-# Just set FABRIK_TOKEN or TUIST_TOKEN (no config needed!)
+# Just set FABRIK_TOKEN (no config needed!)
 export FABRIK_TOKEN="your-token-here"
-# or
-export TUIST_TOKEN="your-token-here"
 
 # Check status
 fabrik auth status
@@ -430,7 +428,7 @@ fabrik auth status
 ```toml
 [auth]
 provider = "token"
-# That's it! Uses FABRIK_TOKEN or TUIST_TOKEN automatically
+# That's it! Uses FABRIK_TOKEN automatically
 ```
 
 **Custom Configuration:**
