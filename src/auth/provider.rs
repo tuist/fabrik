@@ -220,15 +220,10 @@ impl OAuth2ClientWrapper {
 impl AuthProvider {
     /// Create a new authentication provider from configuration
     pub fn new(config: AuthConfig, root_url: Option<String>) -> Result<Self> {
-        let (oauth2_wrapper, oauth2_url) = if matches!(
-            config.provider,
-            Some(ConfigAuthProvider::OAuth2)
-        ) {
-            let oauth2_config = config.oauth2.as_ref().ok_or_else(|| {
-                AuthenticationError::ConfigError(
-                    "OAuth2 provider selected but no oauth2 configuration provided".to_string(),
-                )
-            })?;
+        // Initialize OAuth2 wrapper if OAuth2 config is present
+        // (even if provider is not explicitly set - we'll auto-detect later)
+        let (oauth2_wrapper, oauth2_url) = if config.oauth2.is_some() {
+            let oauth2_config = config.oauth2.as_ref().unwrap();
 
             // Resolve the effective OAuth2 URL
             let resolved_url = oauth2_config
@@ -256,12 +251,66 @@ impl AuthProvider {
         })
     }
 
+    /// Detect which authentication provider to use
+    ///
+    /// Priority:
+    /// 1. FABRIK_AUTH_PROVIDER env var (explicit override)
+    /// 2. FABRIK_TOKEN env var present → use token
+    /// 3. OAuth2 token exists in storage → use OAuth2
+    /// 4. Config file provider setting
+    /// 5. Error if nothing available
+    fn detect_provider(&self) -> Result<ConfigAuthProvider, AuthenticationError> {
+        // 1. Check for explicit env var override
+        if let Ok(provider_str) = std::env::var("FABRIK_AUTH_PROVIDER") {
+            return match provider_str.to_lowercase().as_str() {
+                "token" => Ok(ConfigAuthProvider::Token),
+                "oauth2" => Ok(ConfigAuthProvider::OAuth2),
+                _ => Err(AuthenticationError::ConfigError(format!(
+                    "Invalid FABRIK_AUTH_PROVIDER value: '{}'. Must be 'token' or 'oauth2'",
+                    provider_str
+                ))),
+            };
+        }
+
+        // 2. Check if FABRIK_TOKEN is set → use token auth
+        if std::env::var("FABRIK_TOKEN").is_ok() {
+            return Ok(ConfigAuthProvider::Token);
+        }
+
+        // 3. Check if OAuth2 token exists in storage
+        if let Some(wrapper) = &self.oauth2_wrapper {
+            let token_key = format!(
+                "{}:fabrik",
+                self.oauth2_url.as_ref().expect("OAuth2 URL should be set")
+            );
+            if let Ok(Some(_)) = wrapper.get_token(&token_key) {
+                tracing::debug!("[fabrik] Auto-detected OAuth2 (token found in storage)");
+                return Ok(ConfigAuthProvider::OAuth2);
+            }
+        }
+
+        // 4. Use config file setting if provided
+        if let Some(provider) = &self.config.provider {
+            return Ok(provider.clone());
+        }
+
+        // 5. Nothing available
+        Err(AuthenticationError::NoProvider)
+    }
+
     /// Get a valid access token for authentication
+    ///
+    /// Automatically detects which authentication method to use:
+    /// 1. FABRIK_AUTH_PROVIDER env var (explicit override)
+    /// 2. FABRIK_TOKEN env var present → use token
+    /// 3. OAuth2 token exists in storage → use OAuth2
+    /// 4. Config file provider setting
     pub async fn get_token(&self) -> Result<String, AuthenticationError> {
-        match self.config.provider {
-            Some(ConfigAuthProvider::Token) => self.get_token_from_config(),
-            Some(ConfigAuthProvider::OAuth2) => self.get_oauth2_token().await,
-            None => Err(AuthenticationError::NoProvider),
+        let provider = self.detect_provider()?;
+
+        match provider {
+            ConfigAuthProvider::Token => self.get_token_from_config(),
+            ConfigAuthProvider::OAuth2 => self.get_oauth2_token().await,
         }
     }
 
@@ -357,8 +406,10 @@ impl AuthProvider {
 
     /// Logout (delete stored token)
     pub async fn logout(&self) -> Result<(), AuthenticationError> {
-        match self.config.provider {
-            Some(ConfigAuthProvider::OAuth2) => {
+        let provider = self.detect_provider().unwrap_or(ConfigAuthProvider::Token);
+
+        match provider {
+            ConfigAuthProvider::OAuth2 => {
                 let wrapper =
                     self.oauth2_wrapper
                         .as_ref()
@@ -375,18 +426,20 @@ impl AuthProvider {
                 tracing::info!("[fabrik] Successfully logged out");
                 Ok(())
             }
-            Some(ConfigAuthProvider::Token) => {
+            ConfigAuthProvider::Token => {
                 // For token-based auth, we don't store anything, so nothing to delete
                 tracing::info!("[fabrik] Token-based authentication doesn't require logout");
                 Ok(())
             }
-            None => Err(AuthenticationError::NoProvider),
         }
     }
 
     /// Check authentication status
     pub async fn status(&self) -> Result<AuthStatus, AuthenticationError> {
-        match self.config.provider {
+        // Try to detect provider, but don't fail if we can't
+        let provider = self.detect_provider().ok();
+
+        match provider {
             Some(ConfigAuthProvider::Token) => {
                 // Check if we can get a token
                 match self.get_token_from_config() {
@@ -433,7 +486,12 @@ impl AuthProvider {
                     }),
                 }
             }
-            None => Err(AuthenticationError::NoProvider),
+            None => Ok(AuthStatus {
+                authenticated: false,
+                provider: "none".to_string(),
+                token_preview: None,
+                expires_at: None,
+            }),
         }
     }
 

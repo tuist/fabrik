@@ -387,8 +387,10 @@ fabrik health --timeout 10s
 Manage authentication for connecting to remote cache servers.
 
 Fabrik supports two authentication methods:
-- **Token-based**: Simple token authentication (hardcoded, environment variable, or file)
+- **Token-based**: Simple token authentication (environment variable or file)
 - **OAuth2 with PKCE**: Device code flow for secure, user-friendly authentication
+
+**Auto-Detection:** Fabrik automatically detects which method to use based on `FABRIK_AUTH_PROVIDER` env var, `FABRIK_TOKEN` env var, OAuth2 token in storage, or config file setting. Same config works in CI (token) and local dev (OAuth2)!
 
 ### Commands
 
@@ -424,11 +426,11 @@ export FABRIK_TOKEN="your-token-here"
 fabrik auth status
 ```
 
-**Minimal config:**
+**Minimal config** (optional with auto-detection):
 ```toml
 [auth]
-provider = "token"
-# That's it! Uses FABRIK_TOKEN automatically
+# provider is optional - auto-detects from FABRIK_TOKEN
+# provider = "token"  # Uncomment to force token auth
 ```
 
 **Custom Configuration:**
@@ -472,12 +474,13 @@ Secure authentication with automatic token refresh. Best for interactive use and
 url = "https://tuist.dev"
 
 [auth]
-provider = "oauth2"
+# provider is optional - auto-detects after login!
+# provider = "oauth2"  # Uncomment to force OAuth2
 
 [auth.oauth2]
 client_id = "fabrik-cli"
 scopes = "cache:read cache:write"
-storage = "keychain"  # or "file" or "memory"
+storage = "file"  # or "keychain" or "memory"
 
 # Optional: Custom endpoints (defaults use url)
 # authorization_endpoint = "https://tuist.dev/oauth/authorize"
