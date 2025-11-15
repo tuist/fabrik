@@ -308,7 +308,7 @@ async fn test_oauth2_device_flow_login() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
     let config_path = create_oauth2_config(&temp_dir, server.base_url());
 
-    println!("[fabrik] Test config created at: {:?}", config_path);
+    println!("[fabrik] Test config created");
 
     // Load config and create AuthProvider
     let config_content = std::fs::read_to_string(&config_path).unwrap();
