@@ -58,4 +58,4 @@ predicates = "3"
 
 [build-dependencies]
 tonic-build = "0.12"
-cbindgen = "0.27"
+cbindgen = "0.29"
