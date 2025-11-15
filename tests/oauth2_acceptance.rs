@@ -297,6 +297,9 @@ token_endpoint = "{}/oauth/token"
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_oauth2_device_flow_login() {
+    // Disable browser opening during tests
+    std::env::set_var("SCHLUSSEL_NO_BROWSER", "1");
+
     // Start mock OAuth2 server with auto-authorization
     let server = MockOAuthServer::start_with_auto_authorize(true).await;
     println!(
@@ -376,6 +379,9 @@ async fn test_oauth2_device_flow_login() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_oauth2_status_not_authenticated() {
+    // Disable browser opening during tests
+    std::env::set_var("SCHLUSSEL_NO_BROWSER", "1");
+
     // Start mock OAuth2 server
     let server = MockOAuthServer::start().await;
 
@@ -409,6 +415,9 @@ async fn test_oauth2_status_not_authenticated() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn test_oauth2_token_refresh() {
+    // Disable browser opening during tests
+    std::env::set_var("SCHLUSSEL_NO_BROWSER", "1");
+
     // This test would verify automatic token refresh
     // Currently blocked by the same limitation - need to mock the full flow
     // including token storage and retrieval

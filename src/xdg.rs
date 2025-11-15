@@ -43,6 +43,7 @@ pub fn state_dir() -> PathBuf {
 /// let data_dir = fabrik::xdg::data_dir();
 /// // Unix: ~/.local/share/fabrik or $XDG_DATA_HOME/fabrik
 /// ```
+#[allow(dead_code)]
 pub fn data_dir() -> PathBuf {
     if let Ok(xdg_data) = std::env::var("XDG_DATA_HOME") {
         PathBuf::from(xdg_data).join("fabrik")
@@ -67,6 +68,7 @@ pub fn data_dir() -> PathBuf {
 /// let cache_dir = fabrik::xdg::cache_dir();
 /// // Unix: ~/.cache/fabrik or $XDG_CACHE_HOME/fabrik
 /// ```
+#[allow(dead_code)]
 pub fn cache_dir() -> PathBuf {
     if let Ok(xdg_cache) = std::env::var("XDG_CACHE_HOME") {
         PathBuf::from(xdg_cache).join("fabrik")
@@ -102,6 +104,7 @@ pub fn daemon_state_dir() -> PathBuf {
 /// let oauth_dir = fabrik::xdg::oauth_tokens_dir();
 /// // Unix: ~/.local/share/fabrik/oauth-tokens
 /// ```
+#[allow(dead_code)]
 pub fn oauth_tokens_dir() -> PathBuf {
     data_dir().join("oauth-tokens")
 }
