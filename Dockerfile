@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1.20
 # Multi-stage Dockerfile for Fabrik
 # Optimized for fast builds with cargo-chef and BuildKit cache mounts
 # Expected speedup: 5-10x faster on subsequent builds
@@ -6,7 +6,7 @@
 # ============================================================================
 # Stage 1: Chef Planner (generates dependency recipe)
 # ============================================================================
-FROM rust:1.83-bookworm AS chef
+FROM rust:1.91-bookworm AS chef
 
 # Install cargo-chef from pre-built binary (much faster than compiling from source)
 # This saves 15-20 minutes of build time

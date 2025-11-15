@@ -382,256 +382,216 @@ fabrik health --url https://cache.example.com:8888/health
 fabrik health --timeout 10s
 ```
 
-## `fabrik auth`
+## `fabrik run`
 
-Manage authentication for connecting to remote cache servers.
+Execute scripts with automatic caching based on KDL annotations.
 
-Fabrik supports two authentication methods:
-- **Token-based**: Simple token authentication (environment variable or file)
-- **OAuth2 with PKCE**: Device code flow for secure, user-friendly authentication
+### Usage
 
-**Auto-Detection:** Fabrik automatically detects which method to use based on `FABRIK_AUTH_PROVIDER` env var, `FABRIK_TOKEN` env var, OAuth2 token in storage, or config file setting. Same config works in CI (token) and local dev (OAuth2)!
+```bash
+# Execute script with caching
+fabrik run <SCRIPT> [-- SCRIPT_ARGS...]
+
+# Script management operations
+fabrik run --status <SCRIPT>    # Check cache status
+fabrik run --list               # List all cached scripts
+fabrik run --stats              # Show cache statistics
+```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `--status` | Check cache status for a script |
+| `--list` | List all cached scripts |
+| `--stats` | Show script cache statistics |
+| `--no-cache` | Force execution without checking cache |
+| `--clean` | Remove cached outputs before running |
+| `--dry-run` | Show what would happen without executing |
+| `--cache-only` | Fail if cache miss (for CI validation) |
+| `--verbose`, `-v` | Verbose output |
+
+### Examples
+
+```bash
+# Execute script with caching
+fabrik run build.sh
+
+# Check cache status
+fabrik run --status build.sh
+
+# List all cached scripts
+fabrik run --list
+
+# Show cache statistics
+fabrik run --stats
+
+# Force re-execution
+fabrik run --no-cache build.sh
+
+# Clean cache and re-run
+fabrik run --clean build.sh
+```
+
+See [Script Cache Documentation](/docs/cache/scripts/) for details on KDL annotations and script caching.
+
+## `fabrik cas`
+
+Content-Addressed Storage operations for blob storage.
+
+CAS operations work with content hashes (SHA256) to store and retrieve arbitrary binary data.
 
 ### Commands
 
 ```bash
-# Login with OAuth2 device code flow
-fabrik auth login [--config <PATH>]
+# Get a blob by hash
+fabrik cas get <HASH> [--output <FILE>]
 
-# Check authentication status
-fabrik auth status [--config <PATH>]
+# Store a file (returns hash)
+fabrik cas put <FILE> [--hash <EXPECTED_HASH>]
 
-# Show current access token (for debugging)
-fabrik auth token [--config <PATH>]
+# Check if blob exists
+fabrik cas exists <HASH>
 
-# Logout and delete stored tokens
-fabrik auth logout [--config <PATH>]
+# Delete a blob
+fabrik cas delete <HASH> [--force]
+
+# Show blob information
+fabrik cas info <HASH>
+
+# List all blobs
+fabrik cas list [--verbose]
+
+# Show storage statistics
+fabrik cas stats
 ```
-
-### Authentication Methods
-
-#### Token-Based Authentication
-
-Simple authentication using a static token. Best for CI/CD or when OAuth2 is not available.
-
-**Zero-Configuration (Recommended):**
-
-Fabrik automatically checks for the token in the standard environment variable:
-
-```bash
-# Just set FABRIK_TOKEN (no config needed!)
-export FABRIK_TOKEN="your-token-here"
-
-# Check status
-fabrik auth status
-```
-
-**Minimal config** (optional with auto-detection):
-```toml
-[auth]
-# provider is optional - auto-detects from FABRIK_TOKEN
-# provider = "token"  # Uncomment to force token auth
-```
-
-**Custom Configuration:**
-
-Override the default behavior if needed:
-
-```toml
-[auth]
-provider = "token"
-
-[auth.token]
-# Option 1: Custom environment variable
-env_var = "MY_CUSTOM_TOKEN_VAR"
-
-# Option 2: File path
-file = "~/.fabrik/token"
-```
-
-**Usage with custom config:**
-
-```bash
-# Custom env var
-export MY_CUSTOM_TOKEN_VAR="your-token-here"
-
-# Or file-based
-echo "your-token-here" > ~/.fabrik/token
-chmod 600 ~/.fabrik/token
-
-# Check status
-fabrik auth status
-```
-
-#### OAuth2 with PKCE Authentication
-
-Secure authentication with automatic token refresh. Best for interactive use and development workflows.
-
-**Configuration:**
-
-```toml
-# Service URL (used for OAuth2, service discovery, etc.)
-url = "https://tuist.dev"
-
-[auth]
-# provider is optional - auto-detects after login!
-# provider = "oauth2"  # Uncomment to force OAuth2
-
-[auth.oauth2]
-client_id = "fabrik-cli"
-scopes = "cache:read cache:write"
-storage = "file"  # or "keychain" or "memory"
-
-# Optional: Custom endpoints (defaults use url)
-# authorization_endpoint = "https://tuist.dev/oauth/authorize"
-# token_endpoint = "https://tuist.dev/oauth/token"
-# device_authorization_endpoint = "https://tuist.dev/oauth/device/code"
-```
-
-**Storage Backends:**
-- `keychain` - Uses OS credential manager (macOS Keychain, Windows Credential Manager, Linux Secret Service)
-- `file` - Stores tokens in `~/.fabrik/oauth-tokens/` (cross-process safe with file locking)
-- `memory` - In-memory only (tokens lost on daemon restart)
 
 ### Examples
 
-#### Login Flow
+```bash
+# Store a file in CAS
+fabrik cas put myfile.bin
+# Output: abc123def456... (hash)
+
+# Retrieve blob by hash
+fabrik cas get abc123def456... --output restored.bin
+
+# Check if blob exists
+fabrik cas exists abc123def456...
+
+# Get blob information
+fabrik cas info abc123def456...
+
+# List all blobs
+fabrik cas list --verbose
+
+# Show CAS statistics
+fabrik cas stats
+
+# Delete a blob
+fabrik cas delete abc123def456... --force
+```
+
+### JSON Output
+
+Most commands support `--json` flag for machine-readable output:
 
 ```bash
-# Login with OAuth2
-fabrik auth login --config .fabrik.toml
+fabrik cas put file.bin --json
+# {"hash":"abc123...","size_bytes":1024,"success":true}
 
-# Output:
-# [fabrik] Starting OAuth2 device code flow
-# [fabrik] Please visit: https://tuist.dev/activate
-# [fabrik] Enter code: ABCD-EFGH
-# [fabrik] Waiting for authorization...
-# ✓ Successfully authenticated!
+fabrik cas get abc123... --output file.bin --json
+# {"hash":"abc123...","output_path":"file.bin","size_bytes":1024,"success":true}
 ```
 
-#### Check Authentication Status
+## `fabrik kv`
+
+Key-Value storage operations for action cache and metadata.
+
+KV operations use arbitrary string keys (not content hashes) to store and retrieve data.
+
+### Commands
 
 ```bash
-fabrik auth status
+# Get value by key
+fabrik kv get <KEY> [--output <FILE>]
 
-# Output for OAuth2:
-# Authentication Status: ✓ Authenticated
-# Provider: oauth2
-# Token: abc12345...xyz9
-# Expires: 2025-11-13 12:00:00 UTC
-# Time remaining: 23h 45m
+# Store key-value pair
+fabrik kv put <KEY> <VALUE>
+fabrik kv put <KEY> --file <FILE>
 
-# Output for token:
-# Authentication Status: ✓ Authenticated
-# Provider: token
-# Token: sk_test_...abc9
+# Check if key exists
+fabrik kv exists <KEY>
+
+# Delete key-value pair
+fabrik kv delete <KEY> [--force]
+
+# List all keys
+fabrik kv list [--prefix <PREFIX>]
+
+# Show storage statistics
+fabrik kv stats
 ```
 
-#### Get Current Token (for debugging)
+### Examples
 
 ```bash
-# Show raw token (useful for debugging or manual API calls)
-fabrik auth token
-# eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9...
+# Store a value
+fabrik kv put build-result "success"
+
+# Store from file
+fabrik kv put build-metadata --file metadata.json
+
+# Retrieve value
+fabrik kv get build-result
+
+# Retrieve to file
+fabrik kv get build-metadata --output metadata.json
+
+# Check if key exists
+fabrik kv exists build-result
+
+# List all keys
+fabrik kv list
+
+# List keys with prefix
+fabrik kv list --prefix build-
+
+# Show KV statistics
+fabrik kv stats
+
+# Delete a key
+fabrik kv delete build-result --force
 ```
 
-#### Logout
+### JSON Output
+
+All commands support `--json` flag:
 
 ```bash
-fabrik auth logout
-# ✓ Successfully logged out
+fabrik kv put mykey "myvalue" --json
+# {"key":"mykey","value_bytes":7,"success":true}
 
-# For token-based auth:
-# [fabrik] Token-based authentication doesn't require logout
+fabrik kv list --json
+# [{"key":"build-result"},{"key":"build-metadata"}]
+
+fabrik kv stats --json
+# {"total_keys":10,"total_bytes":5242880}
 ```
 
-### Common Workflows
+### Use Cases
 
-#### Local Development with OAuth2
-
+**Action Cache**: Store build results keyed by input hash
 ```bash
-# One-time setup
-fabrik auth login
-fabrik activate bash
-
-# Daily use (token automatically refreshed)
-cd ~/project
-gradle build  # Uses cached credentials
+# Bazel/Gradle-style action cache
+INPUT_HASH=$(sha256sum inputs.txt | cut -d' ' -f1)
+fabrik kv put "action:$INPUT_HASH" --file result.json
 ```
 
-#### CI/CD with Token
-
-```yaml
-# .github/workflows/build.yml
-- name: Build with cache
-  env:
-    FABRIK_AUTH_TOKEN: ${{ secrets.FABRIK_TOKEN }}
-  run: fabrik exec gradle build
-```
-
-#### Switching Between Environments
-
-```toml
-# .fabrik.toml (development)
-url = "https://tuist.dev"
-
-[auth]
-provider = "oauth2"
-
-[auth.oauth2]
-client_id = "fabrik-cli"
-storage = "keychain"
-```
-
-```toml
-# .fabrik-ci.toml (CI)
-[auth]
-provider = "token"
-
-[auth.token]
-env_var = "FABRIK_AUTH_TOKEN"
-```
-
-### Token Refresh
-
-OAuth2 tokens are automatically refreshed when:
-- Token has 20% or less of its lifetime remaining (80% threshold)
-- A request is made with an expired token
-
-Token refresh is:
-- **Cross-process safe**: Uses file locking to prevent concurrent refreshes
-- **Transparent**: Happens automatically without user intervention
-- **Efficient**: Proactive refresh prevents request delays
-
-### Troubleshooting
-
-**"Token expired" error:**
+**Build Metadata**: Store timestamps, versions, etc.
 ```bash
-# Check token status
-fabrik auth status
-
-# Re-authenticate
-fabrik auth logout
-fabrik auth login
-```
-
-**"No authentication provider configured" error:**
-```bash
-# Verify configuration
-fabrik config show
-
-# Ensure [auth] section exists
-fabrik config validate .fabrik.toml
-```
-
-**Token not found in environment/file:**
-```bash
-# Verify environment variable
-echo $FABRIK_AUTH_TOKEN
-
-# Verify file exists and is readable
-cat ~/.fabrik/token
-ls -la ~/.fabrik/token
+fabrik kv put "last-build-time" "$(date -Iseconds)"
+fabrik kv put "app-version" "1.2.3"
 ```
 
 ## Global Options
