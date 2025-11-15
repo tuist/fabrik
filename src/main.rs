@@ -44,29 +44,43 @@ async fn main() -> Result<()> {
             use cli::AuthCommand;
             use config::FabrikConfig;
 
-            // Load config (with discovery)
-            let config = if let Some(config_path) = &args.config {
-                FabrikConfig::from_file(config_path)?
-            } else {
-                // Try to discover config by traversing up directory tree
-                match config_discovery::discover_config(&std::env::current_dir()?)? {
-                    Some(config_path) => {
-                        tracing::info!("[fabrik] Using config: {}", config_path.display());
-                        FabrikConfig::from_file(&config_path)?
-                    }
-                    None => {
-                        tracing::warn!("[fabrik] No configuration file found, using defaults");
-                        FabrikConfig::default()
+            // Helper to load config with discovery
+            let load_config = |config_path: &Option<String>| -> Result<FabrikConfig> {
+                if let Some(path) = config_path {
+                    FabrikConfig::from_file(path)
+                } else {
+                    // Try to discover config by traversing up directory tree
+                    match config_discovery::discover_config(&std::env::current_dir()?)? {
+                        Some(config_path) => {
+                            tracing::info!("[fabrik] Using config: {}", config_path.display());
+                            FabrikConfig::from_file(&config_path)
+                        }
+                        None => {
+                            tracing::warn!("[fabrik] No configuration file found, using defaults");
+                            Ok(FabrikConfig::default())
+                        }
                     }
                 }
             };
 
             // Dispatch to auth subcommand
             match args.command {
-                AuthCommand::Login => commands::auth::login(config).await,
-                AuthCommand::Logout => commands::auth::logout(config).await,
-                AuthCommand::Status => commands::auth::status(config).await,
-                AuthCommand::Token => commands::auth::token(config).await,
+                AuthCommand::Login(subargs) => {
+                    let config = load_config(&subargs.config)?;
+                    commands::auth::login(config).await
+                }
+                AuthCommand::Logout(subargs) => {
+                    let config = load_config(&subargs.config)?;
+                    commands::auth::logout(config).await
+                }
+                AuthCommand::Status(subargs) => {
+                    let config = load_config(&subargs.config)?;
+                    commands::auth::status(config).await
+                }
+                AuthCommand::Token(subargs) => {
+                    let config = load_config(&subargs.config)?;
+                    commands::auth::token(config).await
+                }
             }
         }
     }

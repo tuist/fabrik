@@ -362,7 +362,7 @@ impl AuthProvider {
         }
     }
 
-    /// Login with OAuth2 device code flow
+    /// Login with OAuth2 device authorization grant (RFC 8628)
     pub async fn login(&self) -> Result<(), AuthenticationError> {
         let wrapper = self
             .oauth2_wrapper
@@ -372,14 +372,17 @@ impl AuthProvider {
             ))?
             .clone();
 
-        tracing::info!("[fabrik] Starting OAuth2 device code flow");
+        tracing::info!("[fabrik] Starting OAuth2 device authorization flow (RFC 8628)");
 
         let oauth2_url = self.oauth2_url.clone();
 
-        // Run blocking OAuth operations in a separate thread to avoid
-        // "Cannot drop a runtime in a context where blocking is not allowed" errors
+        // Run blocking OAuth operations in a separate thread
         let (token, token_key) = tokio::task::spawn_blocking(move || {
-            // Start device code flow (opens browser and polls for completion)
+            // Start standard device authorization flow
+            // This will:
+            // 1. POST to /oauth2/device/authorization to get device_code and user_code
+            // 2. Display the user_code and verification_uri to the user
+            // 3. Poll the token endpoint until the user authorizes
             let token = wrapper.authorize_device()?;
 
             // Prepare token key
@@ -393,7 +396,7 @@ impl AuthProvider {
         .await
         .map_err(|e| AuthenticationError::OAuth2Error(format!("Task join error: {}", e)))??;
 
-        // Save token (also needs to run in blocking context)
+        // Save token
         let wrapper_for_save = self.oauth2_wrapper.as_ref().unwrap().clone();
         tokio::task::spawn_blocking(move || wrapper_for_save.save_token(&token_key, token))
             .await

@@ -608,7 +608,10 @@ pub enum CacheCommands {
 pub struct AuthArgs {
     #[command(subcommand)]
     pub command: AuthCommand,
+}
 
+#[derive(Parser, Debug)]
+pub struct AuthSubcommandArgs {
     /// Config file path
     #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
     pub config: Option<String>,
@@ -617,14 +620,14 @@ pub struct AuthArgs {
 #[derive(Subcommand, Debug)]
 pub enum AuthCommand {
     /// Login with OAuth2
-    Login,
+    Login(AuthSubcommandArgs),
 
     /// Logout and delete stored tokens
-    Logout,
+    Logout(AuthSubcommandArgs),
 
     /// Check authentication status
-    Status,
+    Status(AuthSubcommandArgs),
 
     /// Show current access token (for debugging)
-    Token,
+    Token(AuthSubcommandArgs),
 }
