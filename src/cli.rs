@@ -73,6 +73,12 @@ pub enum Commands {
     /// Manage script cache
     Cache(CacheArgs),
 
+    /// Content-Addressed Storage operations (CAS)
+    Cas(CasArgs),
+
+    /// Key-Value storage operations (Action Cache)
+    Kv(KvArgs),
+
     /// Authentication management
     Auth(AuthArgs),
 }

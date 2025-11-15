@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "@tuist/fabrik": "file:../../../packages/metro",
-    "metro": "^0.81.0",
+    "metro": "^0.83.0",
     "metro-config": "^0.81.0"
   }
 }

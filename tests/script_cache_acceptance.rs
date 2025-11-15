@@ -321,8 +321,8 @@ fn test_cache_status_command() {
     // Check status
     workspace
         .fabrik()
-        .arg("cache")
-        .arg("status")
+        .arg("run")
+        .arg("--status")
         .arg(&script)
         .current_dir(workspace.path())
         .assert()
@@ -355,18 +355,18 @@ fn test_cache_clean_command() {
         .success()
         .stderr(predicate::str::contains("HIT"));
 
-    // Clean cache
+    // Clean cache and re-run (should be a MISS since we're cleaning first)
     workspace
         .fabrik()
-        .arg("cache")
-        .arg("clean")
+        .arg("run")
+        .arg("--clean")
         .arg(&script)
         .current_dir(workspace.path())
         .assert()
         .success()
-        .stdout(predicate::str::contains("Cache cleaned"));
+        .stderr(predicate::str::contains("MISS")); // Clean removes cache, so execution is a MISS
 
-    // Next run should be a miss
+    // Next run should be a hit (from previous execution)
     workspace
         .fabrik()
         .arg("run")
@@ -374,7 +374,7 @@ fn test_cache_clean_command() {
         .current_dir(workspace.path())
         .assert()
         .success()
-        .stderr(predicate::str::contains("MISS"));
+        .stderr(predicate::str::contains("HIT"));
 }
 
 #[test]
@@ -403,8 +403,8 @@ fn test_cache_list_command() {
     // List cache
     workspace
         .fabrik()
-        .arg("cache")
-        .arg("list")
+        .arg("run")
+        .arg("--list")
         .current_dir(workspace.path())
         .assert()
         .success()
@@ -429,8 +429,8 @@ fn test_cache_stats_command() {
     // Get stats
     workspace
         .fabrik()
-        .arg("cache")
-        .arg("stats")
+        .arg("run")
+        .arg("--stats")
         .current_dir(workspace.path())
         .assert()
         .success()
