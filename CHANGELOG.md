@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.9.2] - 2025-11-15
+
+### 🐛 Bug Fixes
+
+- **(deps)** Update rust crate home to v0.5.12 (#13) ([3f30b8d](3f30b8d6894538cc9ff4e66aeb85c6891cc299f1))
+- **(deps)** Update dependency metro to ^0.83.0 (#26) ([5120c06](5120c06fc4e977cc9fda2388d95447ce630a5e22))
+
+### 📦 Dependency Updates
+
+- **(deps)** Update dependency java to v21.0.9+10.0.lts (#12) ([8a353fa](8a353fab4f1f5e74a8ffac2d582af3f2c1608918))
+- **(deps)** Update dependency apple_support to v1.24.4 (#16) ([58bec06](58bec06fbc3ee7b77d74cceda9e287e550d19f0b))
+- **(deps)** Update dependency rules_swift to v2.9.0 (#17) ([3c70ffc](3c70ffca986040839f9284dd9c232a6632a35f43))
+- **(deps)** Update docker/dockerfile docker tag to v1.20 (#19) ([f7cbbd9](f7cbbd9c4aca4e604137beccc550aa831bbf7cf4))
+- **(deps)** Update gradle to v8.14.3 (#20) ([8b62350](8b623509a09df497fd5717e6e829631befc77b02))
+- **(deps)** Update npm to v11.6.2 (#21) ([bbc6b42](bbc6b428257b495f6b56da3fdb621e14f85cd6ae))
+- **(deps)** Update plugin org.jetbrains.kotlin.jvm to v2.2.21 (#22) ([7af9dc1](7af9dc1f26e3caa86e4a203b30b599e369791f46))
+- **(deps)** Update pnpm to v10.22.0 (#23) ([a174aab](a174aabd577838a44ec05948896df9de01ee78c5))
+- **(deps)** Update rust crate cbindgen to 0.29 (#24) ([d2f33e1](d2f33e114523747b32d00373390b475f27d4a6ab))
+- **(deps)** Update rust docker tag to v1.91 (#25) ([6382b11](6382b11bfaf5c9eaf4b4630fc057c53f74bf8039))
+- **(deps)** Update dependency apple_support to v1.24.5 (#27) ([a4d5725](a4d572551e5c36a3d0dd60913fe4102dd0d1b588))
+
 ## [0.9.1] - 2025-11-12
 
 ### 🚜 Refactor
