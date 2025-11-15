@@ -20,11 +20,15 @@ max_size = "20GB"
 socket = ".fabrik/xcode.sock"  # Relative to project root
 ```
 
-**Important:** When socket is configured, the daemon creates **ONLY** the Unix socket server (no HTTP/gRPC TCP servers).
+> [!IMPORTANT]
+> When `socket` is configured, the daemon creates **ONLY** the Unix socket server (no HTTP/gRPC TCP servers). This is exclusive to Xcode integration and cannot be combined with other build systems.
 
 ## Xcode Project Setup
 
-Set these build settings in your Xcode project. The socket path **must match** the path in `fabrik.toml`:
+> [!WARNING]
+> The socket path in Xcode's build settings **must exactly match** the path in `fabrik.toml`. Mismatched paths will prevent Xcode from connecting to the cache.
+
+Set these build settings in your Xcode project:
 
 ### Option 1: Build Settings
 

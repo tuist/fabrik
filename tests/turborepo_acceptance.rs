@@ -191,11 +191,8 @@ fn test_turborepo_http_endpoints() {
     let has_success = response.contains("200 OK") || response.contains("201");
     assert!(
         has_success,
-        "PUT should succeed but got unexpected response (check logs for details)"
+        "PUT should succeed but got unexpected response"
     );
-    if !has_success {
-        println!("Response was: {}", response);
-    }
 
     println!("✅ PUT succeeded");
 
@@ -273,11 +270,8 @@ fn test_turborepo_cache_miss() {
     let has_404 = response.contains("404");
     assert!(
         has_404,
-        "Should return 404 for missing artifact but got unexpected response (check logs for details)"
+        "Should return 404 for missing artifact but got unexpected response"
     );
-    if !has_404 {
-        println!("Response was: {}", response);
-    }
 
     println!("✅ Cache miss handled correctly (404)");
 }

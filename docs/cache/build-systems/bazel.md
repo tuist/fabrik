@@ -22,6 +22,9 @@ bazel build //...
 bazel test //...
 ```
 
+> [!TIP]
+> The shell alias approach is recommended because it works transparently with all Bazel commands and IDE integrations. You don't need to modify your build scripts or `.bazelrc` files.
+
 ### Using fabrik exec
 
 ```bash
