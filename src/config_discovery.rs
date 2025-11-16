@@ -46,6 +46,33 @@ pub fn hash_config(config_path: &Path) -> Result<String> {
     Ok(format!("{:x}", result)[..16].to_string())
 }
 
+/// Loads configuration with auto-discovery support
+///
+/// If `explicit_path` is provided, loads config from that path.
+/// Otherwise, auto-discovers config by traversing up directory tree from cwd.
+///
+/// Returns Ok(None) if no config is found (neither explicit nor discovered).
+pub fn load_config_with_discovery(
+    explicit_path: Option<&str>,
+) -> Result<Option<crate::config::FabrikConfig>> {
+    use crate::config::FabrikConfig;
+
+    if let Some(config_path) = explicit_path {
+        // Explicit path provided - load it
+        Ok(Some(FabrikConfig::from_file(config_path)?))
+    } else {
+        // Auto-discover by traversing up directory tree
+        let current_dir = std::env::current_dir()
+            .context("Failed to get current directory for config discovery")?;
+
+        if let Some(discovered_path) = discover_config(&current_dir)? {
+            Ok(Some(FabrikConfig::from_file(&discovered_path)?))
+        } else {
+            Ok(None)
+        }
+    }
+}
+
 /// Daemon state information
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DaemonState {

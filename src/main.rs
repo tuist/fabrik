@@ -44,14 +44,10 @@ async fn main() -> Result<()> {
         Commands::Kv(args) => commands::kv::run(&args).await,
         Commands::Auth(args) => {
             use cli::AuthCommand;
-            use config::FabrikConfig;
+            use config_discovery::load_config_with_discovery;
 
-            // Load config
-            let config = if let Some(config_path) = &args.config {
-                FabrikConfig::from_file(config_path)?
-            } else {
-                FabrikConfig::default()
-            };
+            // Load config with auto-discovery
+            let config = load_config_with_discovery(args.config.as_deref())?.unwrap_or_default();
 
             // Dispatch to auth subcommand
             match &args.command {
