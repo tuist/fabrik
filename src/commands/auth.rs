@@ -49,22 +49,37 @@ pub async fn status(config: FabrikConfig) -> Result<()> {
                 if let Some(expires_at) = status.expires_at {
                     let dt = DateTime::<Utc>::from_timestamp(expires_at as i64, 0)
                         .unwrap_or_else(Utc::now);
-                    println!("{} Expires: {}", fabrik_prefix(), dt.format("%Y-%m-%d %H:%M:%S UTC"));
+                    println!(
+                        "{} Expires: {}",
+                        fabrik_prefix(),
+                        dt.format("%Y-%m-%d %H:%M:%S UTC")
+                    );
 
                     let now = Utc::now().timestamp() as u64;
                     if expires_at > now {
                         let remaining = expires_at - now;
                         let hours = remaining / 3600;
                         let minutes = (remaining % 3600) / 60;
-                        println!("{} Time remaining: {}h {}m", fabrik_prefix(), hours, minutes);
+                        println!(
+                            "{} Time remaining: {}h {}m",
+                            fabrik_prefix(),
+                            hours,
+                            minutes
+                        );
                     } else {
                         println!("{} ⚠ Token has expired", fabrik_prefix());
                     }
                 }
             } else {
-                println!("{} Authentication Status: ✗ Not authenticated", fabrik_prefix());
+                println!(
+                    "{} Authentication Status: ✗ Not authenticated",
+                    fabrik_prefix()
+                );
                 println!("{} Provider: {}", fabrik_prefix(), status.provider);
-                println!("{} To authenticate, run: fabrik auth login", fabrik_prefix());
+                println!(
+                    "{} To authenticate, run: fabrik auth login",
+                    fabrik_prefix()
+                );
             }
 
             Ok(())

@@ -57,6 +57,8 @@ tempfile = "3"
 serial_test = "3"
 assert_cmd = "2"
 predicates = "3"
+uuid = { version = "1", features = ["v4"] }
+rand = "0.8"
 
 [build-dependencies]
 tonic-build = "0.12"
