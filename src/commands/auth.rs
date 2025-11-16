@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
 
 use crate::auth::AuthProvider;
+use crate::cli_utils::fabrik_prefix;
 use crate::config::FabrikConfig;
 
 /// Login with OAuth2
@@ -13,7 +14,7 @@ pub async fn login(config: FabrikConfig) -> Result<()> {
 
     provider.login().await.context("Authentication failed")?;
 
-    println!("✓ Successfully authenticated!");
+    println!("{} ✓ Successfully authenticated!", fabrik_prefix());
 
     Ok(())
 }
@@ -25,7 +26,7 @@ pub async fn logout(config: FabrikConfig) -> Result<()> {
 
     provider.logout().await.context("Logout failed")?;
 
-    println!("✓ Successfully logged out");
+    println!("{} ✓ Successfully logged out", fabrik_prefix());
 
     Ok(())
 }
@@ -38,39 +39,39 @@ pub async fn status(config: FabrikConfig) -> Result<()> {
     match provider.status().await {
         Ok(status) => {
             if status.authenticated {
-                println!("Authentication Status: ✓ Authenticated");
-                println!("Provider: {}", status.provider);
+                println!("{} Authentication Status: ✓ Authenticated", fabrik_prefix());
+                println!("{} Provider: {}", fabrik_prefix(), status.provider);
 
                 if let Some(preview) = status.token_preview {
-                    println!("Token: {}", preview);
+                    println!("{} Token: {}", fabrik_prefix(), preview);
                 }
 
                 if let Some(expires_at) = status.expires_at {
                     let dt = DateTime::<Utc>::from_timestamp(expires_at as i64, 0)
                         .unwrap_or_else(Utc::now);
-                    println!("Expires: {}", dt.format("%Y-%m-%d %H:%M:%S UTC"));
+                    println!("{} Expires: {}", fabrik_prefix(), dt.format("%Y-%m-%d %H:%M:%S UTC"));
 
                     let now = Utc::now().timestamp() as u64;
                     if expires_at > now {
                         let remaining = expires_at - now;
                         let hours = remaining / 3600;
                         let minutes = (remaining % 3600) / 60;
-                        println!("Time remaining: {}h {}m", hours, minutes);
+                        println!("{} Time remaining: {}h {}m", fabrik_prefix(), hours, minutes);
                     } else {
-                        println!("⚠ Token has expired");
+                        println!("{} ⚠ Token has expired", fabrik_prefix());
                     }
                 }
             } else {
-                println!("Authentication Status: ✗ Not authenticated");
-                println!("Provider: {}", status.provider);
-                println!("\nTo authenticate, run: fabrik auth login");
+                println!("{} Authentication Status: ✗ Not authenticated", fabrik_prefix());
+                println!("{} Provider: {}", fabrik_prefix(), status.provider);
+                println!("{} To authenticate, run: fabrik auth login", fabrik_prefix());
             }
 
             Ok(())
         }
         Err(e) => {
-            println!("Authentication Status: ✗ Error");
-            println!("Error: {}", e);
+            println!("{} Authentication Status: ✗ Error", fabrik_prefix());
+            println!("{} Error: {}", fabrik_prefix(), e);
             anyhow::bail!("Failed to check authentication status");
         }
     }
