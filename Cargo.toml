@@ -47,7 +47,7 @@ home = "=0.5.12"
 schlussel = { git = "https://github.com/tuist/schlussel", branch = "main" }
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.29", features = ["signal"] }
+nix = { version = "0.30", features = ["signal"] }
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["processthreadsapi", "winnt", "handleapi"] }
