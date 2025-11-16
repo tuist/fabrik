@@ -18,20 +18,30 @@ use crate::storage;
 use tonic::transport::Server;
 
 pub async fn run(args: DaemonArgs) -> Result<()> {
-    use crate::config_discovery::{hash_config, DaemonState};
+    use crate::config_discovery::{discover_config, hash_config, DaemonState};
 
-    // Load config file if specified
-    let file_config = if let Some(config_path) = &args.config {
-        Some(FabrikConfig::from_file(config_path)?)
+    // Load config file with auto-discovery and track the path for daemon state
+    let (file_config, config_path_opt) = if let Some(config_path_str) = &args.config {
+        // Explicit path provided
+        let path = std::path::PathBuf::from(config_path_str);
+        (Some(FabrikConfig::from_file(&path)?), Some(path))
     } else {
-        None
+        // Auto-discover by traversing up directory tree
+        let current_dir = std::env::current_dir()?;
+        if let Some(discovered_path) = discover_config(&current_dir)? {
+            (
+                Some(FabrikConfig::from_file(&discovered_path)?),
+                Some(discovered_path),
+            )
+        } else {
+            (None, None)
+        }
     };
 
     // If we have a config file, compute hash for daemon identification
-    let daemon_state_info = if let Some(ref config_path_str) = args.config {
-        let config_path = std::path::PathBuf::from(config_path_str);
-        let config_hash = hash_config(&config_path)?;
-        Some((config_hash, config_path))
+    let daemon_state_info = if let Some(ref config_path) = config_path_opt {
+        let config_hash = hash_config(config_path)?;
+        Some((config_hash, config_path.clone()))
     } else {
         None
     };

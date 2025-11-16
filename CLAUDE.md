@@ -852,11 +852,75 @@ for instance in fabrik_instances:
 2. Environment variables
 3. Configuration file (lowest priority)
 
+### Configuration File Discovery
+
+When a configuration file is not explicitly specified via `--config`, Fabrik automatically discovers it by:
+
+1. **Traversing up from current directory**: Starting from the current working directory, Fabrik looks for `fabrik.toml` in each parent directory
+2. **Global fallback**: If no project config is found, checks `~/.config/fabrik/config.toml`
+3. **Explicit override**: Use `--config /path/to/config.toml` to explicitly specify a config file
+
+**Example directory structure:**
+```
+/home/user/
+├── .config/
+│   └── fabrik/
+│       └── config.toml         # Global config (fallback)
+└── projects/
+    └── myproject/
+        ├── fabrik.toml          # Project config (auto-discovered)
+        └── src/
+            └── subdir/          # Running from here finds ../fabrik.toml
+```
+
+**Behavior:**
+- `cd /home/user/projects/myproject/src/subdir && fabrik daemon` → Uses `/home/user/projects/myproject/fabrik.toml`
+- `cd /home/user && fabrik daemon` → Uses `/home/user/.config/fabrik/config.toml`
+- `fabrik daemon --config /custom/path.toml` → Uses `/custom/path.toml` (explicit override)
+
 ### Design Philosophy
 - **Single binary** with configurable behavior via flags
 - **Unified upstream model**: S3, GCS, and other Fabrik instances are all treated as "upstream" layers
 - **Config-backed options**: CLI flags prefixed with `--config-*` can be set via config file, env vars, or CLI
 - **Flexible deployment**: Same binary can be Layer 1 (local/CI), Layer 2 (regional server), or both
+- **Auto-discovery**: Zero configuration for simple use cases - just add `fabrik.toml` to your project
+
+### Configuration Quick Reference
+
+**Three ways to configure Fabrik (in precedence order):**
+
+1. **Command-line flags** (highest priority)
+   ```bash
+   fabrik daemon --config /custom/path.toml --log-level debug
+   ```
+
+2. **Environment variables**
+   ```bash
+   # Runtime flags
+   export FABRIK_LOG_LEVEL=debug
+   export FABRIK_VERBOSE=true
+
+   # Config overrides
+   export FABRIK_CONFIG_CACHE_DIR=/custom/cache
+   export FABRIK_CONFIG_UPSTREAM_0_URL=grpc://cache.tuist.io:7070
+
+   fabrik daemon  # Uses env vars
+   ```
+
+3. **Configuration file** (lowest priority)
+   ```bash
+   # Auto-discovered (searches up from cwd):
+   fabrik daemon  # Finds ./fabrik.toml or ../../fabrik.toml or ~/.config/fabrik/config.toml
+
+   # Explicit path:
+   fabrik daemon --config /path/to/config.toml
+   ```
+
+**Key principles:**
+- Config file auto-discovery: traverses up directory tree from cwd
+- All flags support environment variables (`FABRIK_*` or `FABRIK_CONFIG_*`)
+- CLI args override env vars, env vars override config file
+- Zero configuration possible in many scenarios (CI, local dev)
 
 ### CLI Commands
 
@@ -1275,23 +1339,73 @@ When Fabrik starts, it automatically detects the runtime environment:
 3. **Local/Other**: Falls back to filesystem storage
    - Uses `cache.dir` from config or default `/tmp/fabrik-cache`
 
-#### Environment Variables
+### Environment Variable Support
 
-All configuration options can be overridden via environment variables with the `TUIST_CONFIG_*` prefix:
+All configuration options and CLI flags can be overridden via environment variables using these conventions:
+
+#### Configuration Overrides (`FABRIK_CONFIG_*`)
+
+Configuration file values can be overridden using the `FABRIK_CONFIG_*` prefix:
 
 | Config Option | Environment Variable | Example |
 |--------------|---------------------|---------|
-| `cache.dir` | `TUIST_CONFIG_CACHE_DIR` | `/tmp/fabrik-cache` |
-| `cache.max_size` | `TUIST_CONFIG_CACHE_MAX_SIZE` | `10GB` |
-| `cache.eviction_policy` | `TUIST_CONFIG_CACHE_EVICTION_POLICY` | `lfu` |
-| `auth.token` | `TUIST_CONFIG_AUTH_TOKEN` or `TUIST_TOKEN` | `eyJ0eXAi...` |
-| `upstream[0].url` | `TUIST_CONFIG_UPSTREAM_0_URL` | `grpc://cache.tuist.io:7070` |
-| `upstream[0].timeout` | `TUIST_CONFIG_UPSTREAM_0_TIMEOUT` | `30s` |
+| `cache.dir` | `FABRIK_CONFIG_CACHE_DIR` | `/tmp/fabrik-cache` |
+| `cache.max_size` | `FABRIK_CONFIG_CACHE_MAX_SIZE` | `10GB` |
+| `cache.eviction_policy` | `FABRIK_CONFIG_CACHE_EVICTION_POLICY` | `lfu` |
+| `upstream[0].url` | `FABRIK_CONFIG_UPSTREAM_0_URL` | `grpc://cache.tuist.io:7070` |
+| `upstream[0].timeout` | `FABRIK_CONFIG_UPSTREAM_0_TIMEOUT` | `30s` |
+| `auth.token` | `FABRIK_CONFIG_AUTH_TOKEN` | `eyJ0eXAi...` |
+| `observability.log_level` | `FABRIK_CONFIG_OBSERVABILITY_LOG_LEVEL` | `debug` |
+| `daemon.socket` | `FABRIK_CONFIG_DAEMON_SOCKET` | `.fabrik/socket` |
 
-**AWS Credentials** (for S3 upstream):
-- `AWS_ACCESS_KEY_ID` or `TUIST_CONFIG_UPSTREAM_X_ACCESS_KEY`
-- `AWS_SECRET_ACCESS_KEY` or `TUIST_CONFIG_UPSTREAM_X_SECRET_KEY`
-- `AWS_REGION` or `TUIST_CONFIG_UPSTREAM_X_REGION`
+**Naming convention:**
+- Nested config: `config.section.key` → `FABRIK_CONFIG_SECTION_KEY`
+- Arrays: `upstream[0].url` → `FABRIK_CONFIG_UPSTREAM_0_URL`
+- All uppercase, underscores separate words
+
+#### Runtime Flags (`FABRIK_*`)
+
+CLI flags and runtime options can be set via `FABRIK_*` (without `CONFIG`):
+
+| CLI Flag | Environment Variable | Example |
+|----------|---------------------|---------|
+| `--config` | `FABRIK_CONFIG_PATH` | `/path/to/fabrik.toml` |
+| `--log-level` | `FABRIK_LOG_LEVEL` | `debug` |
+| `--verbose` | `FABRIK_VERBOSE` | `true` |
+| `--no-cache` | `FABRIK_NO_CACHE` | `true` |
+
+#### Standard Environment Variable Fallbacks
+
+Fabrik respects standard environment variables where applicable:
+
+| Purpose | Fabrik Variable | Standard Fallback |
+|---------|----------------|-------------------|
+| S3 access key | `FABRIK_CONFIG_UPSTREAM_X_ACCESS_KEY` | `AWS_ACCESS_KEY_ID` |
+| S3 secret key | `FABRIK_CONFIG_UPSTREAM_X_SECRET_KEY` | `AWS_SECRET_ACCESS_KEY` |
+| S3 region | `FABRIK_CONFIG_UPSTREAM_X_REGION` | `AWS_REGION` |
+| Auth token | `FABRIK_CONFIG_AUTH_TOKEN` | `FABRIK_TOKEN` |
+
+#### Complete Example
+
+```bash
+# Configuration overrides
+export FABRIK_CONFIG_CACHE_DIR=/custom/cache
+export FABRIK_CONFIG_CACHE_MAX_SIZE=20GB
+export FABRIK_CONFIG_UPSTREAM_0_URL=grpc://cache.tuist.io:7070
+export FABRIK_CONFIG_AUTH_TOKEN=eyJ0eXAi...
+
+# Runtime flags
+export FABRIK_LOG_LEVEL=debug
+export FABRIK_VERBOSE=true
+
+# Use standard AWS credentials
+export AWS_ACCESS_KEY_ID=AKIA...
+export AWS_SECRET_ACCESS_KEY=secret...
+export AWS_REGION=us-east-1
+
+# Run daemon (all config from env vars, no config file needed)
+fabrik daemon
+```
 
 #### Zero-Config CI Examples
 
@@ -1310,7 +1424,7 @@ jobs:
       # Fabrik automatically detects GitHub Actions and uses cache API
       - run: fabrik bazel -- build //...
         env:
-          TUIST_TOKEN: ${{ secrets.TUIST_TOKEN }}  # Optional: for upstream cache
+          FABRIK_TOKEN: ${{ secrets.FABRIK_TOKEN }}  # Optional: for upstream cache
 ```
 
 **What happens:**
@@ -1325,13 +1439,13 @@ build:
   script:
     - fabrik bazel -- build //...
   variables:
-    TUIST_TOKEN: $CI_TUIST_TOKEN
+    FABRIK_TOKEN: $CI_FABRIK_TOKEN
 ```
 
 **Local Development** (no configuration needed):
 ```bash
 # Set token once
-export TUIST_TOKEN=xxx
+export FABRIK_TOKEN=xxx
 
 # Just run - uses filesystem automatically
 fabrik bazel -- build //...
@@ -1558,6 +1672,47 @@ fabrik config show --config config.toml --config-upstream s3://override
 8. **Testing**: Recommend tests for cache behavior, protocol compliance, security, and performance
 9. **Documentation**: Document architectural decisions, trade-offs, and Rust patterns
 10. **Update PLAN.md**: As you complete tasks, mark them done in PLAN.md and update the current phase
+
+### Configuration & Environment Variables (MANDATORY)
+
+**IMPORTANT: All new CLI commands and options must follow these conventions:**
+
+1. **Configuration File Discovery**:
+   - When `--config` is not provided, auto-discover by traversing up from current directory
+   - Look for `fabrik.toml` in each parent directory
+   - Fallback to `~/.config/fabrik/config.toml` if no project config found
+   - Use the `config_discovery::discover_config()` function
+
+2. **Environment Variable Support**:
+   - ALL CLI flags/options must support environment variables with `FABRIK_` prefix
+   - Configuration overrides use `FABRIK_CONFIG_*` prefix
+   - Examples:
+     - CLI flag `--log-level` → env var `FABRIK_LOG_LEVEL`
+     - Config `cache.dir` → env var `FABRIK_CONFIG_CACHE_DIR`
+     - Config `upstream[0].url` → env var `FABRIK_CONFIG_UPSTREAM_0_URL`
+
+3. **Precedence Order** (ALWAYS maintain this order):
+   - Command-line arguments (highest priority)
+   - Environment variables
+   - Configuration file (lowest priority)
+
+4. **Naming Conventions**:
+   - Runtime flags: `FABRIK_{FLAG_NAME}` (e.g., `FABRIK_VERBOSE`, `FABRIK_LOG_LEVEL`)
+   - Config overrides: `FABRIK_CONFIG_{SECTION}_{KEY}` (e.g., `FABRIK_CONFIG_CACHE_DIR`)
+   - Nested config: Use underscores (e.g., `observability.log_level` → `FABRIK_CONFIG_OBSERVABILITY_LOG_LEVEL`)
+   - Arrays: Use index (e.g., `upstream[0].url` → `FABRIK_CONFIG_UPSTREAM_0_URL`)
+
+5. **Standard Fallbacks**:
+   - Support standard env vars where applicable (e.g., `AWS_ACCESS_KEY_ID`, `AWS_REGION`)
+   - Check Fabrik-specific vars first, then fall back to standard vars
+
+**When implementing new commands:**
+- [ ] Add `--config` flag support
+- [ ] Implement config file auto-discovery
+- [ ] Add environment variable support for ALL flags
+- [ ] Document env vars in help text
+- [ ] Test precedence order (CLI > env > config)
+- [ ] Update CLAUDE.md with new config options
 
 ### Key Areas to Focus On
 

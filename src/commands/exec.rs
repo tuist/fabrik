@@ -12,7 +12,6 @@ use crate::bazel::{
     BazelActionCacheService, BazelByteStreamService, BazelCapabilitiesService, BazelCasService,
 };
 use crate::cli::ExecArgs;
-use crate::config::FabrikConfig;
 use crate::config_discovery::populate_build_tool_env_vars;
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
@@ -20,16 +19,14 @@ use crate::storage;
 use tonic::transport::Server;
 
 pub async fn run(args: ExecArgs) -> Result<()> {
+    use crate::config_discovery::load_config_with_discovery;
+
     if args.command.is_empty() {
         anyhow::bail!("No command specified. Usage: fabrik exec -- <command>");
     }
 
-    // Load config file if specified
-    let file_config = if let Some(config_path) = &args.config {
-        Some(FabrikConfig::from_file(config_path)?)
-    } else {
-        None
-    };
+    // Load config file with auto-discovery
+    let file_config = load_config_with_discovery(args.config.as_deref())?;
 
     // Merge configuration
     let config = MergedExecConfig::merge(&args, file_config);

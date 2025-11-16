@@ -388,7 +388,7 @@ pub enum ConfigCommands {
     /// Show effective configuration (merged from all sources)
     Show {
         /// Config file path
-        #[arg(short = 'c', long)]
+        #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
         config: Option<String>,
     },
 }
@@ -396,22 +396,26 @@ pub enum ConfigCommands {
 #[derive(Parser, Debug)]
 pub struct HealthArgs {
     /// URL of Fabrik instance to check
-    #[arg(long)]
+    #[arg(long, env = "FABRIK_HEALTH_URL")]
     pub url: Option<String>,
 
     /// Request timeout
-    #[arg(long, default_value = "5s")]
+    #[arg(long, default_value = "5s", env = "FABRIK_HEALTH_TIMEOUT")]
     pub timeout: String,
 
     /// Output format (text, json)
-    #[arg(long, default_value = "text")]
+    #[arg(long, default_value = "text", env = "FABRIK_HEALTH_FORMAT")]
     pub format: String,
 }
 
 #[derive(Parser, Debug)]
 pub struct DoctorArgs {
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+
     /// Verbose output
-    #[arg(short, long)]
+    #[arg(short, long, env = "FABRIK_VERBOSE")]
     pub verbose: bool,
 }
 
