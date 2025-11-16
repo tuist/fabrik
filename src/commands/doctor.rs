@@ -65,11 +65,7 @@ pub fn run(args: DoctorArgs) -> Result<()> {
     }
 
     // Check 4: State directory
-    let state_dir = if let Some(home) = dirs::home_dir() {
-        home.join(".fabrik/daemons")
-    } else {
-        PathBuf::from("/tmp/fabrik/daemons")
-    };
+    let state_dir = fabrik::xdg::daemon_state_dir();
 
     if state_dir.exists() {
         let daemon_count = fs::read_dir(&state_dir)

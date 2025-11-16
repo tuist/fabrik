@@ -1,4 +1,5 @@
 mod api;
+mod auth;
 mod bazel;
 mod cli;
 mod cli_utils;
@@ -11,6 +12,7 @@ mod merger;
 mod script;
 mod storage;
 mod xcode;
+mod xdg;
 
 use anyhow::Result;
 use clap::Parser;
@@ -37,7 +39,27 @@ async fn main() -> Result<()> {
         Commands::Doctor(args) => commands::doctor::run(args),
         Commands::Init(args) => commands::init::run(args),
         Commands::Run(args) => commands::run::run(&args).await,
+        Commands::Cache(_args) => commands::cache::cache_deprecated().await,
         Commands::Cas(args) => commands::cas::run(&args).await,
         Commands::Kv(args) => commands::kv::run(&args).await,
+        Commands::Auth(args) => {
+            use cli::AuthCommand;
+            use config::FabrikConfig;
+
+            // Load config
+            let config = if let Some(config_path) = &args.config {
+                FabrikConfig::from_file(config_path)?
+            } else {
+                FabrikConfig::default()
+            };
+
+            // Dispatch to auth subcommand
+            match &args.command {
+                AuthCommand::Login(_) => commands::auth::login(config).await,
+                AuthCommand::Logout(_) => commands::auth::logout(config).await,
+                AuthCommand::Status(_) => commands::auth::status(config).await,
+                AuthCommand::Token(_) => commands::auth::token(config).await,
+            }
+        }
     }
 }

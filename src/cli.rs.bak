@@ -70,17 +70,19 @@ pub enum Commands {
     /// Run script with caching
     Run(RunArgs),
 
+<<<<<<< HEAD
     /// Manage script cache
     Cache(CacheArgs),
 
+    /// Authentication management
+    Auth(AuthArgs),
+=======
     /// Content-Addressed Storage operations (CAS)
     Cas(CasArgs),
 
     /// Key-Value storage operations (Action Cache)
     Kv(KvArgs),
-
-    /// Authentication management
-    Auth(AuthArgs),
+>>>>>>> origin/main
 }
 
 #[derive(Parser, Debug)]
@@ -507,155 +509,6 @@ impl RunArgs {
     }
 }
 
-#[derive(Parser, Debug)]
-pub struct CacheArgs {
-    #[command(subcommand)]
-    pub command: CacheCommands,
-
-    /// Local cache directory
-    #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
-    pub config_cache_dir: Option<String>,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum CacheCommands {
-    /// Check cache status for a script
-    Status {
-        /// Script file path
-        script: String,
-
-        /// Verbose output
-        #[arg(short, long)]
-        verbose: bool,
-    },
-
-    /// Clean cache for a script
-    Clean {
-        /// Script file path (omit to clean all)
-        script: Option<String>,
-
-        /// Clean all script caches
-        #[arg(long)]
-        all: bool,
-    },
-
-    /// List all cached scripts
-    List {
-        /// Show detailed information
-        #[arg(short, long)]
-        verbose: bool,
-    },
-
-    /// Show cache statistics
-    Stats,
-
-    /// Get an artifact from the cache by hash
-    Get {
-        /// Content hash (SHA256) of the artifact
-        hash: String,
-
-        /// Output file path
-        #[arg(short, long)]
-        output: String,
-
-        /// Verbose output
-        #[arg(short, long)]
-        verbose: bool,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Put an artifact into the cache
-    Put {
-        /// Input file path
-        input: String,
-
-        /// Content hash (SHA256) - if not provided, will be computed
-        #[arg(long)]
-        hash: Option<String>,
-
-        /// Verbose output
-        #[arg(short, long)]
-        verbose: bool,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Check if an artifact exists in the cache
-    Exists {
-        /// Content hash (SHA256) of the artifact
-        hash: String,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Delete an artifact from the cache
-    Delete {
-        /// Content hash (SHA256) of the artifact
-        hash: String,
-
-        /// Force deletion without confirmation
-        #[arg(short, long)]
-        force: bool,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-
-    /// Show information about a cached artifact
-    Info {
-        /// Content hash (SHA256) of the artifact
-        hash: String,
-
-        /// Output as JSON
-        #[arg(long)]
-        json: bool,
-    },
-}
-
-// ============================================================================
-// Auth Commands
-// ============================================================================
-
-#[derive(Parser, Debug)]
-pub struct AuthArgs {
-    #[command(subcommand)]
-    pub command: AuthCommand,
-
-    /// Config file path
-    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
-    pub config: Option<String>,
-}
-
-#[derive(Parser, Debug)]
-pub struct AuthSubcommandArgs {
-    /// Config file path
-    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
-    pub config: Option<String>,
-}
-
-#[derive(Subcommand, Debug)]
-pub enum AuthCommand {
-    /// Login with OAuth2
-    Login(AuthSubcommandArgs),
-
-    /// Logout and delete stored tokens
-    Logout(AuthSubcommandArgs),
-
-    /// Check authentication status
-    Status(AuthSubcommandArgs),
-
-    /// Show current access token (for debugging)
-    Token(AuthSubcommandArgs),
-}
-
 // ============================================================================
 // CAS (Content-Addressed Storage) Commands
 // ============================================================================
@@ -862,4 +715,36 @@ pub enum KvCommand {
         #[arg(long)]
         json: bool,
     },
+}
+
+// ============================================================================
+// Auth Commands
+// ============================================================================
+
+#[derive(Parser, Debug)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    pub command: AuthCommand,
+}
+
+#[derive(Parser, Debug)]
+pub struct AuthSubcommandArgs {
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AuthCommand {
+    /// Login with OAuth2
+    Login(AuthSubcommandArgs),
+
+    /// Logout and delete stored tokens
+    Logout(AuthSubcommandArgs),
+
+    /// Check authentication status
+    Status(AuthSubcommandArgs),
+
+    /// Show current access token (for debugging)
+    Token(AuthSubcommandArgs),
 }

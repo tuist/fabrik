@@ -1628,3 +1628,5 @@ This document will evolve as the project matures. Update both CLAUDE.md and PLAN
 - Keep the documentation up to date whenever you change something adding or removing pages, or adjusting the content on existing ones. Make sure the navigation of the site is well designed such that's easy to navigate.
 - Ensure cargo format and clippy pass before consider the work done
 - All the logs should be prefixed with [fabrik] consistently throughout the CLI
+- Follow XDG conventions for the directories where Fabrik stores state in the system
+- When adding important, notes, tips, warnings in the documentation, use the admonition GitHub syntax

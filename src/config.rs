@@ -6,6 +6,10 @@ use std::path::Path;
 /// Complete Fabrik configuration (loaded from TOML file)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FabrikConfig {
+    /// Service URL (e.g., "https://tuist.dev") - used for authentication, service discovery, etc.
+    #[serde(default)]
+    pub url: Option<String>,
+
     #[serde(default)]
     pub cache: CacheConfig,
 
@@ -111,6 +115,7 @@ pub struct UpstreamConfig {
 /// Authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
+    // Server-side authentication (JWT validation for incoming requests)
     /// Path to JWT public key file (PEM format)
     pub public_key_file: Option<String>,
 
@@ -127,6 +132,66 @@ pub struct AuthConfig {
     /// Require authentication
     #[serde(default = "default_true")]
     pub required: bool,
+
+    // Client-side authentication (for making requests to upstream servers)
+    /// Authentication provider (token or oauth2)
+    #[serde(default)]
+    pub provider: Option<AuthProvider>,
+
+    /// Token configuration (for token-based auth)
+    #[serde(default)]
+    pub token: Option<TokenAuthConfig>,
+
+    /// OAuth2 configuration (for OAuth2 with PKCE)
+    #[serde(default)]
+    pub oauth2: Option<OAuth2Config>,
+}
+
+/// Authentication provider type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthProvider {
+    /// Token-based authentication
+    Token,
+    /// OAuth2 with PKCE
+    OAuth2,
+}
+
+/// Token-based authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenAuthConfig {
+    /// Environment variable containing the token (defaults to FABRIK_TOKEN if not specified)
+    pub env_var: Option<String>,
+
+    /// Path to file containing the token
+    pub file: Option<String>,
+}
+
+/// OAuth2 with PKCE configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuth2Config {
+    /// OAuth2 server URL (optional, will use root config.url if not provided)
+    pub url: Option<String>,
+
+    /// Client ID
+    pub client_id: String,
+
+    /// Authorization endpoint (optional, will be inferred from url if not provided)
+    pub authorization_endpoint: Option<String>,
+
+    /// Token endpoint (optional, will be inferred from url if not provided)
+    pub token_endpoint: Option<String>,
+
+    /// Device authorization endpoint (optional, for device code flow)
+    pub device_authorization_endpoint: Option<String>,
+
+    /// OAuth2 scopes (space-separated)
+    #[serde(default = "default_oauth2_scopes")]
+    pub scopes: String,
+
+    /// Token storage backend (keychain, file, or memory)
+    #[serde(default = "default_token_storage")]
+    pub storage: String,
 }
 
 /// Build system adapters configuration (Layer 1 only)
@@ -352,6 +417,14 @@ fn default_true() -> bool {
     true
 }
 
+fn default_oauth2_scopes() -> String {
+    "cache:read cache:write".to_string()
+}
+
+fn default_token_storage() -> String {
+    "keychain".to_string()
+}
+
 impl FabrikConfig {
     /// Load configuration from TOML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -421,6 +494,9 @@ impl FabrikConfig {
                 jwks_url: None,
                 key_refresh_interval: "5m".to_string(),
                 required: true,
+                provider: None,
+                token: None,
+                oauth2: None,
             },
             build_systems: BuildSystemsConfig {
                 enabled: vec![], // Layer 2 doesn't run build system adapters

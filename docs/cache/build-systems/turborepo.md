@@ -19,4 +19,5 @@ cd ~/my-turborepo-workspace
 turbo run build
 ```
 
-That's it! TurboRepo will automatically use Fabrik's cache via the environment variables.
+> [!TIP]
+> TurboRepo automatically detects the `TURBO_API`, `TURBO_TOKEN`, and `TURBO_TEAM` environment variables exported by Fabrik's daemon. No manual configuration needed!

@@ -4,13 +4,14 @@ This document explains the key architectural decisions behind Fabrik, with a foc
 
 ## Three-Tier Caching Strategy
 
-Fabrik implements a transparent three-tier caching hierarchy:
-
-1. **Hot Cache (Local Layer)** - Build-local, ultra-fast, lowest latency
-2. **Warm Cache (Regional Layer)** - Shared team cache, dedicated instances
-3. **Cold Cache (Permanent Layer)** - S3-backed permanent storage
-
-Each tier serves a specific purpose, with cache misses automatically falling back to the next tier and writes propagating through all configured layers.
+> [!NOTE]
+> Fabrik implements a transparent three-tier caching hierarchy:
+>
+> 1. **Hot Cache (Local Layer)** - Build-local, ultra-fast, lowest latency
+> 2. **Warm Cache (Regional Layer)** - Shared team cache, dedicated instances
+> 3. **Cold Cache (Permanent Layer)** - S3-backed permanent storage
+>
+> Each tier serves a specific purpose, with cache misses automatically falling back to the next tier and writes propagating through all configured layers.
 
 ## Design Principles
 
