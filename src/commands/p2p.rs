@@ -4,10 +4,16 @@ use crate::config_discovery::load_config_with_discovery;
 use crate::p2p::consent::ConsentManager;
 use crate::p2p::P2PManager;
 use anyhow::{Context, Result};
+use rand::Rng;
 use std::sync::Arc;
 
 pub async fn run(args: P2pArgs) -> Result<()> {
-    // Load config
+    // Secret generation doesn't require config or P2P to be enabled
+    if let P2pCommand::Secret { length } = args.command {
+        return generate_secret(length);
+    }
+
+    // Load config for other commands
     let config = load_config_with_discovery(args.config.as_deref())?
         .context("No configuration file found. Run 'fabrik init' to create one.")?;
 
@@ -24,6 +30,7 @@ pub async fn run(args: P2pArgs) -> Result<()> {
         P2pCommand::Approve { peer, permanent } => approve_peer(&config, &peer, permanent).await,
         P2pCommand::Deny { peer } => deny_peer(&config, &peer).await,
         P2pCommand::Clear { force } => clear_consents(&config, force).await,
+        P2pCommand::Secret { .. } => unreachable!(), // Handled above
     }
 }
 
@@ -153,6 +160,27 @@ async fn clear_consents(config: &FabrikConfig, force: bool) -> Result<()> {
     consent_manager.clear_consents().await?;
 
     println!("[fabrik] Cleared all P2P consents");
+
+    Ok(())
+}
+
+fn generate_secret(length: usize) -> Result<()> {
+    // Ensure minimum length for security
+    if length < 16 {
+        anyhow::bail!("Secret length must be at least 16 bytes for security");
+    }
+
+    // Generate random bytes
+    let mut rng = rand::thread_rng();
+    let random_bytes: Vec<u8> = (0..length).map(|_| rng.gen()).collect();
+
+    // Encode as hexadecimal
+    let secret = random_bytes
+        .iter()
+        .map(|b| format!("{:02x}", b))
+        .collect::<String>();
+
+    println!("{}", secret);
 
     Ok(())
 }

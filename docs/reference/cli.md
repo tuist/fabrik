@@ -603,6 +603,9 @@ P2P cache sharing (Layer 0.5) allows automatic discovery and sharing of build ca
 ### Commands
 
 ```bash
+# Generate a secure random secret
+fabrik p2p secret [--length <BYTES>]
+
 # List discovered peers
 fabrik p2p list [--verbose] [--json]
 
@@ -622,11 +625,22 @@ fabrik p2p clear [--force]
 ### Examples
 
 ```bash
-# Enable P2P in configuration first
+# Generate a secure random secret (default: 32 bytes = 64 hex chars)
+fabrik p2p secret
+# Output: 2295b4779c0fee78a732f249a32e25a03b7b3329db51719058b56aabae426d43
+
+# Generate shorter secret (minimum 16 bytes for security)
+fabrik p2p secret --length 16
+# Output: fc5d669b4220c90e3ac0e48c3c8fcaac
+
+# Generate and save secret to environment
+export P2P_SECRET=$(fabrik p2p secret)
+
+# Create config that uses the environment variable
 cat >> .fabrik.toml <<EOF
 [p2p]
 enabled = true
-secret = "my-team-secret-2024"
+secret = "\${P2P_SECRET}"  # Uses environment variable
 consent_mode = "notify-once"
 EOF
 
@@ -736,12 +750,22 @@ P2P must be enabled in your `.fabrik.toml`:
 ```toml
 [p2p]
 enabled = true
-secret = "my-team-secret-2024"  # Min 16 characters, shared across team
+secret = "${P2P_SECRET}"        # Use env var (min 16 chars, shared across team)
 consent_mode = "notify-once"    # notify-once | notify-always | always-allow
 bind_port = 7071                # Port for P2P server (default: 7071)
 advertise = true                # Advertise this machine to peers
 discovery = true                # Discover other peers
 max_peers = 10                  # Maximum number of peers to connect to
+```
+
+**Generate and set the secret:**
+
+```bash
+# Generate a secure secret
+fabrik p2p secret
+
+# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export P2P_SECRET=<generated-secret>
 ```
 
 ### Consent Modes

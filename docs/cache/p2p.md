@@ -64,10 +64,22 @@ Enabling peer-to-peer requires a single configuration block in your `.fabrik.tom
 ```toml
 [p2p]
 enabled = true
-secret = "your-team-secret-here"
+secret = "${P2P_SECRET}"
 ```
 
-The secret should be at least 16 characters and shared across your team. Some teams use 1Password or similar tools. Others commit it to a private config repository. The important part is that everyone who should be able to share caches has the same secret.
+The secret should be at least 16 characters and shared across your team. You can generate a secure random secret using Fabrik:
+
+```bash
+# Generate a secure secret (32 bytes)
+fabrik p2p secret
+
+# Save to environment variable
+export P2P_SECRET=$(fabrik p2p secret)
+```
+
+This outputs a cryptographically secure random secret suitable for P2P authentication. The configuration uses environment variable expansion (`${P2P_SECRET}`) so you never commit secrets to git. Each team member sets their own `P2P_SECRET` environment variable with the shared team secret.
+
+Some teams use 1Password or similar tools to distribute the secret. Others use CI secrets management. The important part is that everyone who should be able to share caches has the same secret set in their environment.
 
 Once configured, start your daemon as usual. Fabrik will automatically announce itself to the network and discover any other peers running with the same secret. You can check who's been discovered with `fabrik p2p list`.
 

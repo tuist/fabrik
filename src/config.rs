@@ -3,6 +3,8 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+use crate::config_expansion;
+
 /// Complete Fabrik configuration (loaded from TOML file)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FabrikConfig {
@@ -523,7 +525,15 @@ impl FabrikConfig {
         let content = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read config file: {}", path.as_ref().display()))?;
 
-        let config: FabrikConfig = toml::from_str(&content)
+        // Expand environment variables in config content
+        let expanded_content = config_expansion::expand_env_vars(&content).with_context(|| {
+            format!(
+                "Failed to expand environment variables in config file: {}",
+                path.as_ref().display()
+            )
+        })?;
+
+        let config: FabrikConfig = toml::from_str(&expanded_content)
             .with_context(|| format!("Failed to parse config file: {}", path.as_ref().display()))?;
 
         Ok(config)

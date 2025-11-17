@@ -8,6 +8,68 @@ Complete reference for the `.fabrik.toml` configuration file.
 - **System config**: `/etc/fabrik/config.toml`
 - **Custom**: Specify with `--config <path>`
 
+## Environment Variable Expansion
+
+Fabrik supports environment variable expansion in configuration files using shell-like syntax:
+
+```toml
+[cache]
+dir = "${CACHE_DIR:-/tmp/default-cache}"
+max_size = "10GB"
+
+[p2p]
+enabled = true
+secret = "${P2P_SECRET}"  # Required variable (error if not set)
+consent_mode = "${CONSENT_MODE:-notify-once}"  # Optional with default
+```
+
+### Syntax
+
+- **`${VAR}`** - Required variable (Fabrik will error if not set)
+- **`${VAR:-default}`** - Optional variable with default value
+- **`$$`** - Literal dollar sign (escaped)
+
+### Examples
+
+```toml
+# Required variables (must be set in environment)
+secret = "${FABRIK_SECRET}"
+token = "${CI_TOKEN}"
+
+# Optional with defaults
+cache_dir = "${CACHE_DIR:-/tmp/cache}"
+port = ${PORT:-8080}  # Works without quotes for numbers
+consent_mode = "${CONSENT_MODE:-notify-once}"
+
+# Literal dollar signs
+price = "$$100"  # Expands to "$100"
+```
+
+### CI/CD Usage
+
+This feature is particularly useful in CI/CD environments where secrets and paths vary:
+
+```toml
+# .fabrik.toml (checked into git)
+[p2p]
+enabled = true
+secret = "${P2P_SECRET}"  # Set via CI secrets
+consent_mode = "always-allow"
+
+[cache]
+dir = "${CI_PROJECT_DIR:-/tmp}/.fabrik/cache"
+```
+
+```yaml
+# GitHub Actions
+env:
+  P2P_SECRET: ${{ secrets.P2P_SECRET }}
+  CI_PROJECT_DIR: ${{ github.workspace }}
+```
+
+> [!IMPORTANT]
+> Variables are expanded when the configuration file is loaded. If a required variable (`${VAR}`) is not set, Fabrik will exit with an error message.
+
 ## Configuration Precedence
 
 1. Command-line arguments (highest)
@@ -47,8 +109,8 @@ required = true
 
 [p2p]
 enabled = true
-secret = "my-team-secret-2024-min-16-chars"
-consent_mode = "notify-once"  # notify-once | notify-always | always-allow
+secret = "${P2P_SECRET}"  # Use env var for security (min 16 chars)
+consent_mode = "${CONSENT_MODE:-notify-once}"  # notify-once | notify-always | always-allow
 bind_port = 7071
 advertise = true
 discovery = true

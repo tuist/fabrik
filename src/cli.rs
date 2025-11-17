@@ -927,4 +927,11 @@ pub enum P2pCommand {
         #[arg(short, long)]
         force: bool,
     },
+
+    /// Generate a secure random secret for P2P authentication
+    Secret {
+        /// Length of the secret in bytes (default: 32)
+        #[arg(short, long, default_value = "32")]
+        length: usize,
+    },
 }

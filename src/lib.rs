@@ -7,6 +7,7 @@ pub mod capi; // C API (FFI) for external integrations
 pub mod cli_utils;
 pub mod config;
 pub mod config_discovery;
+pub mod config_expansion; // Environment variable expansion for config files
 pub mod logging;
 pub mod p2p; // P2P cache sharing
 pub mod script;

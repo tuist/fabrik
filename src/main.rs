@@ -6,6 +6,7 @@ mod cli_utils;
 mod commands;
 mod config;
 mod config_discovery;
+mod config_expansion; // Environment variable expansion for config files
 mod http;
 mod logging;
 mod merger;
