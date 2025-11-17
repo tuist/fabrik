@@ -37,7 +37,7 @@ If no peer has it, or if peer-to-peer is disabled, the request falls back to the
 
 Letting other machines access your build cache requires trust. Fabrik handles this through a combination of authentication and user consent.
 
-Every team shares a secret, think of it as a password that proves you're part of the same group. This secret gets used to sign all peer-to-peer requests using HMAC-SHA256. If a machine doesn't know the secret, it can't access your cache. If someone tries to replay an old request, Fabrik detects it and rejects it.
+Every team shares a secret, think of it as a password that proves you're part of the same group. This secret gets used to sign all peer-to-peer requests using [HMAC-SHA256](https://en.wikipedia.org/wiki/HMAC). If a machine doesn't know the secret, it can't access your cache. If someone tries to replay an old request, Fabrik detects it and rejects it.
 
 But authentication alone isn't enough for peace of mind. You might trust your teammate but still want to know when they're accessing your cache. That's where consent comes in.
 
