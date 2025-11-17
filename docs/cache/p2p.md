@@ -27,7 +27,7 @@ When peer-to-peer is enabled, Fabrik adds a new layer to your cache hierarchy. T
 
 Your local cache remains the fastest option. Nothing beats reading from your own SSD. But when you don't have something locally, instead of immediately reaching out to the regional cache, Fabrik first checks if any peers on your network might have it.
 
-This discovery happens automatically using mDNS, the same technology that lets you print to nearby printers or stream to an Apple TV without configuring IP addresses. Your Fabrik instance announces its presence to the network and listens for others doing the same. No manual configuration needed. No IP addresses to remember. Just automatic discovery of nearby machines running Fabrik.
+This discovery happens automatically using [mDNS](https://en.wikipedia.org/wiki/Multicast_DNS), the same technology that lets you print to nearby printers or stream to an Apple TV without configuring IP addresses. Your Fabrik instance announces its presence to the network and listens for others doing the same. No manual configuration needed. No IP addresses to remember. Just automatic discovery of nearby machines running Fabrik.
 
 When you need an artifact, Fabrik queries all discovered peers in parallel. Whichever peer has it and responds first wins. The artifact gets transferred directly over your local network, usually in 1-5 milliseconds compared to 20-50 milliseconds from a regional cache.
 
