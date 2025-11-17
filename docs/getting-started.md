@@ -153,7 +153,7 @@ Fabrik works with any build system that supports remote caching. Continue with t
   </a>
 </div>
 
-[View all build systems →](/cache/build-systems/)
+[View all build systems →](/cache/build-systems/README)
 
 ## How It Works
 
