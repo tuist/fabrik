@@ -18,13 +18,8 @@ jobs:
         with:
           fetch-depth: 0 # Required for VitePress lastUpdated feature
 
-      - uses: pnpm/action-setup@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 20
-          cache: pnpm
+      - name: Setup mise
+        uses: jdx/mise-action@v2
 
       - name: Install dependencies
         run: pnpm install
@@ -36,6 +31,4 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: |
-          pnpm add -g wrangler
-          wrangler pages deploy docs/.vitepress/dist --project-name tuist-fabrik
+        run: wrangler pages deploy docs/.vitepress/dist --project-name tuist-fabrik
