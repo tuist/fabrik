@@ -2,6 +2,26 @@
 
 All notable changes to this project will be documented in this file.
 
+## [Unreleased]
+
+### 🚀 Features
+
+- **P2P Cache Sharing (Layer 0.5)**: Automatic discovery and sharing of build caches across local networks
+  - Zero-configuration peer discovery via mDNS/DNS-SD
+  - Secure HMAC-SHA256 authentication with shared secrets
+  - User consent system with cross-platform system notifications
+  - High-performance parallel peer querying (1-5ms latency)
+  - Comprehensive metrics tracking (hits, misses, bandwidth, consent)
+  - CLI management commands: `fabrik p2p list`, `status`, `approve`, `deny`, `clear`
+  - XDG-compliant consent storage
+
+### 📚 Documentation
+
+- Add comprehensive P2P section to CLAUDE.md with architecture, usage, and security considerations
+- Add P2P example configuration file (examples/p2p-config.toml)
+- Update README.md with P2P cache sharing key feature
+- Update PLAN.md with P2P implementation status
+
 ## [0.9.2] - 2025-11-15
 
 ### 🐛 Bug Fixes
