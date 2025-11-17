@@ -2,25 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [1.0.0] - 2025-11-17
 
-### 🚀 Features
+### 🐛 Bug Fixes
 
-- **P2P Cache Sharing (Layer 0.5)**: Automatic discovery and sharing of build caches across local networks
-  - Zero-configuration peer discovery via mDNS/DNS-SD
-  - Secure HMAC-SHA256 authentication with shared secrets
-  - User consent system with cross-platform system notifications
-  - High-performance parallel peer querying (1-5ms latency)
-  - Comprehensive metrics tracking (hits, misses, bandwidth, consent)
-  - CLI management commands: `fabrik p2p list`, `status`, `approve`, `deny`, `clear`
-  - XDG-compliant consent storage
+- **(deps)** Update rust crate nix to 0.30 (#31) ([dd8be54](dd8be548dab963ceb2f0e79a53e1eb7045365ce8))
+- **(deps)** Update dependency metro-config to ^0.83.0 (#28) ([99d7fa7](99d7fa722c904cd37ae8b8692e915014befaa972))
+- **(deps)** Update rust crate toml to 0.9 (#33) ([0ab72a3](0ab72a3448380ccd427e62d09a8dc222482f97cf))
+- Resolve clippy warnings in P2P implementation ([fe59453](fe59453536cd58eb9aabb1b806b3a124419391e9))
+- Use vendored OpenSSL for cross-compilation ([a2bfd76](a2bfd769fce4cf9f49ae178a7be28e78e0aab908))
 
 ### 📚 Documentation
 
-- Add comprehensive P2P section to CLAUDE.md with architecture, usage, and security considerations
-- Add P2P example configuration file (examples/p2p-config.toml)
-- Update README.md with P2P cache sharing key feature
-- Update PLAN.md with P2P implementation status
+- Add comprehensive P2P feature documentation ([190021e](190021e50bb972e73042d4decff426765eff253a))
+- Add P2P philosophy and rationale page ([5bce35f](5bce35f3a64a1bc283190a4e8d2529ed776e29b2))
+- Add P2P page to sidebar navigation ([c849dff](c849dff32c14b6475b74d1ad92af5ec6f9dde363))
+- Rewrite P2P documentation with narrative style ([d48e926](d48e926cefbb9f9c2ca623b5586bcdcbeb8d9b88))
+- Remove em dashes, shorten P2P docs, add context admonition ([ff6eb0a](ff6eb0a791fb8c00dfbac7a7d38b673a99508a7b))
+- Remove subtitle from P2P page ([e9c584b](e9c584bd7d60037c137f42bace74d2b59b44b6f8))
+- Add link to mDNS explanation ([6d8e1b2](6d8e1b2fb7b01bdfba04d8d1896a6939dec3eeb6))
+- Add link to HMAC-SHA256 explanation ([f4499ea](f4499eab7b8f034c05aab706760c5607ee0d3acc))
+- Add quick example to P2P documentation ([fc7c904](fc7c90417baf62bb336c4366379556a392abd9ab))
+
+### 📦 Dependency Updates
+
+- **(deps)** Update actions/checkout action to v5 (#36) ([a107844](a1078448f9dd6052d51f104df15225659a5d8f2e))
+- **(deps)** Update actions/setup-node action to v6 (#37) ([4209cec](4209cecef67d9fb396c90bed52867ee4b0d811b2))
+
+### 🚀 Features
+
+- [**breaking**] Implement authentication flow with token and OAuth2 support (#18) ([137370f](137370f2679298c7b05d5fc647081466295354dc))
+- Implement config auto-discovery and env var support across all CLI commands (#40) ([e323ca5](e323ca5963f82acbba38401fcc24c1a2e2ad995c))
+- Implement P2P cache sharing on local networks ([da0e26e](da0e26eb3e2fcb2489f2c2d55e0d6b6768fc56e4))
+- Add P2P secret generation and environment variable expansion ([9b40d42](9b40d42c43e1a37f6f25c05cdfd524ac983d7dd6))
 
 ## [0.9.2] - 2025-11-15
 
