@@ -9,14 +9,14 @@ _.path = './target/release'
 [tools]
 rust = "latest"
 git-cliff = "latest"
-bazel = "latest"
+bazel = "9.0.0rc2"  # Includes BAZELRC environment variable support
 gradle = "latest"
 protoc = "28.3"  # Protocol Buffers compiler (supports proto3 optional keyword)
 node = "24.10.0"
 pnpm = "latest"
 fnox = "latest"
 age = "latest"
-java = "21.0.9+10.0.LTS"
+java = "21"  # LTS version
 "npm:wrangler" = "latest"
 
 [tasks."docs:deploy-with-secrets"]

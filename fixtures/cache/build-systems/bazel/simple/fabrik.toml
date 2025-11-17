@@ -1,0 +1,3 @@
+[cache]
+dir = ".fabrik/cache"
+max_size = "1GB"
