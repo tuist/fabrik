@@ -1,4 +1,3 @@
-#![allow(dead_code)] // P2P feature not fully integrated yet
 use crate::config::P2PConfig;
 use crate::p2p::auth;
 use crate::p2p::proto::p2p_cache_client::P2pCacheClient as GrpcP2pCacheClient;
@@ -33,7 +32,6 @@ impl P2PClient {
     }
 
     /// Fetch artifact from peers (races all peers in parallel)
-    #[allow(dead_code)] // Will be used when integrated with daemon storage layer
     pub async fn fetch_from_peers(&self, peers: &[Peer], hash: &str) -> Result<Bytes> {
         if peers.is_empty() {
             return Err(anyhow!("No peers available"));

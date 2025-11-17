@@ -28,10 +28,13 @@ pub mod proto {
 
 /// P2P manager coordinates discovery, server, and client
 pub struct P2PManager {
+    #[allow(dead_code)] // Kept for future use (e.g., runtime config inspection)
     config: Arc<P2PConfig>,
     discovery: Option<Arc<DiscoveryService>>,
     server: Option<Arc<P2PServer>>,
+    #[allow(dead_code)] // Will be used when integrated with daemon storage layer
     client: Arc<P2PClient>,
+    #[allow(dead_code)] // Will be exposed via metrics endpoint
     metrics: Arc<P2PMetrics>,
 }
 
@@ -91,6 +94,7 @@ impl P2PManager {
     }
 
     /// Get the P2P client for making requests to peers
+    #[allow(dead_code)] // Will be used when integrated with daemon storage layer
     pub fn client(&self) -> Arc<P2PClient> {
         self.client.clone()
     }
@@ -105,6 +109,7 @@ impl P2PManager {
     }
 
     /// Get P2P metrics
+    #[allow(dead_code)] // Will be exposed via metrics endpoint
     pub fn metrics(&self) -> Arc<P2PMetrics> {
         self.metrics.clone()
     }

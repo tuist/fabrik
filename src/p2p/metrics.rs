@@ -1,3 +1,4 @@
+#![allow(dead_code)] // P2P feature not fully integrated yet
 /// P2P metrics tracking
 ///
 /// Tracks P2P cache performance metrics including:

@@ -9,6 +9,7 @@ type HmacSha256 = Hmac<Sha256>;
 const MAX_TIME_SKEW_SECS: u64 = 300;
 
 /// Compute HMAC-SHA256 signature
+#[allow(dead_code)] // Used in tests and will be used for future P2P features
 pub fn compute_signature(secret: &str, message: &str) -> Vec<u8> {
     let mut mac =
         HmacSha256::new_from_slice(secret.as_bytes()).expect("HMAC can take key of any size");
@@ -37,7 +38,7 @@ pub fn current_timestamp() -> i64 {
 /// Verify timestamp is recent (replay protection)
 pub fn verify_timestamp(timestamp: i64) -> Result<()> {
     let now = current_timestamp();
-    let diff = (now - timestamp).abs() as u64;
+    let diff = (now - timestamp).unsigned_abs();
 
     if diff > MAX_TIME_SKEW_SECS {
         return Err(anyhow!(
@@ -51,6 +52,7 @@ pub fn verify_timestamp(timestamp: i64) -> Result<()> {
 }
 
 /// Sign a request with hash and timestamp
+#[allow(dead_code)] // Will be used when P2P client is fully integrated
 pub fn sign_request(secret: &str, hash: &str, timestamp: i64) -> Vec<u8> {
     let message = format!("{}:{}", hash, timestamp);
     compute_signature(secret, &message)

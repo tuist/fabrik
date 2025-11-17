@@ -1,3 +1,4 @@
+#![allow(dead_code)] // P2P feature not fully integrated yet
 use crate::config::P2PConfig;
 use crate::p2p::{Peer, PeerInfo};
 use anyhow::{Context, Result};

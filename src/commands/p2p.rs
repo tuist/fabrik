@@ -51,20 +51,18 @@ async fn list_peers(config: &FabrikConfig, verbose: bool, json: bool) -> Result<
             })
             .collect();
         println!("{}", serde_json::to_string_pretty(&peers_json)?);
+    } else if peers.is_empty() {
+        println!("[fabrik] No P2P peers discovered");
+        println!("[fabrik] Make sure other instances are running with P2P enabled");
     } else {
-        if peers.is_empty() {
-            println!("[fabrik] No P2P peers discovered");
-            println!("[fabrik] Make sure other instances are running with P2P enabled");
-        } else {
-            println!("[fabrik] Discovered {} peer(s):\n", peers.len());
-            for peer in peers {
-                println!("  • {}", peer.display_name());
-                if verbose {
-                    println!("    Machine ID: {}", peer.info.machine_id);
-                    println!("    Port: {}", peer.info.port);
-                    println!("    Accepting requests: {}", peer.info.accepting_requests);
-                    println!();
-                }
+        println!("[fabrik] Discovered {} peer(s):\n", peers.len());
+        for peer in peers {
+            println!("  • {}", peer.display_name());
+            if verbose {
+                println!("    Machine ID: {}", peer.info.machine_id);
+                println!("    Port: {}", peer.info.port);
+                println!("    Accepting requests: {}", peer.info.accepting_requests);
+                println!();
             }
         }
     }

@@ -1,3 +1,4 @@
+#![allow(dead_code)] // P2P feature not fully integrated yet
 use std::net::IpAddr;
 use std::time::SystemTime;
 
