@@ -91,6 +91,21 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     let storage = storage::create_storage(&config.cache_dir)?;
     let storage = Arc::new(storage);
 
+    // Initialize P2P manager if enabled
+    let p2p_manager = if let Some(ref fc) = file_config {
+        if fc.p2p.enabled {
+            info!("[fabrik] P2P cache sharing is enabled");
+            let p2p = crate::p2p::P2PManager::new(fc.p2p.clone()).await?;
+            p2p.start().await?;
+            info!("[fabrik] P2P services started successfully");
+            Some(Arc::new(p2p))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     // Start servers based on mode
     let mut handles = vec![];
     let mut actual_http_port = 0u16;
@@ -269,6 +284,13 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     {
         signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
         info!("Received Ctrl+C, shutting down gracefully...");
+    }
+
+    // Shutdown P2P services first
+    if let Some(p2p) = p2p_manager {
+        if let Err(e) = p2p.shutdown().await {
+            tracing::warn!("Failed to shutdown P2P services: {}", e);
+        }
     }
 
     // Abort all server tasks immediately

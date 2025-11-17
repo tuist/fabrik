@@ -10,5 +10,6 @@ pub mod exec;
 pub mod health;
 pub mod init;
 pub mod kv;
+pub mod p2p;
 pub mod run;
 pub mod server;

@@ -9,6 +9,7 @@ mod config_discovery;
 mod http;
 mod logging;
 mod merger;
+mod p2p; // P2P cache sharing
 mod script;
 mod storage;
 mod xcode;
@@ -42,6 +43,7 @@ async fn main() -> Result<()> {
         Commands::Cache(_args) => commands::cache::cache_deprecated().await,
         Commands::Cas(args) => commands::cas::run(&args).await,
         Commands::Kv(args) => commands::kv::run(&args).await,
+        Commands::P2p(args) => commands::p2p::run(args).await,
         Commands::Auth(args) => {
             use cli::AuthCommand;
             use config_discovery::load_config_with_discovery;

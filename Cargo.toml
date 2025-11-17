@@ -45,9 +45,18 @@ which = "6"
 # Pin home to avoid edition 2024 requirement
 home = "=0.5.12"
 schlussel = { git = "https://github.com/tuist/schlussel", branch = "main" }
+# P2P dependencies
+mdns-sd = "0.11"
+notify-rust = "4.11"
+hmac = "0.12"
+hostname = "0.4"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30", features = ["signal"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+cocoa = "0.26"
+objc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 winapi = { version = "0.3", features = ["processthreadsapi", "winnt", "handleapi"] }

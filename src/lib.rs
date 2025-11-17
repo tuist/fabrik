@@ -8,6 +8,7 @@ pub mod cli_utils;
 pub mod config;
 pub mod config_discovery;
 pub mod logging;
+pub mod p2p; // P2P cache sharing
 pub mod script;
 pub mod storage;
 pub mod xdg;

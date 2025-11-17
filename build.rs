@@ -24,6 +24,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             &["proto"],
         )?;
 
+    // Compile P2P proto files
+    tonic_build::configure()
+        .build_server(true)
+        .build_client(true) // We need both server and client for P2P
+        .compile_protos(&["proto/p2p.proto"], &["proto"])?;
+
     // Generate C header file using cbindgen
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR")?;
     let output_file = std::path::Path::new(&crate_dir)
@@ -45,6 +51,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("cargo:rerun-if-changed=src/capi/mod.rs");
     println!("cargo:rerun-if-changed=cbindgen.toml");
+
+    // Link AppKit framework on macOS (required for notify-rust)
+    #[cfg(target_os = "macos")]
+    {
+        println!("cargo:rustc-link-lib=framework=AppKit");
+    }
 
     Ok(())
 }

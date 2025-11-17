@@ -81,6 +81,9 @@ pub enum Commands {
 
     /// Authentication management
     Auth(AuthArgs),
+
+    /// P2P cache sharing management
+    P2p(P2pArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -865,5 +868,63 @@ pub enum KvCommand {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+    },
+}
+
+// ============================================================================
+// P2P Commands
+// ============================================================================
+
+#[derive(Parser, Debug)]
+pub struct P2pArgs {
+    #[command(subcommand)]
+    pub command: P2pCommand,
+
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum P2pCommand {
+    /// List discovered peers
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show P2P status and statistics
+    Status {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Approve a peer to access your cache
+    Approve {
+        /// Machine ID or hostname of the peer
+        peer: String,
+
+        /// Approve permanently (store consent)
+        #[arg(short, long)]
+        permanent: bool,
+    },
+
+    /// Deny a peer from accessing your cache
+    Deny {
+        /// Machine ID or hostname of the peer
+        peer: String,
+    },
+
+    /// Clear all stored consents
+    Clear {
+        /// Skip confirmation
+        #[arg(short, long)]
+        force: bool,
     },
 }

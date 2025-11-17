@@ -33,6 +33,9 @@ pub struct FabrikConfig {
 
     #[serde(default)]
     pub daemon: DaemonConfig,
+
+    #[serde(default)]
+    pub p2p: P2PConfig,
 }
 
 /// Daemon configuration
@@ -42,6 +45,71 @@ pub struct DaemonConfig {
     /// If set, daemon will ONLY create Unix socket server (no TCP)
     /// If not set, daemon creates TCP servers (HTTP + gRPC)
     pub socket: Option<String>,
+}
+
+/// P2P cache sharing configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct P2PConfig {
+    /// Enable P2P cache sharing
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Shared secret for authentication (HMAC)
+    pub secret: Option<String>,
+
+    /// Advertise this instance on the local network
+    #[serde(default = "default_true")]
+    pub advertise: bool,
+
+    /// Discover other peers on the local network
+    #[serde(default = "default_true")]
+    pub discovery: bool,
+
+    /// P2P protocol bind port (0 = random)
+    #[serde(default = "default_p2p_port")]
+    pub bind_port: u16,
+
+    /// Maximum number of peers to track
+    #[serde(default = "default_max_peers")]
+    pub max_peers: usize,
+
+    /// Consent mode: notify-once, notify-always, auto-approve, disabled
+    #[serde(default = "default_consent_mode")]
+    pub consent_mode: String,
+
+    /// Consent timeout (how long to wait for user response)
+    #[serde(default = "default_consent_timeout")]
+    pub consent_timeout: String,
+
+    /// Auto-approve requests from same user (different machines)
+    #[serde(default = "default_true")]
+    pub auto_approve_same_user: bool,
+
+    /// Request timeout (max time to wait for peer response)
+    #[serde(default = "default_p2p_request_timeout")]
+    pub request_timeout: String,
+
+    /// Max concurrent peer requests
+    #[serde(default = "default_max_concurrent_peer_requests")]
+    pub max_concurrent_requests: usize,
+}
+
+impl Default for P2PConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            secret: None,
+            advertise: true,
+            discovery: true,
+            bind_port: default_p2p_port(),
+            max_peers: default_max_peers(),
+            consent_mode: default_consent_mode(),
+            consent_timeout: default_consent_timeout(),
+            auto_approve_same_user: true,
+            request_timeout: default_p2p_request_timeout(),
+            max_concurrent_requests: default_max_concurrent_peer_requests(),
+        }
+    }
 }
 
 /// Local cache configuration
@@ -425,6 +493,30 @@ fn default_token_storage() -> String {
     "keychain".to_string()
 }
 
+fn default_p2p_port() -> u16 {
+    7071
+}
+
+fn default_max_peers() -> usize {
+    20
+}
+
+fn default_consent_mode() -> String {
+    "notify-once".to_string()
+}
+
+fn default_consent_timeout() -> String {
+    "30s".to_string()
+}
+
+fn default_p2p_request_timeout() -> String {
+    "5s".to_string()
+}
+
+fn default_max_concurrent_peer_requests() -> usize {
+    5
+}
+
 impl FabrikConfig {
     /// Load configuration from TOML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
@@ -551,6 +643,27 @@ impl FabrikConfig {
             if !["gradle", "bazel", "nx", "turborepo", "sccache"].contains(&build_system.as_str()) {
                 anyhow::bail!(
                     "build_systems.enabled must contain only: gradle, bazel, nx, turborepo, sccache"
+                );
+            }
+        }
+
+        // Validate P2P configuration
+        if self.p2p.enabled {
+            if self.p2p.secret.is_none() {
+                anyhow::bail!("p2p.secret must be set when P2P is enabled");
+            }
+
+            if let Some(ref secret) = self.p2p.secret {
+                if secret.len() < 16 {
+                    anyhow::bail!("p2p.secret must be at least 16 characters for security");
+                }
+            }
+
+            if !["notify-once", "notify-always", "auto-approve", "disabled"]
+                .contains(&self.p2p.consent_mode.as_str())
+            {
+                anyhow::bail!(
+                    "p2p.consent_mode must be one of: notify-once, notify-always, auto-approve, disabled"
                 );
             }
         }
