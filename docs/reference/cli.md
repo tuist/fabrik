@@ -433,7 +433,7 @@ fabrik run --no-cache build.sh
 fabrik run --clean build.sh
 ```
 
-See [Script Cache Documentation](/docs/cache/scripts/) for details on KDL annotations and script caching.
+See [Script Cache Documentation](/cache/scripts/) for details on KDL annotations and script caching.
 
 ## `fabrik cas`
 

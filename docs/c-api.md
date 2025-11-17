@@ -409,18 +409,7 @@ export DYLD_LIBRARY_PATH=/path/to/fabrik/lib:$DYLD_LIBRARY_PATH
 
 ## Examples
 
-See the [examples/c](../examples/c) directory for complete working examples:
-
-- `example.c`: Comprehensive demonstration of all API functions
-- `Makefile`: Build configuration
-
-To run the example:
-
-```bash
-cd examples/c
-make
-make run
-```
+> **Note**: C API examples are coming soon.
 
 ## Integration Patterns
 
@@ -526,4 +515,4 @@ Use a larger buffer or dynamically allocate based on artifact size.
 
 ## License
 
-MIT License - see [LICENSE](../LICENSE) file for details.
+MPL-2.0 License - see [LICENSE](https://github.com/tuist/fabrik/blob/main/LICENSE.md) for details.

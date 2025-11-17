@@ -153,5 +153,5 @@ Use `--verbose` for detailed output including input/output tracking.
 
 ## Next Steps
 
-- [Configuration Reference](/script-caching/reference) - Complete list of all directives
-- [Examples](/script-caching/examples) - Real-world examples and recipes
+- [Configuration Reference](/cache/scripts/reference) - Complete list of all directives
+- [Examples](/cache/scripts/examples) - Real-world examples and recipes
