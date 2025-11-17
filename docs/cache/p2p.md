@@ -1,192 +1,93 @@
-# P2P Cache Sharing
+# Peer to Peer
 
-## Philosophy
+## The Hidden Cache Right Next to You
 
-Traditional build caches follow a client-server model: your local machine fetches artifacts from a remote cache server. While this works well for distributed teams, it introduces unnecessary latency when team members are on the same local network.
+Picture this: you're working in an office, laptop humming as it rebuilds a large project. Meanwhile, your colleague sitting two desks away just finished building the exact same target five minutes ago. Their machine has everything you need, cached and ready. Yet here you are, waiting for your computer to fetch those artifacts from a server halfway across the country.
 
-**The P2P Vision:**
+This scenario plays out thousands of times a day in software teams around the world. We've built elaborate cloud caching systems, deployed regional servers, and optimized network routes—all while ignoring the fastest network connection available: the one connecting you to your teammates on the same local network.
 
-What if your coworker sitting next to you just built the same target you need? Their machine already has the artifact cached locally. Instead of both of you fetching from a cloud server 50ms away, you could fetch directly from each other in just 1-5ms.
+Fabrik's peer-to-peer caching changes this. Instead of always reaching out to distant servers, your build tools can fetch artifacts directly from nearby machines. The same artifacts, but delivered in milliseconds instead of dozens or hundreds of milliseconds.
 
-This is the philosophy behind Fabrik's P2P cache sharing: **leverage the natural clustering of developers on the same network** to create a faster, intermediate cache layer.
+## Why This Matters
 
-## The Problem
+Traditional build caching follows a simple pattern: your machine talks to a server. When you need a cached artifact, you ask the server for it. The server lives in a data center somewhere—maybe close, maybe far—and responds as quickly as the internet allows.
 
-Consider a typical development scenario:
+This works remarkably well for distributed teams. Someone in San Francisco caches their build, and someone in Berlin can reuse it hours later. The cloud erases geography, at least in principle.
 
-```
-Developer A (MacBook):                  Developer B (Linux Desktop):
-  ├─ Local Cache (0-1ms) ✓               ├─ Local Cache (0-1ms) ✗
-  ├─ Regional Cache (20-50ms) ✗           ├─ Regional Cache (20-50ms) → 50ms wait
-  └─ S3 Backup (100-200ms) ✗              └─ S3 Backup (100-200ms) ✗
-```
+But what about when geography doesn't need erasing? What about the developer sitting in the same room, on the same WiFi network, who built the same artifact moments ago? Why should that request travel to the cloud and back when the answer is right there, meters away?
 
-Developer A just built a large artifact. Developer B needs the same artifact seconds later. Without P2P, Developer B must:
-1. Check local cache → MISS
-2. Query regional cache → 50ms round trip
-3. Download artifact → additional time
+The peer-to-peer approach recognizes that software teams often cluster physically, even in our remote-first world. You might have an office where half the team works. You might be a developer with both a MacBook and a Linux desktop at home. You might have a dozen CI runners all provisioned in the same data center, rebuilding similar code in parallel.
 
-**The waste:** Developer A has the exact artifact B needs, sitting idle on a machine 2 meters away.
+In all these cases, there's a better first question than "Does the cloud have this?" That question is: "Does anyone nearby have this?"
 
-## The Solution: Layer 0.5
+## How It Works
 
-Fabrik introduces **Layer 0.5** - a peer-to-peer layer that sits between your local cache and the regional cache:
+When peer-to-peer is enabled, Fabrik adds a new layer to your cache hierarchy. Think of it as Layer 0.5—closer than your regional cache, but further than your local disk.
 
-```
-Layer 0: Local Cache       (0-1ms)   ✓ Fastest, but limited to your machine
-Layer 0.5: P2P Peers       (1-5ms)   ← NEW! Same office/home network
-Layer 1: Regional Cache    (20-50ms) ↓ Geographically distributed
-Layer 2: S3 Backup         (100-200ms) ↓ Permanent storage
-```
+Your local cache remains the fastest option, of course. Nothing beats reading from your own SSD. But when you don't have something locally, instead of immediately reaching out to the regional cache, Fabrik first checks: are there any peers on my network who might have this?
 
-When you need an artifact:
-1. Check local cache → MISS
-2. **Check P2P peers on LAN** → HIT! (1-5ms) ✨
-3. Download directly from peer's machine over local network
-4. *(Skip regional/S3 entirely)*
+This discovery happens automatically using mDNS, the same technology that lets you print to nearby printers or stream to an Apple TV without configuring IP addresses. Your Fabrik instance announces its presence to the network, and listens for others doing the same. No manual configuration needed. No IP addresses to remember. Just automatic discovery of nearby machines running Fabrik.
 
-## When P2P Shines
+When you need an artifact, Fabrik queries all discovered peers in parallel. Whichever peer has it and responds first wins. The artifact gets transferred directly over your local network—usually in 1-5 milliseconds compared to 20-50 milliseconds from a regional cache.
 
-### 1. **Office/Team Environments**
+If no peer has it, or if peer-to-peer is disabled, the request falls back to the regional cache exactly as before. The feature is transparent. It never breaks your build. It only makes it faster when nearby machines can help.
 
-Teams working in the same office naturally benefit:
-- First developer builds → caches locally
-- Second developer builds → fetches from first (LAN speed)
-- No cloud bandwidth consumed
-- 10-50x faster than cloud cache
+## Security and Privacy
 
-### 2. **Multi-Machine Developers**
+Letting other machines access your build cache requires trust. Fabrik handles this through a combination of authentication and user consent.
 
-Developers with multiple machines (MacBook + Linux desktop):
-- Build on one machine → P2P cache available on other
-- Seamless switching between machines
-- Consistent cache across home network
+Every team shares a secret—think of it as a password that proves you're part of the same group. This secret gets used to sign all peer-to-peer requests using HMAC-SHA256. If a machine doesn't know the secret, it can't access your cache. If someone tries to replay an old request, Fabrik detects it and rejects it.
 
-### 3. **CI/CD Runners on Same Network**
+But authentication alone isn't enough for peace of mind. You might trust your teammate but still want to know when they're accessing your cache. That's where consent comes in.
 
-Multiple CI runners on the same infrastructure:
-- First runner builds base dependencies
-- Subsequent runners fetch via P2P
-- Reduced cloud cache costs
-- Faster parallel builds
+When a peer requests an artifact from your machine for the first time, you get a system notification. It tells you who's asking—their hostname, which machine they're using. You can approve them permanently, just for this session, or deny them entirely. The choice is yours.
 
-## Design Principles
+You control the notification behavior too. The default mode, "notify-once," shows a notification the first time each peer asks for access, then remembers your decision. If you want maximum control, use "notify-always" to approve every single request. If you're on a completely trusted network—say, just your own machines at home—you can use "always-allow" to skip notifications entirely.
 
-### Zero Configuration
+What can peers access? Only build artifacts you've already created. They can't browse your filesystem, can't see your source code, can't execute anything on your machine. The peer-to-peer system deals purely in content-addressed blobs—chunks of data identified by their SHA256 hash. A peer asks for a specific hash. If you have it, you send it. That's all.
 
-P2P "just works" with minimal setup:
-- **mDNS discovery** - Automatically finds peers on your network
-- **No IP addresses** - No manual network configuration
-- **Cross-platform** - Works on Linux, macOS, Windows
+## When to Use It
 
-### Security First
+Peer-to-peer shines in specific scenarios. If you work alone, from home, on a single machine, it won't help you. There are no peers to share with. But if your team works from an office, even part-time, the benefits start appearing immediately.
 
-P2P is secure by default:
-- **HMAC authentication** - Shared team secret prevents unauthorized access
-- **User consent** - System notifications before granting cache access
-- **Replay protection** - Timestamps prevent request replay attacks
-- **Network isolation** - Only discovers peers on same local network
+Imagine a typical office day. The first developer arrives and runs the build. Their machine downloads everything from the cloud cache, stores it locally. The second developer arrives an hour later and runs the same build. Instead of hitting the cloud again, they fetch from the first developer's machine. The third developer gets it even faster—two peers to choose from now. By the time the whole team is in, most builds pull from peers rather than the cloud.
 
-### Graceful Degradation
+The same pattern applies to developers who use multiple machines. You might do most of your work on a MacBook but occasionally need to test on a Linux desktop. When both machines are home, on the same network, they can share caches with each other. Build on one, instantly available on the other.
 
-P2P is always optional:
-- If no peers found → falls back to regional cache
-- If P2P fails → falls back to regional cache
-- If P2P disabled → no impact on existing workflow
-- **Never breaks your build**, only makes it faster
+CI environments benefit too, particularly if you run your own runners. Cloud-based CI that spins up fresh containers for every build won't benefit—there's no persistent network, no peers to discover. But if you run Jenkins or GitLab runners on your own infrastructure, each runner becomes a potential cache source for the others. The first build in a batch pulls from the cloud. The rest pull from each other.
 
-## Privacy & Consent
-
-Fabrik respects your privacy:
-
-**You control access** via three consent modes:
-
-1. `notify-once` *(recommended)* - One notification per peer, remembered
-2. `notify-always` - Notification every time (maximum control)
-3. `always-allow` - No notifications (trusted networks only)
-
-**What peers can access:**
-- ✅ Build artifacts you've already built
-- ✅ Content-addressed by hash (no metadata exposure)
-- ❌ Cannot access files you haven't built
-- ❌ Cannot browse your filesystem
-- ❌ Cannot execute code on your machine
-
-## Performance Impact
-
-Real-world latency comparison:
-
-| Cache Layer | Typical Latency | Example Use Case |
-|-------------|----------------|------------------|
-| Local Cache | 0-1ms | Already built on this machine |
-| P2P Peers | **1-5ms** | Coworker built it 5 minutes ago |
-| Regional Cache | 20-50ms | Team mate in different office |
-| S3 Backup | 100-200ms | First time anyone builds this |
-
-**Speedup:** For artifacts your peers have, you get **4-10x faster fetches** compared to regional cache.
-
-## Trade-offs
-
-### When P2P Helps
-
-✅ **Office/Team environments** - Multiple developers on same network
-✅ **Multi-machine setups** - Developer with MacBook + desktop at home
-✅ **Local CI runners** - Jenkins/GitLab runners on same LAN
-✅ **Large artifacts** - P2P latency advantage matters more
-✅ **Frequent rebuilds** - Team iterating on same codebase
-
-### When P2P Doesn't Help
-
-❌ **Solo developers** - No peers to share with
-❌ **Remote-first teams** - Everyone on different networks
-❌ **Cloud-only CI** - Runners provisioned dynamically, no persistent network
-❌ **Tiny artifacts** - Latency savings negligible (<1KB)
+The trade-off is simplicity versus speed. Peer-to-peer adds complexity to your caching strategy. You're introducing another layer, another potential point of confusion when debugging cache misses. But that complexity is hidden behind automatic discovery and transparent fallback. From the outside, your build just gets faster when peers are available.
 
 ## Getting Started
 
-> [!NOTE]
-> For configuration details, see the [Configuration Reference](/reference/config-file#p2p).
-> For CLI usage, see the [CLI Reference](/reference/cli#fabrik-p2p).
+Enabling peer-to-peer requires a single configuration block in your `.fabrik.toml`:
 
-**Quick setup:**
+```toml
+[p2p]
+enabled = true
+secret = "your-team-secret-here"
+```
 
-1. Enable P2P in your `.fabrik.toml`:
-   ```toml
-   [p2p]
-   enabled = true
-   secret = "my-team-secret-2024"
-   ```
+The secret should be at least 16 characters and shared across your team. How you share it is up to you. Some teams use 1Password or similar tools. Others commit it to a private config repository. The important part is that everyone who should be able to share caches has the same secret.
 
-2. Share the secret with your team (via 1Password, team config, etc.)
+Once configured, start your daemon as usual. Fabrik will automatically announce itself to the network and discover any other peers running with the same secret. You can check who's been discovered with `fabrik p2p list`.
 
-3. Start the daemon - P2P discovery happens automatically:
-   ```bash
-   fabrik daemon start
-   ```
+When peers appear, they'll send consent requests the first time they need artifacts from you. Approve the ones you trust, deny the ones you don't. After that, the system runs on its own.
 
-4. Check discovered peers:
-   ```bash
-   fabrik p2p list
-   ```
+That's the entire setup. No servers to configure, no network topology to map out, no IP addresses to manage. Just enable it and let it run.
 
-That's it! Your builds will now automatically check P2P peers before hitting the cloud cache.
+## The Philosophy
 
-## Philosophy in Practice
+The best infrastructure is the kind you don't think about. It works when it can. It falls back when it can't. It never interrupts your workflow to ask for help.
 
-> "The best cache is the one you didn't know was there."
+Peer-to-peer caching embodies this principle. When peers are available and have what you need, you get faster builds. When they're not available, or don't have it, you get the same builds you always got. The feature adds speed but never adds brittleness.
 
-P2P cache sharing embodies this principle:
-- No explicit "push to team cache" steps
-- No manual cache synchronization
-- No complex network setup
-- Just faster builds, transparently
+This aligns with a broader truth about build caching: the most valuable cache is often the most local one. Your own disk is faster than a nearby machine. A nearby machine is faster than a regional server. A regional server is faster than the internet at large. Each layer adds latency but also adds reach.
 
-When it works, you don't notice it. When it helps, you see the latency savings. When it's not available, your build continues normally.
+Peer-to-peer simply fills a gap that cloud-first caching left open. It acknowledges that software development, despite being inherently digital and distributed, still clusters physically. Teams still gather in offices. Developers still own multiple machines. Infrastructure still lives in specific data centers.
 
-This is infrastructure that gets out of your way while making your workflow faster.
+By making that physical proximity count for something, peer-to-peer caching brings some of the cloud's benefits back down to the local level. You get the sharing and reuse of a distributed cache, with the speed of local access.
 
-## Next Steps
+---
 
-- **Configuration:** [P2P Configuration Reference](/reference/config-file#p2p)
-- **CLI Commands:** [P2P CLI Reference](/reference/cli#fabrik-p2p)
-- **Architecture:** [Architecture Guide](/guide/architecture)
+For detailed configuration options, see the [configuration reference](/reference/config-file#p2p). For CLI commands, see the [CLI reference](/reference/cli#fabrik-p2p).
