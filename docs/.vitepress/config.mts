@@ -25,6 +25,7 @@ export default defineConfig({
       {
         text: "Cache",
         items: [
+          { text: "P2P Cache Sharing", link: "/cache/p2p" },
           {
             text: "Build Systems",
             items: [
