@@ -3,7 +3,8 @@
   display: inline-flex !important;
   align-items: center !important;
   gap: 0.5em !important;
-  line-height: 1 !important;
+  line-height: 1.5 !important;
+  white-space: nowrap !important;
 }
 
 .sidebar-icon {
@@ -11,6 +12,7 @@
   height: 1.2em !important;
   vertical-align: middle !important;
   flex-shrink: 0 !important;
+  display: inline-block !important;
 }
 
 /* Fix spacing between sidebar items with icons */
@@ -20,4 +22,16 @@
 
 .VPSidebarItem .item {
   line-height: 2 !important;
+}
+
+/* Ensure sidebar links handle inline HTML properly */
+.VPSidebarItem .link {
+  display: block !important;
+  overflow: hidden !important;
+}
+
+.VPSidebarItem .link .text {
+  display: block !important;
+  white-space: normal !important;
+  word-wrap: break-word !important;
 }
