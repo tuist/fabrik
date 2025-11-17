@@ -1,7 +1,5 @@
 # Peer to Peer
 
-## The Hidden Cache Right Next to You
-
 Picture this: you're working in an office, laptop humming as it rebuilds a large project. Meanwhile, your colleague sitting two desks away just finished building the exact same target five minutes ago. Their machine has everything you need, cached and ready. Yet here you are, waiting for your computer to fetch those artifacts from a server halfway across the country.
 
 This scenario plays out thousands of times a day in software teams around the world. We've built elaborate cloud caching systems, deployed regional servers, and optimized network routes, all while ignoring the fastest network connection available: the one connecting you to your teammates on the same local network.
