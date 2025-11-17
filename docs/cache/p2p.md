@@ -9,6 +9,35 @@ Fabrik's peer-to-peer caching changes this. Instead of always reaching out to di
 > [!NOTE]
 > Peer-to-peer caching is most beneficial for teams working from the same local network, such as developers sharing an office or CI runners in the same data center. If your team is fully remote with everyone on different networks, you may not see significant benefits from this feature.
 
+## Quick Example
+
+Here's what P2P looks like in practice:
+
+```bash
+# Alice builds a project
+alice@macbook:~/project$ gradle build
+Building...
+✓ Build complete (45s)
+[fabrik] Cached 1.2 GB to local cache
+[fabrik] Cached 1.2 GB to cloud cache (us-east)
+
+# Bob builds the same project 5 minutes later (same office network)
+bob@desktop:~/project$ gradle build
+Building...
+[fabrik] Cache HIT from peer alice-macbook (192.168.1.42) - 1.2 GB in 2.3s
+✓ Build complete (3s)
+
+# Without P2P, this would have taken 15-20s fetching from cloud
+```
+
+**Performance comparison:**
+- **Local cache** (already built): ~1s (disk read)
+- **P2P cache** (nearby peer): ~3s (LAN transfer)
+- **Cloud cache** (regional): ~20s (internet download)
+- **No cache** (full rebuild): ~45s
+
+P2P gives you cloud cache benefits with local network speed.
+
 ## Why This Matters
 
 Traditional build caching follows a simple pattern: your machine talks to a server. When you need a cached artifact, you ask the server for it. The server lives in a data center somewhere, maybe close or maybe far, and responds as quickly as the internet allows.
