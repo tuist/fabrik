@@ -28,6 +28,7 @@ export default defineConfig({
           { text: "Peer to Peer", link: "/cache/p2p" },
           {
             text: "Build Systems",
+            collapsed: false,
             items: [
               {
                 text: "Bazel",
