@@ -45,6 +45,8 @@ which = "6"
 # Pin home to avoid edition 2024 requirement
 home = "=0.5.12"
 schlussel = { git = "https://github.com/tuist/schlussel", branch = "main" }
+# OpenSSL vendored for cross-compilation
+openssl = { version = "0.10", features = ["vendored"] }
 # P2P dependencies
 mdns-sd = "0.11"
 notify-rust = "4.11"
