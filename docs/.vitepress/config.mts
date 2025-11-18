@@ -57,11 +57,27 @@ export default defineConfig({
             ],
           },
           {
-            text: "Scripts",
+            text: "Recipes",
+            collapsed: true,
             items: [
-              { text: "Introduction", link: "/cache/scripts/" },
-              { text: "Configuration Reference", link: "/cache/scripts/reference" },
-              { text: "Examples", link: "/cache/scripts/examples" },
+              {
+                text: "Local",
+                collapsed: true,
+                items: [
+                  { text: "Introduction", link: "/cache/recipes/local/" },
+                  { text: "Configuration Reference", link: "/cache/recipes/local/reference" },
+                  { text: "Examples", link: "/cache/recipes/local/examples" },
+                ],
+              },
+              {
+                text: "Remote",
+                collapsed: true,
+                items: [
+                  { text: "Introduction", link: "/cache/recipes/remote/" },
+                  { text: "Syntax Reference", link: "/cache/recipes/remote/syntax" },
+                  { text: "Examples", link: "/cache/recipes/remote/examples" },
+                ],
+              },
             ],
           },
         ],
