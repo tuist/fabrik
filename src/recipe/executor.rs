@@ -17,20 +17,12 @@ impl RecipeExecutor {
         Self { recipe_path }
     }
 
-    /// Execute a recipe
+    /// Execute a recipe at root level
     ///
-    /// If target is None, executes the entire script at root level.
-    /// If target is Some(name), calls the exported function with that name.
-    pub async fn execute(&self, target: Option<&str>) -> Result<()> {
-        if let Some(t) = target {
-            tracing::info!(
-                "[fabrik] Executing recipe: {:?} target: {}",
-                self.recipe_path,
-                t
-            );
-        } else {
-            tracing::info!("[fabrik] Executing recipe: {:?}", self.recipe_path);
-        }
+    /// Recipes are plain JavaScript files that run from top to bottom.
+    /// They should NOT export functions - all logic is at the root level.
+    pub async fn execute(&self) -> Result<()> {
+        tracing::info!("[fabrik] Executing recipe: {:?}", self.recipe_path);
 
         // Read recipe file
         let recipe_code = tokio::fs::read_to_string(&self.recipe_path).await?;
@@ -38,26 +30,13 @@ impl RecipeExecutor {
         // Create QuickJS runtime with Fabrik APIs
         let (_runtime, context) = create_fabrik_runtime().await?;
 
-        // Execute recipe
+        // Execute recipe at root level (wrap in async IIFE)
         async_with!(context => |ctx| {
-            if let Some(target_name) = target {
-                // Function-based: evaluate the file, then call the target function
-                ctx.eval::<(), _>(recipe_code.as_bytes())?;
+            let wrapped_code = format!("(async () => {{ {} }})();", recipe_code);
+            let promise: rquickjs::Promise = ctx.eval(wrapped_code.as_bytes())?;
 
-                let globals = ctx.globals();
-                let target_fn: rquickjs::Function = globals.get(target_name)?;
-                let promise: rquickjs::Promise = target_fn.call(())?;
-
-                // Wait for promise to complete
-                promise.into_future::<()>().await?;
-            } else {
-                // Root-level: wrap in IIFE and execute
-                let wrapped_code = format!("(async () => {{ {} }})();", recipe_code);
-                let promise: rquickjs::Promise = ctx.eval(wrapped_code.as_bytes())?;
-
-                // Wait for promise to complete
-                promise.into_future::<()>().await?;
-            }
+            // Wait for promise to complete
+            promise.into_future::<()>().await?;
 
             Ok::<_, rquickjs::Error>(())
         })
@@ -80,19 +59,18 @@ mod tests {
         let recipe_path = temp_dir.path().join("test.recipe.js");
 
         let recipe_code = r#"
-            async function test() {
-                const exitCode = await Fabrik.exec("echo", ["hello from recipe"]);
-                if (exitCode !== 0) {
-                    throw new Error("Command failed");
-                }
+            console.log("Running simple recipe");
+            const exitCode = await Fabrik.exec("echo", ["hello from recipe"]);
+            if (exitCode !== 0) {
+                throw new Error("Command failed");
             }
         "#;
 
         tokio::fs::write(&recipe_path, recipe_code).await.unwrap();
 
-        // Execute the recipe (function-based)
+        // Execute the recipe at root level
         let executor = RecipeExecutor::new(recipe_path);
-        let result = executor.execute(Some("test")).await;
+        let result = executor.execute().await;
 
         assert!(result.is_ok(), "Recipe execution should succeed");
     }
@@ -112,16 +90,15 @@ mod tests {
 
         let recipe_code = format!(
             r#"
-            async function build() {{
-                const exists = await Fabrik.exists("{}");
-                if (!exists) {{
-                    throw new Error("File should exist");
-                }}
+            console.log("Checking file operations");
+            const exists = await Fabrik.exists("{}");
+            if (!exists) {{
+                throw new Error("File should exist");
+            }}
 
-                const files = await Fabrik.glob("{}/*.txt");
-                if (files.length === 0) {{
-                    throw new Error("Should find at least one .txt file");
-                }}
+            const files = await Fabrik.glob("{}/*.txt");
+            if (files.length === 0) {{
+                throw new Error("Should find at least one .txt file");
             }}
         "#,
             test_file_str, temp_dir_str
@@ -129,9 +106,9 @@ mod tests {
 
         tokio::fs::write(&recipe_path, recipe_code).await.unwrap();
 
-        // Execute recipe (function-based)
+        // Execute recipe at root level
         let executor = RecipeExecutor::new(recipe_path);
-        executor.execute(Some("build")).await.unwrap();
+        executor.execute().await.unwrap();
     }
 
     #[tokio::test]
@@ -139,7 +116,7 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let recipe_path = temp_dir.path().join("root.recipe.js");
 
-        // Root-level recipe (no functions) - just tests basic execution
+        // Root-level recipe - just tests basic execution
         let recipe_code = r#"
             console.log("Executing at root level");
 
@@ -153,8 +130,8 @@ mod tests {
 
         tokio::fs::write(&recipe_path, recipe_code).await.unwrap();
 
-        // Execute recipe (root-level, no target)
+        // Execute recipe at root level
         let executor = RecipeExecutor::new(recipe_path);
-        executor.execute(None).await.unwrap();
+        executor.execute().await.unwrap();
     }
 }

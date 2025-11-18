@@ -45,16 +45,16 @@ Remote recipes run on any platform with the embedded QuickJS runtime - no extern
 
 ```bash
 # Run a remote recipe from GitHub (default host)
-fabrik run @tuist/recipes/typescript-build.js -- build
+fabrik run @tuist/recipes/typescript-build.js
 
 # With a specific version
-fabrik run @tuist/recipes/typescript-build.js@v1.0.0 -- build
+fabrik run @tuist/recipes/typescript-build.js@v1.0.0
 
 # From GitLab
-fabrik run @gitlab.com/myorg/recipes/deploy.js -- production
+fabrik run @gitlab.com/myorg/recipes/deploy.js
 
 # Verbose mode to see what's happening
-fabrik run --verbose @tuist/recipes/build.js -- test
+fabrik run --verbose @tuist/recipes/build.js
 ```
 
 ## How It Works

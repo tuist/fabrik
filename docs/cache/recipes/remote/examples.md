@@ -7,56 +7,34 @@ A reusable recipe for building TypeScript projects.
 **Repository:** `@tuist/recipes/typescript-build.js@v1.0.0`
 
 ```javascript
-// typescript-build.js
-async function build() {
-    console.log("Building TypeScript project...");
+// typescript-build.js - Root-level script (no exported functions)
+console.log("Building TypeScript project...");
 
-    // Check dependencies
-    const hasPackageJson = await Fabrik.exists("package.json");
-    if (!hasPackageJson) {
-        throw new Error("No package.json found");
-    }
-
-    // Install dependencies
-    console.log("Installing dependencies...");
-    await Fabrik.exec("npm", ["install"]);
-
-    // Run TypeScript compiler
-    console.log("Compiling TypeScript...");
-    const exitCode = await Fabrik.exec("tsc", ["--build"]);
-    if (exitCode !== 0) {
-        throw new Error("TypeScript compilation failed");
-    }
-
-    // Verify outputs
-    const distFiles = await Fabrik.glob("dist/**/*");
-    console.log(`Generated ${distFiles.length} output files`);
+// Check dependencies
+const hasPackageJson = await Fabrik.exists("package.json");
+if (!hasPackageJson) {
+    throw new Error("No package.json found");
 }
 
-async function clean() {
-    console.log("Cleaning build artifacts...");
-    await Fabrik.exec("rm", ["-rf", "dist", "node_modules"]);
+// Install dependencies
+console.log("Installing dependencies...");
+await Fabrik.exec("npm", ["install"]);
+
+// Run TypeScript compiler
+console.log("Compiling TypeScript...");
+const exitCode = await Fabrik.exec("tsc", ["--build"]);
+if (exitCode !== 0) {
+    throw new Error("TypeScript compilation failed");
 }
 
-async function test() {
-    console.log("Running tests...");
-    const exitCode = await Fabrik.exec("npm", ["test"]);
-    if (exitCode !== 0) {
-        throw new Error("Tests failed");
-    }
-}
+// Verify outputs
+const distFiles = await Fabrik.glob("dist/**/*");
+console.log(`Generated ${distFiles.length} output files`);
 ```
 
 **Usage:**
 ```bash
-# Build
-fabrik run @tuist/recipes/typescript-build.js@v1.0.0 -- build
-
-# Clean
-fabrik run @tuist/recipes/typescript-build.js@v1.0.0 -- clean
-
-# Test
-fabrik run @tuist/recipes/typescript-build.js@v1.0.0 -- test
+fabrik run @tuist/recipes/typescript-build.js@v1.0.0
 ```
 
 ---
@@ -65,66 +43,44 @@ fabrik run @tuist/recipes/typescript-build.js@v1.0.0 -- test
 
 A complete CI/CD pipeline recipe.
 
-**Repository:** `@company/ci/pipeline.js@main`
+**Repository:** `@company/ci/lint.js`, `@company/ci/test.js`, `@company/ci/build.js`
 
+**`lint.js`:**
 ```javascript
-// pipeline.js
-async function lint() {
-    console.log("Running linter...");
-    const exitCode = await Fabrik.exec("npm", ["run", "lint"]);
-    if (exitCode !== 0) {
-        throw new Error("Linting failed");
-    }
+console.log("Running linter...");
+const exitCode = await Fabrik.exec("npm", ["run", "lint"]);
+if (exitCode !== 0) {
+    throw new Error("Linting failed");
 }
+console.log("Linting passed!");
+```
 
-async function test() {
-    console.log("Running test suite...");
-    const exitCode = await Fabrik.exec("npm", ["test", "--", "--coverage"]);
-    if (exitCode !== 0) {
-        throw new Error("Tests failed");
-    }
+**`test.js`:**
+```javascript
+console.log("Running test suite...");
+const exitCode = await Fabrik.exec("npm", ["test", "--", "--coverage"]);
+if (exitCode !== 0) {
+    throw new Error("Tests failed");
 }
+console.log("All tests passed!");
+```
 
-async function build() {
-    console.log("Building application...");
-    await Fabrik.exec("npm", ["run", "build"]);
+**`build.js`:**
+```javascript
+console.log("Building application...");
+await Fabrik.exec("npm", ["run", "build"]);
 
-    const buildFiles = await Fabrik.glob("build/**/*");
-    console.log(`Built ${buildFiles.length} files`);
-}
-
-async function deploy() {
-    console.log("Deploying to staging...");
-    await Fabrik.exec("aws", ["s3", "sync", "build/", "s3://staging-bucket/"]);
-}
-
-async function ci() {
-    console.log("Running full CI pipeline...");
-    await lint();
-    await test();
-    await build();
-    console.log("CI pipeline completed successfully!");
-}
-
-async function cd() {
-    console.log("Running CD pipeline...");
-    await ci();
-    await deploy();
-    console.log("CD pipeline completed successfully!");
-}
+const buildFiles = await Fabrik.glob("build/**/*");
+console.log(`Built ${buildFiles.length} files`);
+console.log("Build complete!");
 ```
 
 **Usage:**
 ```bash
-# CI pipeline
-fabrik run @company/ci/pipeline.js -- ci
-
-# Full CD pipeline
-fabrik run @company/ci/pipeline.js -- cd
-
-# Individual steps
-fabrik run @company/ci/pipeline.js -- lint
-fabrik run @company/ci/pipeline.js -- test
+# Run CI steps
+fabrik run @company/ci/lint.js
+fabrik run @company/ci/test.js
+fabrik run @company/ci/build.js
 ```
 
 ---
@@ -137,58 +93,54 @@ Separate recipes for different environments.
 
 **`staging.js`:**
 ```javascript
-async function deploy() {
-    console.log("Deploying to STAGING environment...");
+console.log("Deploying to STAGING environment...");
 
-    // Build with staging config
-    await Fabrik.exec("npm", ["run", "build:staging"]);
+// Build with staging config
+await Fabrik.exec("npm", ["run", "build:staging"]);
 
-    // Deploy to staging
-    await Fabrik.exec("aws", [
-        "s3", "sync", "build/",
-        "s3://staging-bucket/",
-        "--delete"
-    ]);
+// Deploy to staging
+await Fabrik.exec("aws", [
+    "s3", "sync", "build/",
+    "s3://staging-bucket/",
+    "--delete"
+]);
 
-    console.log("Staging deployment complete!");
-    console.log("URL: https://staging.example.com");
-}
+console.log("Staging deployment complete!");
+console.log("URL: https://staging.example.com");
 ```
 
 **`production.js`:**
 ```javascript
-async function deploy() {
-    console.log("Deploying to PRODUCTION environment...");
+console.log("Deploying to PRODUCTION environment...");
 
-    // Build with production config
-    await Fabrik.exec("npm", ["run", "build:production"]);
+// Build with production config
+await Fabrik.exec("npm", ["run", "build:production"]);
 
-    // Deploy to production
-    await Fabrik.exec("aws", [
-        "s3", "sync", "build/",
-        "s3://production-bucket/",
-        "--delete"
-    ]);
+// Deploy to production
+await Fabrik.exec("aws", [
+    "s3", "sync", "build/",
+    "s3://production-bucket/",
+    "--delete"
+]);
 
-    // Invalidate CloudFront cache
-    await Fabrik.exec("aws", [
-        "cloudfront", "create-invalidation",
-        "--distribution-id", "E1234567890ABC",
-        "--paths", "/*"
-    ]);
+// Invalidate CloudFront cache
+await Fabrik.exec("aws", [
+    "cloudfront", "create-invalidation",
+    "--distribution-id", "E1234567890ABC",
+    "--paths", "/*"
+]);
 
-    console.log("Production deployment complete!");
-    console.log("URL: https://example.com");
-}
+console.log("Production deployment complete!");
+console.log("URL: https://example.com");
 ```
 
 **Usage:**
 ```bash
 # Deploy to staging
-fabrik run @company/infra/deploy/staging.js -- deploy
+fabrik run @company/infra/deploy/staging.js
 
 # Deploy to production
-fabrik run @company/infra/deploy/production.js -- deploy
+fabrik run @company/infra/deploy/production.js
 ```
 
 ---
@@ -200,63 +152,38 @@ Build and push Docker images.
 **Repository:** `@tuist/recipes/docker-build.js@v1.0.0`
 
 ```javascript
-async function build() {
-    console.log("Building Docker image...");
+console.log("Building Docker image...");
 
-    // Get current git commit
-    const gitSha = await getGitSha();
-    const imageTag = `myapp:${gitSha}`;
+// Get current git commit (simplified - in real usage you'd capture output)
+const gitSha = "abc123def";
+const imageTag = `myapp:${gitSha}`;
 
-    console.log(`Building image: ${imageTag}`);
+console.log(`Building image: ${imageTag}`);
 
-    const exitCode = await Fabrik.exec("docker", [
-        "build",
-        "-t", imageTag,
-        "-t", "myapp:latest",
-        "."
-    ]);
+const exitCode = await Fabrik.exec("docker", [
+    "build",
+    "-t", imageTag,
+    "-t", "myapp:latest",
+    "."
+]);
 
-    if (exitCode !== 0) {
-        throw new Error("Docker build failed");
-    }
-
-    console.log(`Built image: ${imageTag}`);
+if (exitCode !== 0) {
+    throw new Error("Docker build failed");
 }
 
-async function push() {
-    console.log("Pushing Docker image...");
+console.log(`Built image: ${imageTag}`);
 
-    const gitSha = await getGitSha();
-    const imageTag = `myapp:${gitSha}`;
+// Push images
+console.log("Pushing Docker images...");
+await Fabrik.exec("docker", ["push", imageTag]);
+await Fabrik.exec("docker", ["push", "myapp:latest"]);
 
-    // Push tagged image
-    await Fabrik.exec("docker", ["push", imageTag]);
-
-    // Push latest
-    await Fabrik.exec("docker", ["push", "myapp:latest"]);
-
-    console.log("Images pushed successfully!");
-}
-
-async function all() {
-    await build();
-    await push();
-}
-
-// Helper function
-async function getGitSha() {
-    // Simple implementation - in real usage you'd capture output
-    return "abc123def";
-}
+console.log("Images pushed successfully!");
 ```
 
 **Usage:**
 ```bash
-# Build only
-fabrik run @tuist/recipes/docker-build.js@v1.0.0 -- build
-
-# Build and push
-fabrik run @tuist/recipes/docker-build.js@v1.0.0 -- all
+fabrik run @tuist/recipes/docker-build.js@v1.0.0
 ```
 
 ---
@@ -265,59 +192,80 @@ fabrik run @tuist/recipes/docker-build.js@v1.0.0 -- all
 
 Build multiple packages in a monorepo.
 
-**Repository:** `@company/monorepo/build.js@main`
+**Repository:** `@company/monorepo/build-all.js@main`
 
 ```javascript
-async function buildAll() {
-    console.log("Building all packages...");
+console.log("Building all packages...");
 
-    const packages = [
-        "packages/core",
-        "packages/utils",
-        "packages/ui",
-        "packages/app"
-    ];
+const packages = [
+    "packages/core",
+    "packages/utils",
+    "packages/ui",
+    "packages/app"
+];
 
-    for (const pkg of packages) {
-        console.log(`Building ${pkg}...`);
+for (const pkg of packages) {
+    console.log(`Building ${pkg}...`);
 
-        const exitCode = await Fabrik.exec("npm", [
-            "run", "build",
-            "--workspace", pkg
-        ]);
-
-        if (exitCode !== 0) {
-            throw new Error(`Build failed for ${pkg}`);
-        }
-    }
-
-    console.log("All packages built successfully!");
-}
-
-async function buildPackage() {
-    console.log("Building specific package...");
-    // In real usage, package name would come from args
-    await Fabrik.exec("npm", ["run", "build", "--workspace", "packages/core"]);
-}
-
-async function testAll() {
-    console.log("Testing all packages...");
-
-    const exitCode = await Fabrik.exec("npm", ["test", "--workspaces"]);
+    const exitCode = await Fabrik.exec("npm", [
+        "run", "build",
+        "--workspace", pkg
+    ]);
 
     if (exitCode !== 0) {
-        throw new Error("Tests failed");
+        throw new Error(`Build failed for ${pkg}`);
     }
 }
+
+console.log("All packages built successfully!");
 ```
 
 **Usage:**
 ```bash
-# Build all packages
-fabrik run @company/monorepo/build.js -- buildAll
+fabrik run @company/monorepo/build-all.js
+```
 
-# Test all packages
-fabrik run @company/monorepo/build.js -- testAll
+---
+
+## Conditional Logic Recipe
+
+Recipe with conditional execution based on file existence.
+
+**Repository:** `@tuist/recipes/smart-build.js@v1.0.0`
+
+```javascript
+console.log("Smart build - checking what needs to be built...");
+
+// Check if package.json changed
+const hasPackageJson = await Fabrik.exists("package.json");
+if (hasPackageJson) {
+    console.log("Installing dependencies...");
+    await Fabrik.exec("npm", ["install"]);
+}
+
+// Check if TypeScript files exist
+const tsFiles = await Fabrik.glob("src/**/*.ts");
+if (tsFiles.length > 0) {
+    console.log(`Found ${tsFiles.length} TypeScript files, compiling...`);
+    await Fabrik.exec("tsc", ["--build"]);
+}
+
+// Check if tests exist
+const testFiles = await Fabrik.glob("tests/**/*.test.js");
+if (testFiles.length > 0) {
+    console.log(`Found ${testFiles.length} test files, running tests...`);
+    const exitCode = await Fabrik.exec("npm", ["test"]);
+    if (exitCode !== 0) {
+        throw new Error("Tests failed");
+    }
+}
+
+console.log("Smart build complete!");
+```
+
+**Usage:**
+```bash
+fabrik run @tuist/recipes/smart-build.js@v1.0.0
 ```
 
 ---
@@ -328,27 +276,27 @@ fabrik run @company/monorepo/build.js -- testAll
 
 ```bash
 # ✅ Good - stable, predictable
-fabrik run @tuist/recipes/build.js@v1.0.0 -- build
+fabrik run @tuist/recipes/build.js@v1.0.0
 
 # ❌ Risky - may break unexpectedly
-fabrik run @tuist/recipes/build.js@main -- build
+fabrik run @tuist/recipes/build.js@main
 ```
 
 ### Development: Use Latest
 
 ```bash
 # Development environment
-fabrik run @company/ci/pipeline.js@develop -- ci
+fabrik run @company/ci/pipeline.js@develop
 
 # Production environment
-fabrik run @company/ci/pipeline.js@v2.1.0 -- ci
+fabrik run @company/ci/pipeline.js@v2.1.0
 ```
 
 ### Upgrading Recipes
 
 ```bash
 # Test new version first
-fabrik run @tuist/recipes/build.js@v2.0.0 -- build
+fabrik run @tuist/recipes/build.js@v2.0.0
 
 # If successful, update in CI config
 # Update: @tuist/recipes/build.js@v1.0.0
@@ -370,12 +318,11 @@ git init
 ### Step 2: Add Recipe Files
 
 ```bash
-# Create recipe
+# Create recipe (root-level script)
 cat > build.js << 'EOF'
-async function build() {
-    console.log("Building...");
-    await Fabrik.exec("npm", ["run", "build"]);
-}
+console.log("Building...");
+await Fabrik.exec("npm", ["run", "build"]);
+console.log("Build complete!");
 EOF
 
 git add build.js
@@ -398,7 +345,7 @@ git push --tags
 
 ```bash
 # Use from anywhere
-fabrik run @myorg/my-recipes/build.js@v1.0.0 -- build
+fabrik run @myorg/my-recipes/build.js@v1.0.0
 ```
 
 ---
