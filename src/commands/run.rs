@@ -1,12 +1,14 @@
 /// `fabrik run` command implementation
 ///
-/// Executes scripts with caching based on KDL annotations.
+/// Executes scripts with caching based on KDL annotations,
+/// or runs portable recipes (QuickJS) from local or remote sources.
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::time::Instant;
 
 use crate::cli::RunArgs;
 use crate::cli_utils::fabrik_prefix;
+use crate::recipe::{RecipeExecutor, RemoteRecipe};
 use crate::script::{
     annotations::parse_annotations,
     cache::{create_metadata, ScriptCache},
@@ -52,6 +54,12 @@ pub async fn run(args: &RunArgs) -> Result<()> {
     }
 
     let (cli_runtime, script) = args.parse_runtime_and_script();
+
+    // Check if this is a remote recipe (starts with @)
+    if script.starts_with('@') {
+        return run_remote_recipe(&script, args).await;
+    }
+
     let script_path = Path::new(&script);
 
     if !script_path.exists() {
@@ -499,6 +507,67 @@ async fn run_stats(cache_dir: &std::path::Path) -> Result<()> {
             (stats.total_size_bytes as f64 / stats.total_entries as f64) / 1_000_000.0
         );
     }
+
+    Ok(())
+}
+
+/// Execute a remote recipe (from Git repository)
+async fn run_remote_recipe(recipe_ref: &str, args: &RunArgs) -> Result<()> {
+    if args.verbose {
+        eprintln!("{} Parsing remote recipe: {}", fabrik_prefix(), recipe_ref);
+    }
+
+    // Parse remote recipe reference
+    let remote = RemoteRecipe::parse(recipe_ref)
+        .with_context(|| format!("Failed to parse remote recipe: {}", recipe_ref))?;
+
+    if args.verbose {
+        eprintln!(
+            "{} Remote recipe: {}/{}/{} (ref: {})",
+            fabrik_prefix(),
+            remote.host,
+            remote.org,
+            remote.repo,
+            remote.git_ref.as_deref().unwrap_or("main")
+        );
+    }
+
+    // Fetch repository to local cache
+    if args.verbose {
+        eprintln!("{} Fetching from {}", fabrik_prefix(), remote.git_url());
+    }
+
+    let script_path = remote
+        .fetch()
+        .await
+        .with_context(|| format!("Failed to fetch remote recipe: {}", recipe_ref))?;
+
+    if args.verbose {
+        eprintln!(
+            "{} Recipe cached at: {}",
+            fabrik_prefix(),
+            script_path.display()
+        );
+    }
+
+    // Execute recipe with RecipeExecutor
+    let executor = RecipeExecutor::new(script_path);
+
+    // If script_args is provided, treat first arg as target function name
+    let target = args.script_args.first().map(|s| s.as_str());
+
+    if args.verbose {
+        if let Some(t) = target {
+            eprintln!("{} Executing target: {}", fabrik_prefix(), t);
+        } else {
+            eprintln!("{} Executing recipe at root level", fabrik_prefix());
+        }
+    }
+
+    executor
+        .execute(target)
+        .await
+        .with_context(|| format!("Failed to execute remote recipe: {}", recipe_ref))?;
 
     Ok(())
 }
