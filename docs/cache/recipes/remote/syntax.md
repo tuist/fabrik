@@ -124,14 +124,9 @@ Fabrik converts the remote recipe syntax to HTTPS Git URLs:
 
 ## Cloning Behavior
 
-**Shallow Clone**
-Fabrik uses `git clone --depth 1` for efficient fetching - only the latest commit is downloaded.
-
-**Cached After First Fetch**
-Once fetched, the recipe is cached locally. Subsequent runs reuse the cache without re-fetching.
-
-**Branch Tracking**
-When using a branch reference (e.g., `@main`), the cache is specific to that branch. Switching branches fetches a new copy.
+- **Shallow Clone** - Fabrik uses `git clone --depth 1` for efficient fetching - only the latest commit is downloaded.
+- **Cached After First Fetch** - Once fetched, the recipe is cached locally. Subsequent runs reuse the cache without re-fetching.
+- **Branch Tracking** - When using a branch reference (e.g., `@main`), the cache is specific to that branch. Switching branches fetches a new copy.
 
 ## Common Patterns
 
