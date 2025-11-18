@@ -19,5 +19,5 @@ pub mod xdg;
 pub use auth::AuthProvider;
 pub use config::FabrikConfig;
 pub use config_discovery::{discover_config, hash_config, DaemonState};
-pub use recipe::{RecipeExecutor, RecipeMetadata};
+pub use recipe::RecipeExecutor;
 pub use storage::{create_storage, default_cache_dir, FilesystemStorage, Storage};
