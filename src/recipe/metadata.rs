@@ -1,7 +1,4 @@
 // Recipe metadata parsing and validation
-//
-// This module handles parsing the `export const recipe = {...}` metadata
-// from portable recipe files.
 
 use anyhow::{anyhow, Result};
 use serde::{Deserialize, Serialize};
