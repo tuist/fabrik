@@ -19,8 +19,7 @@ Remote recipes use the `@` prefix syntax to reference recipes stored in Git repo
 fabrik run @org/repo/path/script.js
 ```
 
-> [!NOTE]
-> **Git as Distribution Mechanism**
+> [!NOTE] Git as Distribution Mechanism
 > Git repositories are used purely as a distribution mechanism for sharing recipes. Recipes are self-contained JavaScript files that cannot depend on other recipes or import external modules. Each recipe runs independently with access to Fabrik's built-in APIs only.
 
 Fabrik automatically:
