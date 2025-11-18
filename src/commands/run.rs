@@ -553,19 +553,12 @@ async fn run_remote_recipe(recipe_ref: &str, args: &RunArgs) -> Result<()> {
     // Execute recipe with RecipeExecutor
     let executor = RecipeExecutor::new(script_path);
 
-    // If script_args is provided, treat first arg as target function name
-    let target = args.script_args.first().map(|s| s.as_str());
-
     if args.verbose {
-        if let Some(t) = target {
-            eprintln!("{} Executing target: {}", fabrik_prefix(), t);
-        } else {
-            eprintln!("{} Executing recipe at root level", fabrik_prefix());
-        }
+        eprintln!("{} Executing recipe at root level", fabrik_prefix());
     }
 
     executor
-        .execute(target)
+        .execute()
         .await
         .with_context(|| format!("Failed to execute remote recipe: {}", recipe_ref))?;
 
