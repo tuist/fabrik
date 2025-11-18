@@ -89,15 +89,19 @@ mod tests {
 
     #[test]
     fn test_validate_empty_name() {
-        let mut metadata = RecipeMetadata::default();
-        metadata.name = "".to_string();
+        let metadata = RecipeMetadata {
+            name: "".to_string(),
+            ..Default::default()
+        };
         assert!(metadata.validate().is_err());
     }
 
     #[test]
     fn test_validate_invalid_version() {
-        let mut metadata = RecipeMetadata::default();
-        metadata.version = "1".to_string();
+        let metadata = RecipeMetadata {
+            version: "1".to_string(),
+            ..Default::default()
+        };
         assert!(metadata.validate().is_err());
     }
 
