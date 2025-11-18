@@ -29,20 +29,13 @@ Fabrik automatically:
 
 ## Why Remote Recipes?
 
-**Easy Sharing**
-Share recipes across teams by publishing them in Git repositories. No need to copy files manually.
-
-**Version Control**
-Pin recipes to specific versions using Git tags:
-```bash
-fabrik run @tuist/recipes/build.js@v1.0.0
-```
-
-**Always Up-to-Date**
-Reference `@main` or `@latest` to always use the newest version.
-
-**Cross-Platform**
-Remote recipes run on any platform with the embedded QuickJS runtime - no external dependencies needed.
+- **Easy Sharing** - Share recipes across teams by publishing them in Git repositories. No need to copy files manually.
+- **Version Control** - Pin recipes to specific versions using Git tags:
+  ```bash
+  fabrik run @tuist/recipes/build.js@v1.0.0
+  ```
+- **Always Up-to-Date** - Reference `@main` or `@latest` to always use the newest version.
+- **Cross-Platform** - Remote recipes run on any platform with the embedded QuickJS runtime - no external dependencies needed.
 
 ## Quick Example
 
