@@ -114,6 +114,10 @@ mod tests {
         // Pre-create test file for the recipe to check
         tokio::fs::write(&test_file, b"test data").await.unwrap();
 
+        // Escape backslashes for Windows paths in JavaScript strings
+        let test_file_str = test_file.to_str().unwrap().replace('\\', "\\\\");
+        let temp_dir_str = temp_dir.path().to_str().unwrap().replace('\\', "\\\\");
+
         let recipe_code = format!(
             r#"
             async function build() {{
@@ -128,8 +132,7 @@ mod tests {
                 }}
             }}
         "#,
-            test_file.display(),
-            temp_dir.path().display()
+            test_file_str, temp_dir_str
         );
 
         tokio::fs::write(&recipe_path, recipe_code).await.unwrap();
