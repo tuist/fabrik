@@ -4,8 +4,6 @@
 // on Fabrik's embedded QuickJS runtime with custom Fabrik APIs exposed.
 
 pub mod executor;
-pub mod metadata;
 pub mod runtime;
 
 pub use executor::RecipeExecutor;
-pub use metadata::RecipeMetadata;

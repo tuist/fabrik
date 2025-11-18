@@ -1,12 +1,9 @@
 // Recipe executor - Runs portable recipes in QuickJS runtime
-//
-// This module handles recipe execution with caching and metadata validation.
 
 use anyhow::Result;
 use rquickjs::async_with;
 use std::path::PathBuf;
 
-use super::metadata::RecipeMetadata;
 use super::runtime::create_fabrik_runtime;
 
 /// Executes portable recipes (JavaScript files with Fabrik APIs)
@@ -69,11 +66,6 @@ impl RecipeExecutor {
         tracing::info!("[fabrik] Recipe completed successfully");
 
         Ok(())
-    }
-
-    /// Parse recipe metadata (if present)
-    pub async fn metadata(&self) -> Result<Option<RecipeMetadata>> {
-        RecipeMetadata::from_file(&self.recipe_path).await
     }
 }
 
