@@ -196,7 +196,8 @@ mod tests {
         let (_runtime, context) = create_fabrik_runtime().await.unwrap();
         let temp_dir = std::env::temp_dir();
         let temp_file = temp_dir.join("fabrik_test_file.txt");
-        let temp_file_str = temp_file.to_str().unwrap();
+        // Escape backslashes for Windows paths in JavaScript strings
+        let temp_file_str = temp_file.to_str().unwrap().replace('\\', "\\\\");
 
         // Write test data from Rust side first
         tokio::fs::write(&temp_file, b"test content").await.unwrap();
