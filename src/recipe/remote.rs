@@ -105,6 +105,69 @@ impl RemoteRecipe {
     pub fn script_path(&self) -> Result<PathBuf> {
         Ok(self.cache_dir()?.join(&self.path))
     }
+
+    /// Fetch the remote recipe to local cache
+    ///
+    /// Uses `git clone --depth 1` for efficient fetching.
+    /// If already cached, skips fetch.
+    pub async fn fetch(&self) -> Result<PathBuf> {
+        let cache_dir = self.cache_dir()?;
+        let script_path = self.script_path()?;
+
+        // If already cached and script exists, return immediately
+        if script_path.exists() {
+            tracing::debug!(
+                "[fabrik] Remote recipe already cached: {}",
+                script_path.display()
+            );
+            return Ok(script_path);
+        }
+
+        tracing::info!(
+            "[fabrik] Fetching remote recipe: {} from {}",
+            self.path,
+            self.git_url()
+        );
+
+        // Create cache directory
+        tokio::fs::create_dir_all(&cache_dir).await?;
+
+        // Clone repository with shallow clone
+        let git_ref = self.git_ref.as_deref().unwrap_or("main");
+        let output = tokio::process::Command::new("git")
+            .args([
+                "clone",
+                "--depth",
+                "1",
+                "--branch",
+                git_ref,
+                "--single-branch",
+                &self.git_url(),
+                cache_dir
+                    .to_str()
+                    .ok_or_else(|| anyhow!("Invalid cache directory path"))?,
+            ])
+            .output()
+            .await?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(anyhow!(
+                "Failed to clone repository {}: {}",
+                self.git_url(),
+                stderr
+            ));
+        }
+
+        // Verify script exists
+        if !script_path.exists() {
+            return Err(anyhow!("Script not found at {} in repository", self.path));
+        }
+
+        tracing::info!("[fabrik] Remote recipe fetched successfully");
+
+        Ok(script_path)
+    }
 }
 
 #[cfg(test)]
