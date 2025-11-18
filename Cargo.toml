@@ -54,6 +54,15 @@ notify-rust = "4.11"
 hmac = "0.12"
 hostname = "0.4"
 rand = "0.9"
+# QuickJS runtime for portable recipes
+rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", features = ["array-buffer", "allocator", "loader", "macro", "futures", "classes"] }
+# LLRT modules for Node.js compatibility
+llrt_utils = { git = "https://github.com/awslabs/llrt", branch = "main", features = ["fs"] }
+llrt_fs = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_child_process = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_buffer = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_path = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_console = { git = "https://github.com/awslabs/llrt", branch = "main" }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30", features = ["signal"] }
