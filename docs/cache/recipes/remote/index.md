@@ -27,6 +27,26 @@ Fabrik automatically:
 - Caches it locally following XDG conventions
 - Executes the recipe using the embedded QuickJS runtime
 
+## Comparison with CI Reusable Steps
+
+Remote recipes share similarities with CI reusable steps (like GitHub Actions, GitLab CI Components, and Forgejo Actions) but are designed for a different purpose:
+
+**CI Reusable Steps** (GitHub Actions, GitLab CI Components, Forgejo Actions) are CI/CD workflows that:
+- Run in cloud infrastructure (provider-specific runners)
+- Tightly coupled to specific CI/CD platforms
+- Require platform-specific YAML configuration
+- Execute in response to repository events (push, pull request, etc.)
+- Ideal for automated testing, deployment, and release workflows
+
+**Remote Recipes** are portable automation scripts that:
+- Run locally on developer machines or in any CI environment
+- Not coupled to any specific CI provider
+- Use simple JavaScript with Fabrik's embedded runtime
+- Execute on-demand via `fabrik run` command
+- Ideal for cached build steps, code generation, and reproducible automation
+
+Think of remote recipes as **lightweight, portable actions** that work anywhere Fabrik is installed, with the added benefit of content-addressed caching for fast, incremental builds.
+
 ## Why Remote Recipes?
 
 - **Easy Sharing** - Share recipes across teams by publishing them in Git repositories. No need to copy files manually.

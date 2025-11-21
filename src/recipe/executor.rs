@@ -4,7 +4,7 @@ use anyhow::Result;
 use rquickjs::async_with;
 use std::path::PathBuf;
 
-use super::runtime::create_fabrik_runtime;
+use super::runtime::create_fabrik_runtime_with_dir;
 
 /// Executes portable recipes (JavaScript files with Fabrik APIs)
 pub struct RecipeExecutor {
@@ -27,8 +27,15 @@ impl RecipeExecutor {
         // Read recipe file
         let recipe_code = tokio::fs::read_to_string(&self.recipe_path).await?;
 
+        // Get recipe directory for config discovery
+        let recipe_dir = self
+            .recipe_path
+            .parent()
+            .unwrap_or_else(|| std::path::Path::new("."))
+            .to_path_buf();
+
         // Create QuickJS runtime with Fabrik APIs
-        let (_runtime, context) = create_fabrik_runtime().await?;
+        let (_runtime, context) = create_fabrik_runtime_with_dir(recipe_dir).await?;
 
         // Execute recipe at root level (wrap in async IIFE)
         async_with!(context => |ctx| {
