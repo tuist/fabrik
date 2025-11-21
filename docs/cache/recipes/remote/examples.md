@@ -8,27 +8,30 @@ A reusable recipe for building TypeScript projects.
 
 ```javascript
 // typescript-build.js - Root-level script (no exported functions)
+import { existsSync } from 'fs';
+import { spawn } from 'child_process';
+import { glob } from 'fabrik:fs';
+
 console.log("Building TypeScript project...");
 
 // Check dependencies
-const hasPackageJson = await Fabrik.exists("package.json");
-if (!hasPackageJson) {
+if (!existsSync("package.json")) {
     throw new Error("No package.json found");
 }
 
 // Install dependencies
 console.log("Installing dependencies...");
-await Fabrik.exec("npm", ["install"]);
+await spawn("npm", ["install"]);
 
 // Run TypeScript compiler
 console.log("Compiling TypeScript...");
-const exitCode = await Fabrik.exec("tsc", ["--build"]);
-if (exitCode !== 0) {
+const result = await spawn("tsc", ["--build"]);
+if (result.exitCode !== 0) {
     throw new Error("TypeScript compilation failed");
 }
 
 // Verify outputs
-const distFiles = await Fabrik.glob("dist/**/*");
+const distFiles = await glob("dist/**/*");
 console.log(`Generated ${distFiles.length} output files`);
 ```
 
@@ -47,9 +50,11 @@ A complete CI/CD pipeline recipe.
 
 **`lint.js`:**
 ```javascript
+import { spawn } from 'child_process';
+
 console.log("Running linter...");
-const exitCode = await Fabrik.exec("npm", ["run", "lint"]);
-if (exitCode !== 0) {
+const result = await spawn("npm", ["run", "lint"]);
+if (result.exitCode !== 0) {
     throw new Error("Linting failed");
 }
 console.log("Linting passed!");
@@ -57,9 +62,11 @@ console.log("Linting passed!");
 
 **`test.js`:**
 ```javascript
+import { spawn } from 'child_process';
+
 console.log("Running test suite...");
-const exitCode = await Fabrik.exec("npm", ["test", "--", "--coverage"]);
-if (exitCode !== 0) {
+const result = await spawn("npm", ["test", "--", "--coverage"]);
+if (result.exitCode !== 0) {
     throw new Error("Tests failed");
 }
 console.log("All tests passed!");
@@ -67,10 +74,13 @@ console.log("All tests passed!");
 
 **`build.js`:**
 ```javascript
-console.log("Building application...");
-await Fabrik.exec("npm", ["run", "build"]);
+import { spawn } from 'child_process';
+import { glob } from 'fabrik:fs';
 
-const buildFiles = await Fabrik.glob("build/**/*");
+console.log("Building application...");
+await spawn("npm", ["run", "build"]);
+
+const buildFiles = await glob("build/**/*");
 console.log(`Built ${buildFiles.length} files`);
 console.log("Build complete!");
 ```
@@ -93,13 +103,15 @@ Separate recipes for different environments.
 
 **`staging.js`:**
 ```javascript
+import { spawn } from 'child_process';
+
 console.log("Deploying to STAGING environment...");
 
 // Build with staging config
-await Fabrik.exec("npm", ["run", "build:staging"]);
+await spawn("npm", ["run", "build:staging"]);
 
 // Deploy to staging
-await Fabrik.exec("aws", [
+await spawn("aws", [
     "s3", "sync", "build/",
     "s3://staging-bucket/",
     "--delete"
@@ -111,20 +123,22 @@ console.log("URL: https://staging.example.com");
 
 **`production.js`:**
 ```javascript
+import { spawn } from 'child_process';
+
 console.log("Deploying to PRODUCTION environment...");
 
 // Build with production config
-await Fabrik.exec("npm", ["run", "build:production"]);
+await spawn("npm", ["run", "build:production"]);
 
 // Deploy to production
-await Fabrik.exec("aws", [
+await spawn("aws", [
     "s3", "sync", "build/",
     "s3://production-bucket/",
     "--delete"
 ]);
 
 // Invalidate CloudFront cache
-await Fabrik.exec("aws", [
+await spawn("aws", [
     "cloudfront", "create-invalidation",
     "--distribution-id", "E1234567890ABC",
     "--paths", "/*"
@@ -152,6 +166,8 @@ Build and push Docker images.
 **Repository:** `@tuist/recipes/docker-build.js@v1.0.0`
 
 ```javascript
+import { spawn } from 'child_process';
+
 console.log("Building Docker image...");
 
 // Get current git commit (simplified - in real usage you'd capture output)
@@ -160,14 +176,14 @@ const imageTag = `myapp:${gitSha}`;
 
 console.log(`Building image: ${imageTag}`);
 
-const exitCode = await Fabrik.exec("docker", [
+const result = await spawn("docker", [
     "build",
     "-t", imageTag,
     "-t", "myapp:latest",
     "."
 ]);
 
-if (exitCode !== 0) {
+if (result.exitCode !== 0) {
     throw new Error("Docker build failed");
 }
 
@@ -175,8 +191,8 @@ console.log(`Built image: ${imageTag}`);
 
 // Push images
 console.log("Pushing Docker images...");
-await Fabrik.exec("docker", ["push", imageTag]);
-await Fabrik.exec("docker", ["push", "myapp:latest"]);
+await spawn("docker", ["push", imageTag]);
+await spawn("docker", ["push", "myapp:latest"]);
 
 console.log("Images pushed successfully!");
 ```
@@ -195,6 +211,8 @@ Build multiple packages in a monorepo.
 **Repository:** `@company/monorepo/build-all.js@main`
 
 ```javascript
+import { spawn } from 'child_process';
+
 console.log("Building all packages...");
 
 const packages = [
@@ -207,12 +225,12 @@ const packages = [
 for (const pkg of packages) {
     console.log(`Building ${pkg}...`);
 
-    const exitCode = await Fabrik.exec("npm", [
+    const result = await spawn("npm", [
         "run", "build",
         "--workspace", pkg
     ]);
 
-    if (exitCode !== 0) {
+    if (result.exitCode !== 0) {
         throw new Error(`Build failed for ${pkg}`);
     }
 }
@@ -234,28 +252,31 @@ Recipe with conditional execution based on file existence.
 **Repository:** `@tuist/recipes/smart-build.js@v1.0.0`
 
 ```javascript
+import { existsSync } from 'fs';
+import { spawn } from 'child_process';
+import { glob } from 'fabrik:fs';
+
 console.log("Smart build - checking what needs to be built...");
 
 // Check if package.json changed
-const hasPackageJson = await Fabrik.exists("package.json");
-if (hasPackageJson) {
+if (existsSync("package.json")) {
     console.log("Installing dependencies...");
-    await Fabrik.exec("npm", ["install"]);
+    await spawn("npm", ["install"]);
 }
 
 // Check if TypeScript files exist
-const tsFiles = await Fabrik.glob("src/**/*.ts");
+const tsFiles = await glob("src/**/*.ts");
 if (tsFiles.length > 0) {
     console.log(`Found ${tsFiles.length} TypeScript files, compiling...`);
-    await Fabrik.exec("tsc", ["--build"]);
+    await spawn("tsc", ["--build"]);
 }
 
 // Check if tests exist
-const testFiles = await Fabrik.glob("tests/**/*.test.js");
+const testFiles = await glob("tests/**/*.test.js");
 if (testFiles.length > 0) {
     console.log(`Found ${testFiles.length} test files, running tests...`);
-    const exitCode = await Fabrik.exec("npm", ["test"]);
-    if (exitCode !== 0) {
+    const result = await spawn("npm", ["test"]);
+    if (result.exitCode !== 0) {
         throw new Error("Tests failed");
     }
 }
@@ -320,8 +341,10 @@ git init
 ```bash
 # Create recipe (root-level script)
 cat > build.js << 'EOF'
+import { spawn } from 'child_process';
+
 console.log("Building...");
-await Fabrik.exec("npm", ["run", "build"]);
+await spawn("npm", ["run", "build"]);
 console.log("Build complete!");
 EOF
 
