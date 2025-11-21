@@ -88,5 +88,6 @@ fabrik run --verbose @tuist/recipes/build.js
 
 ## Next Steps
 
+- [JavaScript API Reference](/cache/recipes/api-reference) - Complete API documentation for recipe development
 - [Syntax Reference](/cache/recipes/remote/syntax) - Learn the full `@` prefix syntax
 - [Examples](/cache/recipes/remote/examples) - See real-world remote recipe examples

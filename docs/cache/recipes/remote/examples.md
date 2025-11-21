@@ -375,5 +375,6 @@ fabrik run @myorg/my-recipes/build.js@v1.0.0
 
 ## Next Steps
 
+- [JavaScript API Reference](/cache/recipes/api-reference) - Complete API documentation for recipe development
 - [Syntax Reference](/cache/recipes/remote/syntax) - Learn the full `@` prefix syntax
 - [Local Recipes](/cache/recipes/local/) - Learn about local script recipes
