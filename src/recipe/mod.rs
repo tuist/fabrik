@@ -3,6 +3,7 @@
 // This module provides cross-platform build automation using JavaScript that runs
 // on Fabrik's embedded QuickJS runtime with custom Fabrik APIs exposed.
 
+pub mod cache;
 pub mod executor;
 pub mod remote;
 pub mod runtime;

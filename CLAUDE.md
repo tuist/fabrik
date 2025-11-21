@@ -883,73 +883,232 @@ import { spawn } from 'child_process';
 import { basename, dirname, join } from 'path';
 ```
 
-**Fabrik-Specific APIs** (global `Fabrik` object):
+**Fabrik-Specific APIs** (imported from `fabrik:*` modules):
+
 ```javascript
-// File operations (async)
-const data = await Fabrik.readFile(path)         // Returns Uint8Array
-await Fabrik.writeFile(path, data)               // Accepts Uint8Array
-const exists = await Fabrik.exists(path)         // Returns boolean
-const files = await Fabrik.glob(pattern)         // Returns string[]
+// fabrik:cache - Content-addressed caching APIs
+import { runCached, needsRun } from 'fabrik:cache';
 
-// Process execution (async)
-const exitCode = await Fabrik.exec(command, args)  // Returns exit code (number)
-// TODO: Return { exitCode, stdout, stderr }
+/**
+ * Run action only if cache miss (uses both KV + cache storage)
+ *
+ * Computes hash from inputs/env, checks cache, runs action on miss,
+ * stores outputs in cache.
+ */
+await runCached(
+  // Action to run on cache miss
+  async () => {
+    // Your build logic here
+    const { spawn } = await import('child_process');
+    await spawn("npm", ["run", "build"]);
+  },
+  // Metadata for cache key computation + optional config overrides
+  {
+    inputs: ["src/**/*.ts", "tsconfig.json"],
+    outputs: ["dist/"],
+    env: ["NODE_ENV"],
 
-// Hashing (async)
-const hash = await Fabrik.hashFile(path)         // Returns SHA256 hex string
+    // Optional: Override cache configuration at runtime
+    // (defaults to fabrik.toml discovered from script directory)
+    cacheDir: ".custom-cache",           // Override cache directory
+    upstream: ["grpc://custom.cache"],   // Override upstream cache
+    ttl: "7d"                            // Cache expiration
+  }
+);
 
-// Cache operations (async, placeholders)
-const data = await Fabrik.cache.get(hash)        // Returns Uint8Array | null
-await Fabrik.cache.put(hash, data)               // Stores artifact
-const has = await Fabrik.cache.has(hash)         // Returns boolean
+/**
+ * Check if action needs to run (uses only KV storage)
+ *
+ * Computes hash from inputs/env, checks KV store.
+ * Caller decides what to do with the result.
+ */
+const needed = await needsRun({
+  inputs: ["src/**/*.ts"],
+  env: ["NODE_ENV"],
+
+  // Optional: Override cache configuration
+  cacheDir: ".custom-cache"
+});
+
+if (needed) {
+  console.log("Files changed, rebuilding...");
+  // Your logic here
+} else {
+  console.log("Nothing changed, skipping build");
+}
+
+// Low-level KV operations (for advanced use cases)
+import { get, set, has } from 'fabrik:kv';
+
+const hash = "abc123...";
+await set(hash, { timestamp: Date.now() });
+const value = await get(hash);  // Returns stored value or null
+const exists = await has(hash); // Returns boolean
+
+// Low-level cache operations (for advanced use cases)
+import { get as getArtifact, put as putArtifact } from 'fabrik:storage';
+
+const artifact = await getArtifact(hash);  // Returns Uint8Array | null
+await putArtifact(hash, new Uint8Array([...]));
+
+// File utilities
+import { glob, hashFile } from 'fabrik:fs';
+
+const files = await glob("src/**/*.ts");  // Returns string[]
+const hash = await hashFile("package.json");  // Returns SHA256 hex
 ```
 
 ### Recipe Execution Patterns
 
-**Root-level execution** (simplest):
-```javascript
-// simple.recipe.js
-import { readFileSync } from 'fs';
-import { basename } from 'path';
+**IMPORTANT: Recipes execute at root-level only - they do NOT export functions.**
 
-console.log("Building project...");
+All recipe code executes directly when the file is loaded. There are no targets, no function exports, just sequential execution:
 
-const files = await Fabrik.glob("src/**/*.rs");
-console.log("Found", files.length, "Rust files");
-
-const exitCode = await Fabrik.exec("cargo", ["build"]);
-if (exitCode !== 0) {
-    throw new Error("Build failed!");
-}
-```
-
-**Function-based execution** (for multiple targets):
 ```javascript
 // build.recipe.js
-import { existsSync } from 'fs';
+import { spawn } from 'child_process';
+import { runCached, needsRun } from 'fabrik:cache';
+import { glob } from 'fabrik:fs';
 
-export async function build() {
-    console.log("Starting build...");
-    const exitCode = await Fabrik.exec("cargo", ["build"]);
-    if (exitCode !== 0) throw new Error("Build failed!");
+console.log("Building Rust project...");
+
+// Use runCached() for build - automatically handles caching
+await runCached(
+  async () => {
+    console.log("Running cargo build...");
+    const result = await spawn("cargo", ["build", "--release"]);
+    if (result.exitCode !== 0) {
+      throw new Error("Build failed!");
+    }
+  },
+  {
+    inputs: ["src/**/*.rs", "Cargo.toml", "Cargo.lock"],
+    outputs: ["target/release/"],
+    env: ["RUSTFLAGS"]
+  }
+);
+
+// Use needsRun() for tests - caller controls the logic
+const needsTest = await needsRun({
+  inputs: ["src/**/*.rs", "tests/**/*.rs"],
+  env: ["RUST_TEST_THREADS"]
+});
+
+if (needsTest) {
+  console.log("Running tests...");
+  const testResult = await spawn("cargo", ["test"]);
+  if (testResult.exitCode !== 0) {
+    throw new Error("Tests failed!");
+  }
+} else {
+  console.log("No changes detected, skipping tests");
 }
 
-export async function test() {
-    console.log("Running tests...");
-    const exitCode = await Fabrik.exec("cargo", ["test"]);
-    if (exitCode !== 0) throw new Error("Tests failed!");
-}
+console.log("Build complete!");
 ```
 
 **Execution:**
 ```bash
-# Root-level execution
-fabrik run simple.recipe.js
-
-# Function-based execution
-fabrik run build.recipe.js --target build
-fabrik run build.recipe.js --target test
+# Simply run the recipe - all code executes from top to bottom
+fabrik run build.recipe.js
 ```
+
+**Why no exported functions?**
+- Recipes are meant to be simple, linear automation scripts
+- No need for complex target orchestration
+- If you need multiple entry points, create multiple recipe files
+- Keep recipes focused and composable
+
+### Recipe Configuration
+
+**Configuration Discovery:**
+
+When a recipe calls `runCached()` or `needsRun()`, Fabrik automatically discovers configuration:
+
+1. **Start from recipe location**: Look for `fabrik.toml` in the directory containing the recipe file
+2. **Traverse up**: If not found, walk up parent directories (same as `fabrik daemon`)
+3. **Global fallback**: Use `~/.config/fabrik/config.toml` if no project config found
+4. **Runtime override**: Configuration passed to API calls takes precedence
+
+**Configuration Precedence** (highest to lowest):
+1. Runtime parameters passed to `runCached()`/`needsRun()` (highest)
+2. Project `fabrik.toml` (discovered from recipe directory)
+3. Global `~/.config/fabrik/config.toml` (lowest)
+
+**Example directory structure:**
+```
+/home/user/projects/myproject/
+├── fabrik.toml                    # Project config (auto-discovered)
+├── scripts/
+│   └── build.recipe.js           # Recipe discovers ../fabrik.toml
+└── tools/
+    └── deploy.recipe.js          # Also discovers ../../fabrik.toml
+```
+
+**Configuration Options:**
+
+```javascript
+// build.recipe.js
+import { runCached } from 'fabrik:cache';
+
+// Option 1: Use discovered config (simplest)
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"]
+  }
+);
+
+// Option 2: Override cache directory at runtime
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"],
+    cacheDir: ".custom-cache"  // Override
+  }
+);
+
+// Option 3: Override upstream cache at runtime
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"],
+    upstream: [
+      "grpc://cache-us-east.example.com:7070",
+      "grpc://cache-eu-west.example.com:7070"
+    ]
+  }
+);
+
+// Option 4: Mix discovered config with runtime overrides
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"],
+    ttl: "14d",                    // Override TTL
+    cacheDir: process.env.CACHE_DIR // Dynamic override
+  }
+);
+```
+
+**Supported Runtime Overrides:**
+
+| Option | Type | Description | Example |
+|--------|------|-------------|---------|
+| `cacheDir` | string | Local cache directory | `.fabrik-cache` |
+| `upstream` | string[] | Upstream cache servers | `["grpc://cache.example.com:7070"]` |
+| `ttl` | string | Cache expiration | `"7d"`, `"2h"`, `"30m"` |
+| `hashMethod` | string | How to hash input files | `"content"`, `"mtime"`, `"size"` |
+
+**Benefits:**
+- ✅ **Zero config**: Works out of the box with discovered `fabrik.toml`
+- ✅ **Flexible**: Override per-recipe when needed
+- ✅ **Dynamic**: Use environment variables for runtime config
+- ✅ **Portable**: Same recipe works across different projects
 
 ### Implementation Details
 
@@ -975,25 +1134,20 @@ llrt_buffer::init(&ctx)?;
 
 **Recipe Execution** (src/recipe/executor.rs):
 ```rust
-// Root-level: wrap in IIFE
+// Root-level execution only: wrap entire recipe in async IIFE
 let wrapped_code = format!("(async () => {{ {} }})();", recipe_code);
 let promise: rquickjs::Promise = ctx.eval(wrapped_code.as_bytes())?;
 promise.into_future::<()>().await?;
 
-// Function-based: evaluate file, then call target
-ctx.eval::<(), _>(recipe_code.as_bytes())?;
-let target_fn: rquickjs::Function = globals.get(target_name)?;
-let promise: rquickjs::Promise = target_fn.call(())?;
-promise.into_future::<()>().await?;
+// That's it! No function-based execution, no targets.
 ```
 
 ### Future Enhancements
 
 **Planned:**
 - [ ] TypeScript support via swc compilation
-- [ ] `Fabrik.exec()` should return `{ exitCode, stdout, stderr }`
+- [ ] Replace `Fabrik.exec()` with proper cache-aware APIs (see API design discussion)
 - [ ] Integrate cache operations with actual Fabrik storage
-- [ ] Recipe metadata parsing from `export const recipe = {...}`
 - [ ] Content-addressed caching based on inputs/outputs
 - [ ] More LLRT modules (net, http, crypto, etc.)
 
