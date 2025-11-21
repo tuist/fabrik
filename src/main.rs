@@ -11,6 +11,7 @@ mod http;
 mod logging;
 mod merger;
 mod p2p; // P2P cache sharing
+mod recipe; // Portable recipes (QuickJS/JavaScript)
 mod script;
 mod storage;
 mod xcode;
