@@ -61,10 +61,6 @@ export default defineConfig({
             collapsed: true,
             items: [
               {
-                text: "JavaScript API Reference",
-                link: "/cache/recipes/api-reference",
-              },
-              {
                 text: "Local",
                 collapsed: true,
                 items: [
@@ -81,6 +77,10 @@ export default defineConfig({
                 collapsed: true,
                 items: [
                   { text: "Introduction", link: "/cache/recipes/remote/" },
+                  {
+                    text: "JavaScript API Reference",
+                    link: "/cache/recipes/api-reference",
+                  },
                   {
                     text: "Syntax Reference",
                     link: "/cache/recipes/remote/syntax",
