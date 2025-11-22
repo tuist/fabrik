@@ -40,8 +40,8 @@ jobs:
         with:
           components: clippy
 
-      - name: Install protobuf compiler
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - name: Install protobuf compiler and LLVM
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libclang-dev
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-          cache: 'pnpm'
+          cache: "pnpm"
 
       - name: Install dependencies
         run: pnpm install
@@ -83,22 +83,22 @@ jobs:
         if: runner.os == 'macOS'
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16.0'
+          xcode-version: "16.0"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install protobuf compiler (Ubuntu)
+      - name: Install protobuf compiler and LLVM (Ubuntu)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libclang-dev
 
-      - name: Install protobuf compiler (macOS)
+      - name: Install protobuf compiler and LLVM (macOS)
         if: runner.os == 'macOS'
-        run: brew install protobuf
+        run: brew install protobuf llvm
 
-      - name: Install protobuf compiler (Windows)
+      - name: Install protobuf compiler and LLVM (Windows)
         if: runner.os == 'Windows'
-        run: choco install protoc
+        run: choco install protoc llvm
 
       - name: Setup Node.js (for Nx tests)
         uses: actions/setup-node@v6
@@ -127,22 +127,22 @@ jobs:
         if: runner.os == 'macOS'
         uses: maxim-lobanov/setup-xcode@v1
         with:
-          xcode-version: '16.0'
+          xcode-version: "16.0"
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install protobuf compiler (Ubuntu)
+      - name: Install protobuf compiler and LLVM (Ubuntu)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libclang-dev
 
-      - name: Install protobuf compiler (macOS)
+      - name: Install protobuf compiler and LLVM (macOS)
         if: runner.os == 'macOS'
-        run: brew install protobuf
+        run: brew install protobuf llvm
 
-      - name: Install protobuf compiler (Windows)
+      - name: Install protobuf compiler and LLVM (Windows)
         if: runner.os == 'Windows'
-        run: choco install protoc
+        run: choco install protoc llvm
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
