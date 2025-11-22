@@ -61,7 +61,7 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
           cache: 'pnpm'
 
       - name: Install dependencies
@@ -103,7 +103,7 @@ jobs:
       - name: Setup Node.js (for Nx tests)
         uses: actions/setup-node@v6
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Cache Rust dependencies
         uses: Swatinem/rust-cache@v2
