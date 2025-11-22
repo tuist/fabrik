@@ -16,7 +16,7 @@ node = "24.11.1"
 pnpm = "latest"
 fnox = "latest"
 age = "latest"
-java = "21.0.9+10.0.LTS"  # LTS version
+java = "25.0.1+8.0.LTS"  # LTS version
 "npm:wrangler" = "latest"
 
 [tasks."docs:deploy-with-secrets"]
