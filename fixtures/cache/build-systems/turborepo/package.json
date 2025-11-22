@@ -2,7 +2,7 @@
   "name": "turborepo-fixture",
   "version": "1.0.0",
   "private": true,
-  "packageManager": "npm@11.6.2",
+  "packageManager": "npm@11.6.3",
   "workspaces": [
     "packages/*"
   ],
