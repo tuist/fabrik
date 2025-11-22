@@ -96,6 +96,10 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install protobuf llvm
 
+      - name: Set LLVM environment (macOS)
+        if: runner.os == 'macOS'
+        run: echo "DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+
       - name: Install protobuf compiler and LLVM (Windows)
         if: runner.os == 'Windows'
         run: choco install protoc llvm
@@ -139,6 +143,10 @@ jobs:
       - name: Install protobuf compiler and LLVM (macOS)
         if: runner.os == 'macOS'
         run: brew install protobuf llvm
+
+      - name: Set LLVM environment (macOS)
+        if: runner.os == 'macOS'
+        run: echo "DYLD_FALLBACK_LIBRARY_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
 
       - name: Install protobuf compiler and LLVM (Windows)
         if: runner.os == 'Windows'
