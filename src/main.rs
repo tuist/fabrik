@@ -1,16 +1,20 @@
 mod api;
+mod auth;
 mod bazel;
 mod cli;
 mod cli_utils;
 mod commands;
 mod config;
 mod config_discovery;
+mod config_expansion; // Environment variable expansion for config files
 mod http;
 mod logging;
 mod merger;
+mod p2p; // P2P cache sharing
 mod script;
 mod storage;
 mod xcode;
+mod xdg;
 
 use anyhow::Result;
 use clap::Parser;
@@ -37,7 +41,24 @@ async fn main() -> Result<()> {
         Commands::Doctor(args) => commands::doctor::run(args),
         Commands::Init(args) => commands::init::run(args),
         Commands::Run(args) => commands::run::run(&args).await,
+        Commands::Cache(_args) => commands::cache::cache_deprecated().await,
         Commands::Cas(args) => commands::cas::run(&args).await,
         Commands::Kv(args) => commands::kv::run(&args).await,
+        Commands::P2p(args) => commands::p2p::run(args).await,
+        Commands::Auth(args) => {
+            use cli::AuthCommand;
+            use config_discovery::load_config_with_discovery;
+
+            // Load config with auto-discovery
+            let config = load_config_with_discovery(args.config.as_deref())?.unwrap_or_default();
+
+            // Dispatch to auth subcommand
+            match &args.command {
+                AuthCommand::Login(_) => commands::auth::login(config).await,
+                AuthCommand::Logout(_) => commands::auth::logout(config).await,
+                AuthCommand::Status(_) => commands::auth::status(config).await,
+                AuthCommand::Token(_) => commands::auth::token(config).await,
+            }
+        }
     }
 }

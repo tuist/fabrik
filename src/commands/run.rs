@@ -18,11 +18,21 @@ use crate::script::{
 use crate::storage::default_cache_dir;
 
 pub async fn run(args: &RunArgs) -> Result<()> {
-    // Initialize cache directory
+    use crate::config_discovery::load_config_with_discovery;
+
+    // Load config file with auto-discovery
+    let file_config = load_config_with_discovery(args.config.as_deref())?;
+
+    // Initialize cache directory (CLI arg > config file > default)
     let cache_dir = args
         .config_cache_dir
         .as_deref()
         .map(std::path::PathBuf::from)
+        .or_else(|| {
+            file_config
+                .as_ref()
+                .map(|c| std::path::PathBuf::from(&c.cache.dir))
+        })
         .unwrap_or_else(default_cache_dir);
 
     // Handle script management operations

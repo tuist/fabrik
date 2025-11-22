@@ -1,0 +1,32 @@
+@@ -77,6 +78,7 @@
+     }
+ 
+     /// Fetch artifact from a single peer
++    #[allow(dead_code)] // Will be used when integrated with daemon storage layer
+     async fn fetch_from_peer(&self, peer: &Peer, hash: &str) -> Result<Bytes> {
+         let endpoint = peer.endpoint();
+ 
+@@ -130,6 +132,7 @@
+     }
+ 
+     /// Create existence check request
++    #[allow(dead_code)] // Will be used when integrated with daemon storage layer
+     fn create_exists_request(&self, hash: &str) -> ExistsRequest {
+         let timestamp = auth::current_timestamp();
+         let signature = self.sign_request(hash, timestamp);
+@@ -144,6 +147,7 @@
+     }
+ 
+     /// Create get request
++    #[allow(dead_code)] // Will be used when integrated with daemon storage layer
+     fn create_get_request(&self, hash: &str) -> GetRequest {
+         let timestamp = auth::current_timestamp();
+         let signature = self.sign_request(hash, timestamp);
+@@ -158,6 +162,7 @@
+     }
+ 
+     /// Sign a request using HMAC-SHA256
++    #[allow(dead_code)] // Will be used when integrated with daemon storage layer
+     fn sign_request(&self, hash: &str, timestamp: i64) -> Vec<u8> {
+         let secret = self
+             .config

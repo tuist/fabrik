@@ -18,37 +18,40 @@ export default defineConfig({
         items: [
           { text: "Introduction", link: "/guide/introduction" },
           { text: "Getting Started", link: "/getting-started" },
+          { text: "Authentication", link: "/guide/authentication" },
           { text: "Architecture", link: "/guide/architecture" },
         ],
       },
       {
         text: "Cache",
         items: [
+          { text: "Peer to Peer", link: "/cache/p2p" },
           {
             text: "Build Systems",
+            collapsed: false,
             items: [
               {
-                text: '<span class="sidebar-icon-text"><img src="/images/bazel.svg" class="sidebar-icon" alt="Bazel">Bazel</span>',
+                text: "Bazel",
                 link: "/cache/build-systems/bazel",
               },
               {
-                text: '<span class="sidebar-icon-text"><img src="/images/gradle.svg" class="sidebar-icon" alt="Gradle">Gradle</span>',
+                text: "Gradle",
                 link: "/cache/build-systems/gradle",
               },
               {
-                text: '<span class="sidebar-icon-text"><img src="/images/metro.svg" class="sidebar-icon" alt="Metro">Metro</span>',
+                text: "Metro",
                 link: "/cache/build-systems/metro",
               },
               {
-                text: '<span class="sidebar-icon-text"><img src="/images/nx.svg" class="sidebar-icon" alt="Nx">Nx</span>',
+                text: "Nx",
                 link: "/cache/build-systems/nx",
               },
               {
-                text: '<span class="sidebar-icon-text"><img src="/images/turborepo-icon.svg" class="sidebar-icon" alt="TurboRepo">TurboRepo</span>',
+                text: "TurboRepo",
                 link: "/cache/build-systems/turborepo",
               },
               {
-                text: '<span class="sidebar-icon-text"><img src="/images/xcode.png" class="sidebar-icon" alt="Xcode">Xcode</span>',
+                text: "Xcode",
                 link: "/cache/build-systems/xcode",
               },
             ],

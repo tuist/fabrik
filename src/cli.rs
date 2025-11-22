@@ -70,11 +70,20 @@ pub enum Commands {
     /// Run script with caching
     Run(RunArgs),
 
+    /// Manage script cache
+    Cache(CacheArgs),
+
     /// Content-Addressed Storage operations (CAS)
     Cas(CasArgs),
 
     /// Key-Value storage operations (Action Cache)
     Kv(KvArgs),
+
+    /// Authentication management
+    Auth(AuthArgs),
+
+    /// P2P cache sharing management
+    P2p(P2pArgs),
 }
 
 #[derive(Parser, Debug)]
@@ -382,7 +391,7 @@ pub enum ConfigCommands {
     /// Show effective configuration (merged from all sources)
     Show {
         /// Config file path
-        #[arg(short = 'c', long)]
+        #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
         config: Option<String>,
     },
 }
@@ -390,22 +399,26 @@ pub enum ConfigCommands {
 #[derive(Parser, Debug)]
 pub struct HealthArgs {
     /// URL of Fabrik instance to check
-    #[arg(long)]
+    #[arg(long, env = "FABRIK_HEALTH_URL")]
     pub url: Option<String>,
 
     /// Request timeout
-    #[arg(long, default_value = "5s")]
+    #[arg(long, default_value = "5s", env = "FABRIK_HEALTH_TIMEOUT")]
     pub timeout: String,
 
     /// Output format (text, json)
-    #[arg(long, default_value = "text")]
+    #[arg(long, default_value = "text", env = "FABRIK_HEALTH_FORMAT")]
     pub format: String,
 }
 
 #[derive(Parser, Debug)]
 pub struct DoctorArgs {
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+
     /// Verbose output
-    #[arg(short, long)]
+    #[arg(short, long, env = "FABRIK_VERBOSE")]
     pub verbose: bool,
 }
 
@@ -499,6 +512,155 @@ impl RunArgs {
             }
         }
     }
+}
+
+#[derive(Parser, Debug)]
+pub struct CacheArgs {
+    #[command(subcommand)]
+    pub command: CacheCommands,
+
+    /// Local cache directory
+    #[arg(long, env = "FABRIK_CONFIG_CACHE_DIR")]
+    pub config_cache_dir: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum CacheCommands {
+    /// Check cache status for a script
+    Status {
+        /// Script file path
+        script: String,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Clean cache for a script
+    Clean {
+        /// Script file path (omit to clean all)
+        script: Option<String>,
+
+        /// Clean all script caches
+        #[arg(long)]
+        all: bool,
+    },
+
+    /// List all cached scripts
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        verbose: bool,
+    },
+
+    /// Show cache statistics
+    Stats,
+
+    /// Get an artifact from the cache by hash
+    Get {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Output file path
+        #[arg(short, long)]
+        output: String,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Put an artifact into the cache
+    Put {
+        /// Input file path
+        input: String,
+
+        /// Content hash (SHA256) - if not provided, will be computed
+        #[arg(long)]
+        hash: Option<String>,
+
+        /// Verbose output
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Check if an artifact exists in the cache
+    Exists {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Delete an artifact from the cache
+    Delete {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Force deletion without confirmation
+        #[arg(short, long)]
+        force: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show information about a cached artifact
+    Info {
+        /// Content hash (SHA256) of the artifact
+        hash: String,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+}
+
+// ============================================================================
+// Auth Commands
+// ============================================================================
+
+#[derive(Parser, Debug)]
+pub struct AuthArgs {
+    #[command(subcommand)]
+    pub command: AuthCommand,
+
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+}
+
+#[derive(Parser, Debug)]
+pub struct AuthSubcommandArgs {
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AuthCommand {
+    /// Login with OAuth2
+    Login(AuthSubcommandArgs),
+
+    /// Logout and delete stored tokens
+    Logout(AuthSubcommandArgs),
+
+    /// Check authentication status
+    Status(AuthSubcommandArgs),
+
+    /// Show current access token (for debugging)
+    Token(AuthSubcommandArgs),
 }
 
 // ============================================================================
@@ -706,5 +868,70 @@ pub enum KvCommand {
         /// Output as JSON
         #[arg(long)]
         json: bool,
+    },
+}
+
+// ============================================================================
+// P2P Commands
+// ============================================================================
+
+#[derive(Parser, Debug)]
+pub struct P2pArgs {
+    #[command(subcommand)]
+    pub command: P2pCommand,
+
+    /// Config file path
+    #[arg(short = 'c', long, env = "FABRIK_CONFIG")]
+    pub config: Option<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub enum P2pCommand {
+    /// List discovered peers
+    List {
+        /// Show detailed information
+        #[arg(short, long)]
+        verbose: bool,
+
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Show P2P status and statistics
+    Status {
+        /// Output as JSON
+        #[arg(long)]
+        json: bool,
+    },
+
+    /// Approve a peer to access your cache
+    Approve {
+        /// Machine ID or hostname of the peer
+        peer: String,
+
+        /// Approve permanently (store consent)
+        #[arg(short, long)]
+        permanent: bool,
+    },
+
+    /// Deny a peer from accessing your cache
+    Deny {
+        /// Machine ID or hostname of the peer
+        peer: String,
+    },
+
+    /// Clear all stored consents
+    Clear {
+        /// Skip confirmation
+        #[arg(short, long)]
+        force: bool,
+    },
+
+    /// Generate a secure random secret for P2P authentication
+    Secret {
+        /// Length of the secret in bytes (default: 32)
+        #[arg(short, long, default_value = "32")]
+        length: usize,
     },
 }

@@ -417,5 +417,5 @@ fabrik run --clean build.sh
 
 ## See Also
 
-- [Introduction](/script-caching/) - Overview and quick start
-- [Configuration Reference](/script-caching/reference) - Complete directive reference
+- [Introduction](/cache/scripts/) - Overview and quick start
+- [Configuration Reference](/cache/scripts/reference) - Complete directive reference

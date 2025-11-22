@@ -72,16 +72,20 @@ fabrik run build.sh
 
 ## When to Use Script Caching
 
-**Good use cases:**
-- ✅ Scripts that produce deterministic outputs
-- ✅ Scripts that take time to run (>1 second)
-- ✅ Scripts that are frequently re-run with same inputs
-- ✅ Build steps that aren't covered by your build system
+> [!TIP]
+> **Good use cases:**
+> - ✅ Scripts that produce deterministic outputs
+> - ✅ Scripts that take time to run (>1 second)
+> - ✅ Scripts that are frequently re-run with same inputs
+> - ✅ Build steps that aren't covered by your build system
 
-**Not suitable for:**
-- ❌ Scripts with side effects (database updates, API calls)
-- ❌ Scripts that depend on current time or random values
-- ❌ Scripts that are already fast (<1 second)
+> [!WARNING]
+> **Not suitable for:**
+> - ❌ Scripts with side effects (database updates, API calls)
+> - ❌ Scripts that depend on current time or random values
+> - ❌ Scripts that are already fast (<1 second)
+>
+> Script caching is designed for pure, deterministic computations. Caching scripts with side effects can lead to unexpected behavior.
 
 ## Cache Key Computation
 
@@ -149,5 +153,5 @@ Use `--verbose` for detailed output including input/output tracking.
 
 ## Next Steps
 
-- [Configuration Reference](/script-caching/reference) - Complete list of all directives
-- [Examples](/script-caching/examples) - Real-world examples and recipes
+- [Configuration Reference](/cache/scripts/reference) - Complete list of all directives
+- [Examples](/cache/scripts/examples) - Real-world examples and recipes

@@ -18,20 +18,30 @@ use crate::storage;
 use tonic::transport::Server;
 
 pub async fn run(args: DaemonArgs) -> Result<()> {
-    use crate::config_discovery::{hash_config, DaemonState};
+    use crate::config_discovery::{discover_config, hash_config, DaemonState};
 
-    // Load config file if specified
-    let file_config = if let Some(config_path) = &args.config {
-        Some(FabrikConfig::from_file(config_path)?)
+    // Load config file with auto-discovery and track the path for daemon state
+    let (file_config, config_path_opt) = if let Some(config_path_str) = &args.config {
+        // Explicit path provided
+        let path = std::path::PathBuf::from(config_path_str);
+        (Some(FabrikConfig::from_file(&path)?), Some(path))
     } else {
-        None
+        // Auto-discover by traversing up directory tree
+        let current_dir = std::env::current_dir()?;
+        if let Some(discovered_path) = discover_config(&current_dir)? {
+            (
+                Some(FabrikConfig::from_file(&discovered_path)?),
+                Some(discovered_path),
+            )
+        } else {
+            (None, None)
+        }
     };
 
     // If we have a config file, compute hash for daemon identification
-    let daemon_state_info = if let Some(ref config_path_str) = args.config {
-        let config_path = std::path::PathBuf::from(config_path_str);
-        let config_hash = hash_config(&config_path)?;
-        Some((config_hash, config_path))
+    let daemon_state_info = if let Some(ref config_path) = config_path_opt {
+        let config_hash = hash_config(config_path)?;
+        Some((config_hash, config_path.clone()))
     } else {
         None
     };
@@ -80,6 +90,21 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     // Initialize shared storage backend
     let storage = storage::create_storage(&config.cache_dir)?;
     let storage = Arc::new(storage);
+
+    // Initialize P2P manager if enabled
+    let p2p_manager = if let Some(ref fc) = file_config {
+        if fc.p2p.enabled {
+            info!("[fabrik] P2P cache sharing is enabled");
+            let p2p = crate::p2p::P2PManager::new(fc.p2p.clone()).await?;
+            p2p.start().await?;
+            info!("[fabrik] P2P services started successfully");
+            Some(Arc::new(p2p))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
 
     // Start servers based on mode
     let mut handles = vec![];
@@ -259,6 +284,13 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     {
         signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
         info!("Received Ctrl+C, shutting down gracefully...");
+    }
+
+    // Shutdown P2P services first
+    if let Some(p2p) = p2p_manager {
+        if let Err(e) = p2p.shutdown().await {
+            tracing::warn!("Failed to shutdown P2P services: {}", e);
+        }
     }
 
     // Abort all server tasks immediately

@@ -57,13 +57,11 @@ fn generate(template: &str) -> Result<()> {
 }
 
 fn show(config_path: Option<String>) -> Result<()> {
+    use crate::config_discovery::load_config_with_discovery;
+
     info!("Showing effective configuration");
 
-    let config = if let Some(path) = config_path {
-        FabrikConfig::from_file(path)?
-    } else {
-        FabrikConfig::default()
-    };
+    let config = load_config_with_discovery(config_path.as_deref())?.unwrap_or_default();
 
     println!("Effective Configuration:\n");
     println!("{}", toml::to_string_pretty(&config)?);

@@ -57,6 +57,9 @@ echo 'fabrik activate fish | source' >> ~/.config/fish/config.fish
 source ~/.config/fish/config.fish
 ```
 
+> [!IMPORTANT]
+> After adding shell integration, restart your terminal or run the `source` command shown above. The activation hook needs to be loaded before Fabrik can manage daemons automatically.
+
 ## Step 3: Verify Installation
 
 Run the doctor command to verify everything is set up correctly:
@@ -150,7 +153,7 @@ Fabrik works with any build system that supports remote caching. Continue with t
   </a>
 </div>
 
-[View all build systems →](./build-systems/README.md)
+[View all build systems →](/cache/build-systems/README)
 
 ## How It Works
 
@@ -166,7 +169,8 @@ gradle build
 # → Faster builds with caching! 🚀
 ```
 
-Each project gets its own isolated daemon with unique ports - no conflicts, no configuration needed.
+> [!TIP]
+> Each project gets its own isolated daemon with unique ports - no conflicts, no configuration needed. The daemon automatically starts when you `cd` into a project with `fabrik.toml` and stops when you leave.
 
 ## Next Steps
 

@@ -1,0 +1,111 @@
+syntax = "proto3";
+
+package fabrik.p2p;
+
+// P2P cache service for local network cache sharing
+service P2PCache {
+  // Check if artifact exists
+  rpc Exists(ExistsRequest) returns (ExistsResponse);
+
+  // Retrieve artifact (streaming for large artifacts)
+  rpc Get(GetRequest) returns (stream GetResponse);
+
+  // Peer info exchange (for discovery)
+  rpc Hello(HelloRequest) returns (HelloResponse);
+}
+
+// Request to check if artifact exists
+message ExistsRequest {
+  // Content hash (SHA256)
+  string hash = 1;
+
+  // UNIX timestamp (for replay protection)
+  int64 timestamp = 2;
+
+  // HMAC-SHA256 signature over hash:timestamp
+  bytes signature = 3;
+
+  // Requester machine ID (for consent)
+  string requester_id = 4;
+
+  // Requester hostname (for notifications)
+  string requester_hostname = 5;
+}
+
+// Response indicating if artifact exists
+message ExistsResponse {
+  // Whether artifact exists in cache
+  bool found = 1;
+
+  // Consent required (user must approve)
+  bool consent_required = 2;
+
+  // Consent message (shown to user)
+  string consent_message = 3;
+}
+
+// Request to fetch artifact
+message GetRequest {
+  // Content hash (SHA256)
+  string hash = 1;
+
+  // UNIX timestamp (for replay protection)
+  int64 timestamp = 2;
+
+  // HMAC-SHA256 signature over hash:timestamp
+  bytes signature = 3;
+
+  // Requester machine ID (for consent)
+  string requester_id = 4;
+
+  // Requester hostname (for notifications)
+  string requester_hostname = 5;
+}
+
+// Response containing artifact data (streamed)
+message GetResponse {
+  // Artifact data chunk
+  bytes chunk = 1;
+
+  // Total size (only in first chunk)
+  int64 total_size = 2;
+
+  // Consent required (only in first chunk if needed)
+  bool consent_required = 3;
+
+  // Consent denied
+  bool consent_denied = 4;
+}
+
+// Hello request for peer discovery
+message HelloRequest {
+  // Peer machine ID
+  string machine_id = 1;
+
+  // Peer hostname
+  string hostname = 2;
+
+  // P2P protocol version
+  string version = 3;
+
+  // UNIX timestamp
+  int64 timestamp = 4;
+
+  // HMAC-SHA256 signature
+  bytes signature = 5;
+}
+
+// Hello response
+message HelloResponse {
+  // Server machine ID
+  string machine_id = 1;
+
+  // Server hostname
+  string hostname = 2;
+
+  // P2P protocol version
+  string version = 3;
+
+  // Server is accepting requests
+  bool accepting_requests = 4;
+}

@@ -3,9 +3,15 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
+use crate::config_expansion;
+
 /// Complete Fabrik configuration (loaded from TOML file)
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct FabrikConfig {
+    /// Service URL (e.g., "https://tuist.dev") - used for authentication, service discovery, etc.
+    #[serde(default)]
+    pub url: Option<String>,
+
     #[serde(default)]
     pub cache: CacheConfig,
 
@@ -29,6 +35,9 @@ pub struct FabrikConfig {
 
     #[serde(default)]
     pub daemon: DaemonConfig,
+
+    #[serde(default)]
+    pub p2p: P2PConfig,
 }
 
 /// Daemon configuration
@@ -38,6 +47,71 @@ pub struct DaemonConfig {
     /// If set, daemon will ONLY create Unix socket server (no TCP)
     /// If not set, daemon creates TCP servers (HTTP + gRPC)
     pub socket: Option<String>,
+}
+
+/// P2P cache sharing configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct P2PConfig {
+    /// Enable P2P cache sharing
+    #[serde(default)]
+    pub enabled: bool,
+
+    /// Shared secret for authentication (HMAC)
+    pub secret: Option<String>,
+
+    /// Advertise this instance on the local network
+    #[serde(default = "default_true")]
+    pub advertise: bool,
+
+    /// Discover other peers on the local network
+    #[serde(default = "default_true")]
+    pub discovery: bool,
+
+    /// P2P protocol bind port (0 = random)
+    #[serde(default = "default_p2p_port")]
+    pub bind_port: u16,
+
+    /// Maximum number of peers to track
+    #[serde(default = "default_max_peers")]
+    pub max_peers: usize,
+
+    /// Consent mode: notify-once, notify-always, auto-approve, disabled
+    #[serde(default = "default_consent_mode")]
+    pub consent_mode: String,
+
+    /// Consent timeout (how long to wait for user response)
+    #[serde(default = "default_consent_timeout")]
+    pub consent_timeout: String,
+
+    /// Auto-approve requests from same user (different machines)
+    #[serde(default = "default_true")]
+    pub auto_approve_same_user: bool,
+
+    /// Request timeout (max time to wait for peer response)
+    #[serde(default = "default_p2p_request_timeout")]
+    pub request_timeout: String,
+
+    /// Max concurrent peer requests
+    #[serde(default = "default_max_concurrent_peer_requests")]
+    pub max_concurrent_requests: usize,
+}
+
+impl Default for P2PConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            secret: None,
+            advertise: true,
+            discovery: true,
+            bind_port: default_p2p_port(),
+            max_peers: default_max_peers(),
+            consent_mode: default_consent_mode(),
+            consent_timeout: default_consent_timeout(),
+            auto_approve_same_user: true,
+            request_timeout: default_p2p_request_timeout(),
+            max_concurrent_requests: default_max_concurrent_peer_requests(),
+        }
+    }
 }
 
 /// Local cache configuration
@@ -111,6 +185,7 @@ pub struct UpstreamConfig {
 /// Authentication configuration
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct AuthConfig {
+    // Server-side authentication (JWT validation for incoming requests)
     /// Path to JWT public key file (PEM format)
     pub public_key_file: Option<String>,
 
@@ -127,6 +202,66 @@ pub struct AuthConfig {
     /// Require authentication
     #[serde(default = "default_true")]
     pub required: bool,
+
+    // Client-side authentication (for making requests to upstream servers)
+    /// Authentication provider (token or oauth2)
+    #[serde(default)]
+    pub provider: Option<AuthProvider>,
+
+    /// Token configuration (for token-based auth)
+    #[serde(default)]
+    pub token: Option<TokenAuthConfig>,
+
+    /// OAuth2 configuration (for OAuth2 with PKCE)
+    #[serde(default)]
+    pub oauth2: Option<OAuth2Config>,
+}
+
+/// Authentication provider type
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AuthProvider {
+    /// Token-based authentication
+    Token,
+    /// OAuth2 with PKCE
+    OAuth2,
+}
+
+/// Token-based authentication configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TokenAuthConfig {
+    /// Environment variable containing the token (defaults to FABRIK_TOKEN if not specified)
+    pub env_var: Option<String>,
+
+    /// Path to file containing the token
+    pub file: Option<String>,
+}
+
+/// OAuth2 with PKCE configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OAuth2Config {
+    /// OAuth2 server URL (optional, will use root config.url if not provided)
+    pub url: Option<String>,
+
+    /// Client ID
+    pub client_id: String,
+
+    /// Authorization endpoint (optional, will be inferred from url if not provided)
+    pub authorization_endpoint: Option<String>,
+
+    /// Token endpoint (optional, will be inferred from url if not provided)
+    pub token_endpoint: Option<String>,
+
+    /// Device authorization endpoint (optional, for device code flow)
+    pub device_authorization_endpoint: Option<String>,
+
+    /// OAuth2 scopes (space-separated)
+    #[serde(default = "default_oauth2_scopes")]
+    pub scopes: String,
+
+    /// Token storage backend (keychain, file, or memory)
+    #[serde(default = "default_token_storage")]
+    pub storage: String,
 }
 
 /// Build system adapters configuration (Layer 1 only)
@@ -352,13 +487,53 @@ fn default_true() -> bool {
     true
 }
 
+fn default_oauth2_scopes() -> String {
+    "cache:read cache:write".to_string()
+}
+
+fn default_token_storage() -> String {
+    "keychain".to_string()
+}
+
+fn default_p2p_port() -> u16 {
+    7071
+}
+
+fn default_max_peers() -> usize {
+    20
+}
+
+fn default_consent_mode() -> String {
+    "notify-once".to_string()
+}
+
+fn default_consent_timeout() -> String {
+    "30s".to_string()
+}
+
+fn default_p2p_request_timeout() -> String {
+    "5s".to_string()
+}
+
+fn default_max_concurrent_peer_requests() -> usize {
+    5
+}
+
 impl FabrikConfig {
     /// Load configuration from TOML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(&path)
             .with_context(|| format!("Failed to read config file: {}", path.as_ref().display()))?;
 
-        let config: FabrikConfig = toml::from_str(&content)
+        // Expand environment variables in config content
+        let expanded_content = config_expansion::expand_env_vars(&content).with_context(|| {
+            format!(
+                "Failed to expand environment variables in config file: {}",
+                path.as_ref().display()
+            )
+        })?;
+
+        let config: FabrikConfig = toml::from_str(&expanded_content)
             .with_context(|| format!("Failed to parse config file: {}", path.as_ref().display()))?;
 
         Ok(config)
@@ -421,6 +596,9 @@ impl FabrikConfig {
                 jwks_url: None,
                 key_refresh_interval: "5m".to_string(),
                 required: true,
+                provider: None,
+                token: None,
+                oauth2: None,
             },
             build_systems: BuildSystemsConfig {
                 enabled: vec![], // Layer 2 doesn't run build system adapters
@@ -475,6 +653,27 @@ impl FabrikConfig {
             if !["gradle", "bazel", "nx", "turborepo", "sccache"].contains(&build_system.as_str()) {
                 anyhow::bail!(
                     "build_systems.enabled must contain only: gradle, bazel, nx, turborepo, sccache"
+                );
+            }
+        }
+
+        // Validate P2P configuration
+        if self.p2p.enabled {
+            if self.p2p.secret.is_none() {
+                anyhow::bail!("p2p.secret must be set when P2P is enabled");
+            }
+
+            if let Some(ref secret) = self.p2p.secret {
+                if secret.len() < 16 {
+                    anyhow::bail!("p2p.secret must be at least 16 characters for security");
+                }
+            }
+
+            if !["notify-once", "notify-always", "auto-approve", "disabled"]
+                .contains(&self.p2p.consent_mode.as_str())
+            {
+                anyhow::bail!(
+                    "p2p.consent_mode must be one of: notify-once, notify-always, auto-approve, disabled"
                 );
             }
         }

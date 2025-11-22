@@ -3,7 +3,6 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::cli::ServerArgs;
-use crate::config::FabrikConfig;
 use crate::merger::MergedServerConfig;
 use crate::storage::FilesystemStorage;
 use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
@@ -11,12 +10,10 @@ use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
 use crate::xcode::{CasService, KeyValueService};
 
 pub async fn run(args: ServerArgs) -> Result<()> {
-    // Load config file if specified
-    let file_config = if let Some(config_path) = &args.config {
-        Some(FabrikConfig::from_file(config_path)?)
-    } else {
-        None
-    };
+    use crate::config_discovery::load_config_with_discovery;
+
+    // Load config file with auto-discovery
+    let file_config = load_config_with_discovery(args.config.as_deref())?;
 
     // Merge configuration
     let config = MergedServerConfig::merge(&args, file_config);

@@ -449,6 +449,24 @@ lazy_static = "1.4"  # for global metrics
 - 👀 **Rspack** - Future (monitoring)
 - 👀 **Maven** - Future (to be evaluated)
 
+### P2P Cache Sharing Status (2025-11-17)
+
+**Implemented:**
+- ✅ **mDNS Discovery** - Zero-configuration peer discovery via mdns-sd
+- ✅ **HMAC Authentication** - Secure authentication using shared secrets
+- ✅ **User Consent System** - System notifications with consent management
+- ✅ **P2P gRPC Protocol** - Efficient binary protocol for cache transfer
+- ✅ **Parallel Peer Querying** - Race all peers for fastest response
+- ✅ **Comprehensive Metrics** - P2P-specific metrics (hits, misses, bandwidth, consent)
+- ✅ **CLI Management** - Commands for list, status, approve, deny, clear
+- ✅ **XDG Compliance** - Consent storage in `~/.local/share/fabrik/p2p/`
+
+**Performance:**
+- Local Cache: 0-1ms
+- P2P Peers: 1-5ms (Layer 0.5) ← **NEW!**
+- Regional Cache: 20-50ms
+- S3 Backup: 100-200ms
+
 ### Open Questions
 - Should we support custom storage backends via plugins? (Future consideration)
 - What's the optimal default cache size for Layer 1/2? (Tunable, needs testing)

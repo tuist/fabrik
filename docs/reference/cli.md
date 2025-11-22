@@ -433,7 +433,7 @@ fabrik run --no-cache build.sh
 fabrik run --clean build.sh
 ```
 
-See [Script Cache Documentation](/docs/cache/scripts/) for details on KDL annotations and script caching.
+See [Script Cache Documentation](/cache/scripts/) for details on KDL annotations and script caching.
 
 ## `fabrik cas`
 
@@ -592,6 +592,215 @@ fabrik kv put "action:$INPUT_HASH" --file result.json
 ```bash
 fabrik kv put "last-build-time" "$(date -Iseconds)"
 fabrik kv put "app-version" "1.2.3"
+```
+
+## `fabrik p2p`
+
+Manage peer-to-peer cache sharing on local networks.
+
+P2P cache sharing (Layer 0.5) allows automatic discovery and sharing of build caches between machines on the same network, with 1-5ms latency.
+
+### Commands
+
+```bash
+# Generate a secure random secret
+fabrik p2p secret [--length <BYTES>]
+
+# List discovered peers
+fabrik p2p list [--verbose] [--json]
+
+# Show P2P status
+fabrik p2p status [--json]
+
+# Approve a peer (grant cache access)
+fabrik p2p approve <PEER> [--permanent]
+
+# Deny a peer (revoke cache access)
+fabrik p2p deny <PEER>
+
+# Clear all consent records
+fabrik p2p clear [--force]
+```
+
+### Examples
+
+```bash
+# Generate a secure random secret (default: 32 bytes = 64 hex chars)
+fabrik p2p secret
+# Output: 2295b4779c0fee78a732f249a32e25a03b7b3329db51719058b56aabae426d43
+
+# Generate shorter secret (minimum 16 bytes for security)
+fabrik p2p secret --length 16
+# Output: fc5d669b4220c90e3ac0e48c3c8fcaac
+
+# Generate and save secret to environment
+export P2P_SECRET=$(fabrik p2p secret)
+
+# Create config that uses the environment variable
+cat >> .fabrik.toml <<EOF
+[p2p]
+enabled = true
+secret = "\${P2P_SECRET}"  # Uses environment variable
+consent_mode = "notify-once"
+EOF
+
+# Start daemon with P2P enabled
+fabrik daemon start
+
+# List discovered peers
+fabrik p2p list
+# Output:
+# [fabrik] Discovered 2 peer(s):
+#
+#   • alice-macbook (192.168.1.100:7071)
+#   • bob-desktop (192.168.1.101:7071)
+
+# List peers with details
+fabrik p2p list --verbose
+# Output:
+# [fabrik] Discovered 2 peer(s):
+#
+#   • alice-macbook (192.168.1.100:7071)
+#     Machine ID: a3f5d9c2b1e8f7a4
+#     Port: 7071
+#     Accepting requests: true
+#
+#   • bob-desktop (192.168.1.101:7071)
+#     Machine ID: b7e4a1f9c8d2e3f6
+#     Port: 7071
+#     Accepting requests: true
+
+# Show P2P status
+fabrik p2p status
+# Output:
+# [fabrik] P2P Cache Sharing Status
+#
+#   Enabled: true
+#   Advertise: true
+#   Discovery: true
+#   Port: 7071
+#   Consent mode: notify-once
+#   Max peers: 10
+#
+#   Peers discovered: 2
+
+# Approve peer permanently
+fabrik p2p approve alice-macbook --permanent
+# Output: [fabrik] Permanently approved peer: alice-macbook
+
+# Approve peer for current session only
+fabrik p2p approve bob-desktop
+# Output: [fabrik] Approved peer for this session: bob-desktop
+
+# Deny a peer
+fabrik p2p deny charlie-laptop
+# Output: [fabrik] Denied peer: charlie-laptop
+
+# Clear all consent records
+fabrik p2p clear
+# Output:
+# [fabrik] This will clear all stored P2P consents.
+# [fabrik] You will need to re-approve peers next time they request access.
+# [fabrik] Continue? [y/N] y
+# [fabrik] Cleared all P2P consents
+
+# Force clear without confirmation
+fabrik p2p clear --force
+```
+
+### JSON Output
+
+All P2P commands support `--json` for machine-readable output:
+
+```bash
+fabrik p2p list --json
+# [
+#   {
+#     "machine_id": "a3f5d9c2b1e8f7a4",
+#     "hostname": "alice-macbook",
+#     "address": "192.168.1.100",
+#     "port": 7071,
+#     "accepting_requests": true
+#   },
+#   {
+#     "machine_id": "b7e4a1f9c8d2e3f6",
+#     "hostname": "bob-desktop",
+#     "address": "192.168.1.101",
+#     "port": 7071,
+#     "accepting_requests": true
+#   }
+# ]
+
+fabrik p2p status --json
+# {
+#   "enabled": true,
+#   "advertise": true,
+#   "discovery": true,
+#   "bind_port": 7071,
+#   "consent_mode": "notify-once",
+#   "peers_discovered": 2,
+#   "max_peers": 10
+# }
+```
+
+### Configuration
+
+P2P must be enabled in your `.fabrik.toml`:
+
+```toml
+[p2p]
+enabled = true
+secret = "${P2P_SECRET}"        # Use env var (min 16 chars, shared across team)
+consent_mode = "notify-once"    # notify-once | notify-always | always-allow
+bind_port = 7071                # Port for P2P server (default: 7071)
+advertise = true                # Advertise this machine to peers
+discovery = true                # Discover other peers
+max_peers = 10                  # Maximum number of peers to connect to
+```
+
+**Generate and set the secret:**
+
+```bash
+# Generate a secure secret
+fabrik p2p secret
+
+# Add to your shell profile (~/.bashrc, ~/.zshrc, etc.)
+export P2P_SECRET=<generated-secret>
+```
+
+### Consent Modes
+
+- `notify-once` - System notification on first access, remembered
+- `notify-always` - System notification every time
+- `always-allow` - No notifications, always allow (use with caution)
+
+### Security
+
+- All P2P communication authenticated via HMAC-SHA256 with shared secret
+- Replay protection with 5-minute time window
+- User consent required before cache access
+- Consent records stored in `~/.local/share/fabrik/p2p/consents.json`
+
+### Use Cases
+
+**Team collaboration:**
+```bash
+# Same office network
+# Developer A builds feature → Developer B instantly gets cached artifacts
+# 1-5ms latency vs 20-50ms from cloud cache
+```
+
+**Multi-machine development:**
+```bash
+# MacBook + Linux desktop on same home network
+# Build on one machine → cache available on other
+```
+
+**CI/CD optimization:**
+```bash
+# Multiple CI runners on same LAN
+# First runner builds → subsequent runners use P2P cache
+# Reduces cloud cache bandwidth costs
 ```
 
 ## Global Options

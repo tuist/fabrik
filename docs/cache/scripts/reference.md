@@ -410,5 +410,5 @@ npm run stats > build-stats.json
 
 ## See Also
 
-- [Introduction](/script-caching/) - Overview and quick start
-- [Examples](/script-caching/examples) - Real-world examples
+- [Introduction](/cache/scripts/) - Overview and quick start
+- [Examples](/cache/scripts/examples) - Real-world examples

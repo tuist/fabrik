@@ -66,6 +66,7 @@ Or read locally:
 - 🤖 **AI-Ready**: Optimized for agentic coding workflows and automated development
 - 🔥 **Transparent Optimization**: Intelligent caching with automatic fallback across storage tiers
 - 🔧 **Universal Compatibility**: Supports Gradle, Bazel, Nx, TurboRepo, Xcode, and custom scripts
+- 🚀 **P2P Cache Sharing**: Automatic discovery and sharing of build caches across local networks (1-5ms latency)
 - ⚡ **High Performance**: Built in Rust with RocksDB for ultra-low latency (<10ms p99)
 - 🎯 **Zero Configuration**: Automatically adapts to your environment
 - 💎 **Open Source**: MPL-2.0 licensed—deploy anywhere, customize freely

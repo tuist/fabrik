@@ -1,23 +1,78 @@
-/* Sidebar icon styling */
-.sidebar-icon-text {
-  display: inline-flex !important;
-  align-items: center !important;
-  gap: 0.5em !important;
-  line-height: 1 !important;
+/* Add icons to build system sidebar items using CSS */
+.VPSidebarItem a[href*="/cache/build-systems/bazel"] .text::before {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  background-image: url('/images/bazel.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
-.sidebar-icon {
-  width: 1.2em !important;
-  height: 1.2em !important;
-  vertical-align: middle !important;
-  flex-shrink: 0 !important;
+.VPSidebarItem a[href*="/cache/build-systems/gradle"] .text::before {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  background-image: url('/images/gradle.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
-/* Fix spacing between sidebar items with icons */
-.VPSidebarItem.has-children .items .VPSidebarItem {
-  margin-top: 0 !important;
+.VPSidebarItem a[href*="/cache/build-systems/metro"] .text::before {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  background-image: url('/images/metro.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
 
-.VPSidebarItem .item {
-  line-height: 2 !important;
+.VPSidebarItem a[href*="/cache/build-systems/nx"] .text::before {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  background-image: url('/images/nx.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.VPSidebarItem a[href*="/cache/build-systems/turborepo"] .text::before {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  background-image: url('/images/turborepo-icon.svg');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
+}
+
+.VPSidebarItem a[href*="/cache/build-systems/xcode"] .text::before {
+  content: "";
+  display: inline-block;
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.5em;
+  vertical-align: middle;
+  background-image: url('/images/xcode.png');
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: center;
 }
