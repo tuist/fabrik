@@ -26,6 +26,7 @@
 // This ensures tests can run in parallel without interfering with each other
 // or with development daemons running on the same machine.
 
+use std::net::TcpStream;
 use std::path::PathBuf;
 use std::process::{Child, Command};
 use std::thread;
@@ -37,6 +38,19 @@ use tempfile::TempDir;
 enum DaemonMode {
     Tcp,        // TCP mode: HTTP + gRPC servers
     UnixSocket, // Unix socket mode: For Xcode
+}
+
+/// Wait for HTTP server to be ready by attempting to connect
+/// Returns true if server is ready, false if timeout
+fn wait_for_http_server(port: u16) -> bool {
+    for _ in 0..50 {
+        // Try 50 times with 100ms sleep = 5 seconds max
+        if TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    false
 }
 
 /// Helper to start a Fabrik daemon for testing
@@ -171,6 +185,14 @@ socket = "{}"
         println!("  HTTP port: {}", http_port);
         println!("  gRPC port: {}", grpc_port);
         println!("  Cache dir: {}", cache_dir.display());
+
+        // Wait for HTTP server to be ready (only for TCP mode, skip for Unix socket mode)
+        if http_port != 0 {
+            let http_ready = wait_for_http_server(http_port);
+            if !http_ready {
+                panic!("HTTP server failed to become ready on port {}", http_port);
+            }
+        }
 
         Self {
             _temp_dir: temp_dir,
