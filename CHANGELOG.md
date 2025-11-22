@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2025-11-22
+
+### 🐛 Bug Fixes
+
+- **(deps)** Update rust crate axum to 0.8 (#30) ([9dedf37](9dedf37305e286bea1c1f071a05b8c19a686dd89))
+- Remove explicit pnpm version from docs workflow ([c3cb161](c3cb1619181e583ecfb5f1fd9fd5048af75d692a))
+- Ignore dead links in VitePress build ([57bb7e9](57bb7e983ccd8245fd6e70dd7d4a079df13d9af7))
+- Install wrangler globally before deployment ([1de1b5d](1de1b5d81c7dba1c6bfc489a51467604f58055bd))
+- Correct all dead links in documentation ([84311e0](84311e0d7a58a08917a9bc719879e6019466033b))
+- Update build systems link to use README instead of index ([47c2c29](47c2c294bcdd33e5aa4f5665d5c9dd6734a3f53e))
+- Use direct wrangler command instead of wrangler-action ([2b3b70f](2b3b70f43891305e4208996c00df67d8b600bc60))
+- Use correct secret name for Cloudflare token ([b125a1f](b125a1f1e69bf502e874081284551ab838caa734))
+- Remove HTML from sidebar config to fix production rendering ([eabee87](eabee87f9fff9e1b1c3de7c7a7b06d5058fe3d35))
+
+### 📦 Dependency Updates
+
+- **(deps)** Update dependency @11ty/eleventy to v3 (#39) ([f8ca533](f8ca533cd5e3e094de7071bb1d5c658bd3572c4e))
+- **(deps)** Update dependency nx to v22 (#43) ([a8787c3](a8787c3891e5f645fafa62d968bf52f89ff48824))
+- **(deps)** Update dependency protoc to v33 (#44) ([11b7a70](11b7a70de3056c43378d2dacbbc3fb23a2a5c435))
+- **(deps)** Update rust crate clap to v4.5.53 (#48) ([7ffd5f6](7ffd5f699cc8a9c164cf58ed22e1a337c16fec83))
+- **(deps)** Update dependency java to v21.0.9+10.0.lts (#46) ([e944f3f](e944f3fdb777d28ae76cc97616c6496500703ed5))
+- **(deps)** Update dependency node (#42) ([0bd59c2](0bd59c23fc06838c82cee119a0fd3ff296ce0511))
+
+### 🚀 Features
+
+- Add zero-config Bazel integration via BAZELRC (#45) ([e3017de](e3017dea3e70b768f14e5f7546e19652cdd6e60d))
+- Add GitHub workflow for continuous documentation deployment ([f50e9f8](f50e9f8fe37c12a2dd68a3255790f754d393400a))
+- Add build system icons via CSS pseudo-elements ([d33b9bc](d33b9bcaccba058106f1c9261f96cd4d6334a77c))
+
+### 🚜 Refactor
+
+- Use mise-action for tool installation ([c0ea123](c0ea12362b561231e4f6d382e8a8e834eae3b2ea))
+
 ## [1.0.0] - 2025-11-17
 
 ### 🐛 Bug Fixes
