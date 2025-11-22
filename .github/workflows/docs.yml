@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0 # Required for VitePress lastUpdated feature
 
       - name: Setup mise
-        uses: jdx/mise-action@v2
+        uses: jdx/mise-action@v3
 
       - name: Install dependencies
         run: pnpm install
