@@ -4,7 +4,7 @@ Cache any script execution (bash, node, python, etc.) with automatic invalidatio
 
 ## What Are Standard Recipes?
 
-Standard recipes are scripts in any language (bash, node, python, ruby, etc.) that use FABRIK annotations for content-addressed caching. Unlike portable recipes (which run in Fabrik's embedded JavaScript runtime), standard recipes:
+Standard recipes are scripts in any language (bash, node, python, ruby, etc.) that use FABRIK annotations for content-addressed caching. Unlike [portable recipes](/cache/recipes/portable/) (which run in Fabrik's embedded JavaScript runtime), standard recipes:
 
 - ✅ Use your system's installed runtimes (bash, node, python, etc.)
 - ✅ Support any scripting language with a shebang line
@@ -25,7 +25,7 @@ With script caching, you declare inputs and outputs using special comments in yo
 
 ## Standard vs Portable Recipes
 
-| Feature | Standard Recipes | Portable Recipes |
+| Feature | Standard Recipes | [Portable Recipes](/cache/recipes/portable/) |
 |---------|------------------|------------------|
 | **Runtime** | System (bash, node, python) | Embedded (QuickJS in Fabrik) |
 | **Languages** | Any with shebang | JavaScript only |
