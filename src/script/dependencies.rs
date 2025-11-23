@@ -224,7 +224,7 @@ echo "build"
         fs::write(
             &main_script,
             r#"#!/usr/bin/env -S fabrik run bash
-#FABRIK depends "./dep.sh" use-outputs=true
+#FABRIK depends "./dep.sh" use-outputs=#true
 echo "deploy"
 "#,
         )

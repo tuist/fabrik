@@ -175,7 +175,7 @@ fn parse_kdl_node(annotations: &mut ScriptAnnotations, node: &KdlNode) -> Result
 
             let hash = node
                 .get("hash")
-                .and_then(|e| e.value().as_string())
+                .and_then(|e| e.as_string())
                 .unwrap_or("content");
 
             let hash_method = match hash {
@@ -202,7 +202,7 @@ fn parse_kdl_node(annotations: &mut ScriptAnnotations, node: &KdlNode) -> Result
 
             let required = node
                 .get("required")
-                .and_then(|e| e.value().as_bool())
+                .and_then(|e| e.as_bool())
                 .unwrap_or(true);
 
             annotations.outputs.push(OutputSpec { path, required });
@@ -218,13 +218,13 @@ fn parse_kdl_node(annotations: &mut ScriptAnnotations, node: &KdlNode) -> Result
         }
 
         "cache" => {
-            if let Some(ttl) = node.get("ttl").and_then(|e| e.value().as_string()) {
+            if let Some(ttl) = node.get("ttl").and_then(|e| e.as_string()) {
                 annotations.cache_ttl = Some(parse_duration(ttl)?);
             }
-            if let Some(key) = node.get("key").and_then(|e| e.value().as_string()) {
+            if let Some(key) = node.get("key").and_then(|e| e.as_string()) {
                 annotations.cache_key = Some(key.to_string());
             }
-            if let Some(disabled) = node.get("disabled").and_then(|e| e.value().as_bool()) {
+            if let Some(disabled) = node.get("disabled").and_then(|e| e.as_bool()) {
                 annotations.cache_disabled = disabled;
             }
         }
@@ -235,10 +235,7 @@ fn parse_kdl_node(annotations: &mut ScriptAnnotations, node: &KdlNode) -> Result
                 annotations.runtime = runtime_name;
             }
 
-            if let Some(include) = node
-                .get("include-version")
-                .and_then(|e| e.value().as_bool())
-            {
+            if let Some(include) = node.get("include-version").and_then(|e| e.as_bool()) {
                 annotations.runtime_version = include;
             }
         }
@@ -256,13 +253,13 @@ fn parse_kdl_node(annotations: &mut ScriptAnnotations, node: &KdlNode) -> Result
         }
 
         "exec" => {
-            if let Some(cwd) = node.get("cwd").and_then(|e| e.value().as_string()) {
+            if let Some(cwd) = node.get("cwd").and_then(|e| e.as_string()) {
                 annotations.exec_cwd = Some(PathBuf::from(cwd));
             }
-            if let Some(timeout) = node.get("timeout").and_then(|e| e.value().as_string()) {
+            if let Some(timeout) = node.get("timeout").and_then(|e| e.as_string()) {
                 annotations.exec_timeout = Some(parse_duration(timeout)?);
             }
-            if let Some(shell) = node.get("shell").and_then(|e| e.value().as_bool()) {
+            if let Some(shell) = node.get("shell").and_then(|e| e.as_bool()) {
                 annotations.exec_shell = shell;
             }
         }
@@ -273,7 +270,7 @@ fn parse_kdl_node(annotations: &mut ScriptAnnotations, node: &KdlNode) -> Result
 
             let use_outputs = node
                 .get("use-outputs")
-                .and_then(|e| e.value().as_bool())
+                .and_then(|e| e.as_bool())
                 .unwrap_or(false);
 
             annotations.depends_on.push(DependencySpec {

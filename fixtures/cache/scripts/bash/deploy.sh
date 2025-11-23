@@ -1,5 +1,5 @@
 #!/usr/bin/env -S fabrik run bash
-#FABRIK depends "./build.sh" use-outputs=true
+#FABRIK depends "./build.sh" use-outputs=#true
 #FABRIK input "build/"
 #FABRIK output "deploy.log"
 #FABRIK env "DEPLOY_ENV"

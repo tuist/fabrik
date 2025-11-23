@@ -126,7 +126,7 @@ Declare dependencies on other scripts. Fabrik will execute dependencies before t
 
 **With output reuse:**
 ```bash
-#FABRIK depends "build-deps.sh" use-outputs=true
+#FABRIK depends "build-deps.sh" use-outputs=#true
 ```
 
 **Examples:**
@@ -135,14 +135,14 @@ Declare dependencies on other scripts. Fabrik will execute dependencies before t
 #FABRIK depends "./prepare.sh"
 
 # Dependency with output reuse (adds dependency outputs as inputs)
-#FABRIK depends "./build-libs.sh" use-outputs=true
+#FABRIK depends "./build-libs.sh" use-outputs=#true
 
 # Multiple dependencies
 #FABRIK depends "./step1.sh"
 #FABRIK depends "./step2.sh"
 ```
 
-**With `use-outputs=true`:**
+**With `use-outputs=#true`:**
 - Dependency's outputs are automatically added as inputs to current script
 - Ensures cache invalidation when dependency outputs change
 - Useful for build pipelines (build → test → deploy)
@@ -395,7 +395,7 @@ Here's a comprehensive example using multiple directives:
 #FABRIK output "build-stats.json"
 #FABRIK env "NODE_ENV"
 #FABRIK env "BUILD_TARGET"
-#FABRIK depends "./install-deps.sh" use-outputs=true
+#FABRIK depends "./install-deps.sh" use-outputs=#true
 #FABRIK cache ttl="24h"
 #FABRIK runtime-version
 #FABRIK exec timeout="10m"
