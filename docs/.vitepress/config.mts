@@ -61,31 +61,37 @@ export default defineConfig({
             collapsed: true,
             items: [
               {
-                text: "Local",
+                text: "Standard",
                 collapsed: true,
                 items: [
-                  { text: "Introduction", link: "/cache/recipes/local/" },
+                  { text: "Introduction", link: "/cache/recipes/standard/" },
                   {
                     text: "Configuration Reference",
-                    link: "/cache/recipes/local/reference",
+                    link: "/cache/recipes/standard/reference",
                   },
-                  { text: "Examples", link: "/cache/recipes/local/examples" },
+                  {
+                    text: "Examples",
+                    link: "/cache/recipes/standard/examples",
+                  },
                 ],
               },
               {
-                text: "Remote",
+                text: "Portable",
                 collapsed: true,
                 items: [
-                  { text: "Introduction", link: "/cache/recipes/remote/" },
+                  { text: "Introduction", link: "/cache/recipes/portable/" },
                   {
                     text: "JavaScript API Reference",
                     link: "/cache/recipes/api-reference",
                   },
                   {
                     text: "Syntax Reference",
-                    link: "/cache/recipes/remote/syntax",
+                    link: "/cache/recipes/portable/syntax",
                   },
-                  { text: "Examples", link: "/cache/recipes/remote/examples" },
+                  {
+                    text: "Examples",
+                    link: "/cache/recipes/portable/examples",
+                  },
                 ],
               },
             ],
