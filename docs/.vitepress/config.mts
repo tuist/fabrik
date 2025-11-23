@@ -66,8 +66,8 @@ export default defineConfig({
                 items: [
                   { text: "Introduction", link: "/cache/recipes/standard/" },
                   {
-                    text: "Configuration Reference",
-                    link: "/cache/recipes/standard/reference",
+                    text: "Annotations Reference",
+                    link: "/cache/recipes/standard/annotations",
                   },
                   {
                     text: "Examples",

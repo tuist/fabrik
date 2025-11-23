@@ -4,7 +4,7 @@ Cache any script execution (bash, node, python, etc.) with automatic invalidatio
 
 ## What Are Standard Recipes?
 
-Standard recipes are scripts in any language (bash, node, python, ruby, etc.) that use FABRIK annotations for content-addressed caching. Unlike [portable recipes](/cache/recipes/portable/) (which run in Fabrik's embedded JavaScript runtime), standard recipes:
+Standard recipes are scripts in any language (bash, node, python, ruby, etc.) that use [FABRIK annotations](/cache/recipes/standard/annotations) for content-addressed caching. Unlike [portable recipes](/cache/recipes/portable/) (which run in Fabrik's embedded JavaScript runtime), standard recipes:
 
 - ✅ Use your system's installed runtimes (bash, node, python, etc.)
 - ✅ Support any scripting language with a shebang line
@@ -21,7 +21,7 @@ While Fabrik integrates with build tools like Gradle and Bazel, many build workf
 - Deployment scripts
 - Docker image builds
 
-With script caching, you declare inputs and outputs using special comments in your scripts, and Fabrik handles the rest.
+With standard recipes, you declare inputs and outputs using [FABRIK annotations](/cache/recipes/standard/annotations), and Fabrik handles the rest.
 
 ## Standard vs Portable Recipes
 
@@ -31,7 +31,7 @@ With script caching, you declare inputs and outputs using special comments in yo
 | **Languages** | Any with shebang | JavaScript only |
 | **Dependencies** | Requires runtime installed | Zero dependencies |
 | **Distribution** | Managed manually | Managed by Fabrik (via `@` syntax) |
-| **Caching** | FABRIK annotations | FABRIK annotations + runtime JS APIs |
+| **Caching** | [FABRIK annotations](/cache/recipes/standard/annotations) | [FABRIK annotations](/cache/recipes/standard/annotations) + runtime JS APIs |
 
 ## How It Works
 
