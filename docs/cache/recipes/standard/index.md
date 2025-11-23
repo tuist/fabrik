@@ -60,11 +60,9 @@ Run it with Fabrik:
 ```bash
 # First run - cache miss, executes script
 fabrik run build.sh
-# Output: Cache key: script-abc123 | MISS ✗ | 2.45s (exit: 0)
 
 # Second run - cache hit, restores outputs instantly
 fabrik run build.sh
-# Output: Cache key: script-abc123 | HIT ✓ | 0.01s (exit: 0)
 ```
 
 Change an input file, and the cache automatically invalidates:
@@ -75,7 +73,6 @@ echo "export const foo = 42;" >> src/index.ts
 
 # Cache miss - script executes again
 fabrik run build.sh
-# Output: Cache key: script-def456 | MISS ✗ | 2.50s (exit: 0)
 ```
 
 ## Key Features
