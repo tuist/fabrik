@@ -1,12 +1,17 @@
-// Portable recipes - Cross-platform JavaScript automation
-//
-// This module provides cross-platform build automation using JavaScript that runs
-// on Fabrik's embedded QuickJS runtime with custom Fabrik APIs exposed.
-
+/// Script caching module
+///
+/// Provides Nx-style caching for arbitrary scripts using KDL annotations.
+/// Scripts can declare inputs, outputs, environment dependencies, and cache behavior
+/// inline using KDL comments.
+pub mod annotations;
 pub mod cache;
+pub mod cache_key;
+pub mod dependencies;
 pub mod executor;
-pub mod remote;
-pub mod runtime;
+pub mod inputs;
+pub mod outputs;
 
-pub use executor::RecipeExecutor;
-pub use remote::RemoteRecipe;
+#[allow(unused_imports)]
+pub use annotations::ScriptAnnotations;
+#[allow(unused_imports)]
+pub use cache::CreateMetadataParams;

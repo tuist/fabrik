@@ -1,144 +1,333 @@
-// Recipe executor - Runs portable recipes in QuickJS runtime
+/// Script executor
+///
+/// Handles spawning the runtime, capturing output, monitoring timeout, and handling exit codes.
+use anyhow::{Context, Result};
+use std::io::IsTerminal;
+use std::path::Path;
+use std::process::{Command, Stdio};
+use std::time::{Duration, Instant};
 
-use anyhow::Result;
-use rquickjs::async_with;
-use std::path::PathBuf;
+use super::annotations::ScriptAnnotations;
 
-use super::runtime::create_fabrik_runtime_with_dir;
-
-/// Executes portable recipes (JavaScript files with Fabrik APIs)
-pub struct RecipeExecutor {
-    recipe_path: PathBuf,
+/// Result of script execution
+#[derive(Debug, Clone)]
+pub struct ExecutionResult {
+    pub exit_code: i32,
+    pub duration: Duration,
+    #[allow(dead_code)] // May be used in future for output caching
+    pub stdout: Vec<u8>,
+    #[allow(dead_code)] // May be used in future for output caching
+    pub stderr: Vec<u8>,
 }
 
-impl RecipeExecutor {
-    /// Create a new recipe executor
-    pub fn new(recipe_path: PathBuf) -> Self {
-        Self { recipe_path }
+/// Script executor
+pub struct ScriptExecutor {
+    verbose: bool,
+}
+
+impl ScriptExecutor {
+    pub fn new(verbose: bool) -> Self {
+        Self { verbose }
     }
 
-    /// Execute a recipe at root level
-    ///
-    /// Recipes are plain JavaScript files that run from top to bottom.
-    /// They should NOT export functions - all logic is at the root level.
-    pub async fn execute(&self) -> Result<()> {
-        tracing::info!("[fabrik] Executing recipe: {:?}", self.recipe_path);
+    /// Execute script with the specified runtime
+    pub fn execute(
+        &self,
+        script_path: &Path,
+        annotations: &ScriptAnnotations,
+        args: &[String],
+    ) -> Result<ExecutionResult> {
+        let start = Instant::now();
 
-        // Read recipe file
-        let recipe_code = tokio::fs::read_to_string(&self.recipe_path).await?;
+        if self.verbose {
+            eprintln!(
+                "[fabrik] Executing: {} {} {}",
+                annotations.runtime,
+                script_path.display(),
+                args.join(" ")
+            );
+        }
 
-        // Get recipe directory for config discovery
-        let recipe_dir = self
-            .recipe_path
-            .parent()
-            .unwrap_or_else(|| std::path::Path::new("."))
-            .to_path_buf();
+        // Prepare command - resolve runtime from PATH
+        let runtime_path = which::which(&annotations.runtime).unwrap_or_else(|e| {
+            if self.verbose {
+                eprintln!(
+                    "[fabrik] Warning: Could not find '{}' in PATH: {}. Trying as-is.",
+                    annotations.runtime, e
+                );
+            }
+            // Fallback to the original runtime name if not found in PATH
+            std::path::PathBuf::from(&annotations.runtime)
+        });
 
-        // Create QuickJS runtime with Fabrik APIs
-        let (_runtime, context) = create_fabrik_runtime_with_dir(recipe_dir).await?;
+        if self.verbose {
+            eprintln!("[fabrik] Using runtime: {}", runtime_path.display());
+        }
 
-        // Execute recipe at root level (wrap in async IIFE)
-        async_with!(context => |ctx| {
-            let wrapped_code = format!("(async () => {{ {} }})();", recipe_code);
-            let promise: rquickjs::Promise = ctx.eval(wrapped_code.as_bytes())?;
+        let mut cmd = Command::new(&runtime_path);
 
-            // Wait for promise to complete
-            promise.into_future::<()>().await?;
+        // Add runtime args
+        cmd.args(&annotations.runtime_args);
 
-            Ok::<_, rquickjs::Error>(())
+        // Add script path
+        cmd.arg(script_path);
+
+        // Add script arguments
+        cmd.args(args);
+
+        // Set working directory
+        if let Some(cwd) = &annotations.exec_cwd {
+            let abs_cwd = if cwd.is_absolute() {
+                cwd.clone()
+            } else {
+                script_path
+                    .parent()
+                    .ok_or_else(|| anyhow::anyhow!("Script has no parent directory"))?
+                    .join(cwd)
+            };
+            cmd.current_dir(abs_cwd);
+        } else {
+            // Default: script's directory (if it has one and it's not empty)
+            if let Some(parent) = script_path.parent() {
+                if parent != std::path::Path::new("") {
+                    cmd.current_dir(parent);
+                }
+            }
+        }
+
+        // Check if stdout/stderr are TTYs - if so, inherit them for colors
+        let use_tty = std::io::stdout().is_terminal() && std::io::stderr().is_terminal();
+
+        if use_tty {
+            // Inherit stdout/stderr to preserve colors and interactivity
+            cmd.stdout(Stdio::inherit());
+            cmd.stderr(Stdio::inherit());
+        } else {
+            // Capture output when piped (e.g., in tests or when output is redirected)
+            cmd.stdout(Stdio::piped());
+            cmd.stderr(Stdio::piped());
+        }
+
+        if self.verbose {
+            eprintln!("[fabrik] Command: {:?}", cmd);
+        }
+
+        // Spawn process
+        let mut child = cmd
+            .spawn()
+            .with_context(|| format!("Failed to spawn runtime: {}", annotations.runtime))?;
+
+        // Handle timeout if specified
+        let result = if let Some(timeout) = annotations.exec_timeout {
+            self.wait_with_timeout(&mut child, timeout)
+        } else {
+            // Wait indefinitely
+            child
+                .wait()
+                .map(|status| (status, false))
+                .context("Failed to wait for child process")
+        };
+
+        let (status, timed_out) = result?;
+
+        let duration = start.elapsed();
+
+        if timed_out {
+            return Err(anyhow::anyhow!(
+                "Script execution timed out after {}s",
+                annotations.exec_timeout.unwrap().as_secs()
+            ));
+        }
+
+        let exit_code = status.code().unwrap_or(-1);
+
+        // Capture output only if we piped it
+        let (stdout, stderr) = if use_tty {
+            // Output was inherited, nothing to capture
+            (Vec::new(), Vec::new())
+        } else {
+            // Output was piped, capture it
+            let output = child
+                .wait_with_output()
+                .context("Failed to capture output")?;
+            (output.stdout, output.stderr)
+        };
+
+        if self.verbose {
+            eprintln!(
+                "[fabrik] Completed in {:.2}s with exit code {}",
+                duration.as_secs_f64(),
+                exit_code
+            );
+        }
+
+        Ok(ExecutionResult {
+            exit_code,
+            duration,
+            stdout,
+            stderr,
         })
-        .await?;
+    }
 
-        tracing::info!("[fabrik] Recipe completed successfully");
+    /// Wait for child process with timeout
+    #[cfg(unix)]
+    fn wait_with_timeout(
+        &self,
+        child: &mut std::process::Child,
+        timeout: Duration,
+    ) -> Result<(std::process::ExitStatus, bool)> {
+        use std::os::unix::process::ExitStatusExt;
+        use std::thread;
 
-        Ok(())
+        let start = Instant::now();
+
+        loop {
+            match child.try_wait()? {
+                Some(status) => return Ok((status, false)),
+                None => {
+                    if start.elapsed() >= timeout {
+                        // Kill the process
+                        child.kill()?;
+                        child.wait()?; // Reap zombie
+                        return Ok((
+                            std::process::ExitStatus::from_raw(128 + 9), // SIGKILL
+                            true,
+                        ));
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
+    }
+
+    /// Wait for child process with timeout (Windows version)
+    #[cfg(windows)]
+    fn wait_with_timeout(
+        &self,
+        child: &mut std::process::Child,
+        timeout: Duration,
+    ) -> Result<(std::process::ExitStatus, bool)> {
+        use std::os::windows::io::AsRawHandle;
+        use std::os::windows::process::ExitStatusExt;
+        use std::thread;
+        use winapi::um::processthreadsapi::TerminateProcess;
+        use winapi::um::winnt::HANDLE;
+
+        let start = Instant::now();
+
+        loop {
+            match child.try_wait()? {
+                Some(status) => return Ok((status, false)),
+                None => {
+                    if start.elapsed() >= timeout {
+                        // Terminate the process
+                        unsafe {
+                            let handle = child.as_raw_handle() as HANDLE;
+                            TerminateProcess(handle, 1);
+                        }
+                        child.wait()?;
+                        return Ok((std::process::ExitStatus::from_raw(1), true));
+                    }
+                    thread::sleep(Duration::from_millis(100));
+                }
+            }
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::script::annotations::ScriptAnnotations;
+    use std::fs;
+    use tempfile::TempDir;
 
-    #[tokio::test]
-    async fn test_execute_simple_recipe() {
-        // Create a temporary recipe file
-        let temp_dir = tempfile::tempdir().unwrap();
-        let recipe_path = temp_dir.path().join("test.recipe.js");
+    #[test]
+    fn test_execute_simple_script() {
+        let temp = TempDir::new().unwrap();
+        let script = temp.path().join("test.sh");
 
-        let recipe_code = r#"
-            console.log("Running simple recipe");
-            const exitCode = await Fabrik.exec("echo", ["hello from recipe"]);
-            if (exitCode !== 0) {
-                throw new Error("Command failed");
-            }
-        "#;
+        let content = r#"#!/usr/bin/env -S fabrik run bash
+#FABRIK output "output.txt"
 
-        tokio::fs::write(&recipe_path, recipe_code).await.unwrap();
+echo "hello world" > output.txt
+"#;
 
-        // Execute the recipe at root level
-        let executor = RecipeExecutor::new(recipe_path);
-        let result = executor.execute().await;
+        fs::write(&script, content).unwrap();
 
-        assert!(result.is_ok(), "Recipe execution should succeed");
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&script).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&script, perms).unwrap();
+        }
+
+        let annotations = ScriptAnnotations {
+            runtime: "bash".to_string(),
+            runtime_args: vec![],
+            inputs: vec![],
+            outputs: vec![],
+            env_vars: vec![],
+            cache_ttl: None,
+            cache_key: None,
+            cache_disabled: false,
+            runtime_version: false,
+            exec_cwd: None,
+            exec_timeout: None,
+            exec_shell: false,
+            depends_on: vec![],
+        };
+
+        let executor = ScriptExecutor::new(false);
+        let result = executor.execute(&script, &annotations, &[]).unwrap();
+
+        assert_eq!(result.exit_code, 0);
+
+        // Check output file was created
+        assert!(temp.path().join("output.txt").exists());
     }
 
-    #[tokio::test]
-    async fn test_execute_file_operations() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let recipe_path = temp_dir.path().join("file_test.recipe.js");
-        let test_file = temp_dir.path().join("test_output.txt");
+    #[test]
+    fn test_execute_with_timeout() {
+        let temp = TempDir::new().unwrap();
+        let script = temp.path().join("test.sh");
 
-        // Pre-create test file for the recipe to check
-        tokio::fs::write(&test_file, b"test data").await.unwrap();
+        let content = r#"#!/usr/bin/env -S fabrik run bash
+sleep 10
+"#;
 
-        // Escape backslashes for Windows paths in JavaScript strings
-        let test_file_str = test_file.to_str().unwrap().replace('\\', "\\\\");
-        let temp_dir_str = temp_dir.path().to_str().unwrap().replace('\\', "\\\\");
+        fs::write(&script, content).unwrap();
 
-        let recipe_code = format!(
-            r#"
-            console.log("Checking file operations");
-            const exists = await Fabrik.exists("{}");
-            if (!exists) {{
-                throw new Error("File should exist");
-            }}
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let mut perms = fs::metadata(&script).unwrap().permissions();
+            perms.set_mode(0o755);
+            fs::set_permissions(&script, perms).unwrap();
+        }
 
-            const files = await Fabrik.glob("{}/*.txt");
-            if (files.length === 0) {{
-                throw new Error("Should find at least one .txt file");
-            }}
-        "#,
-            test_file_str, temp_dir_str
-        );
+        let annotations = ScriptAnnotations {
+            runtime: "bash".to_string(),
+            runtime_args: vec![],
+            inputs: vec![],
+            outputs: vec![],
+            env_vars: vec![],
+            cache_ttl: None,
+            cache_key: None,
+            cache_disabled: false,
+            runtime_version: false,
+            exec_cwd: None,
+            exec_timeout: Some(Duration::from_secs(1)),
+            exec_shell: false,
+            depends_on: vec![],
+        };
 
-        tokio::fs::write(&recipe_path, recipe_code).await.unwrap();
+        let executor = ScriptExecutor::new(false);
+        let result = executor.execute(&script, &annotations, &[]);
 
-        // Execute recipe at root level
-        let executor = RecipeExecutor::new(recipe_path);
-        executor.execute().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn test_execute_root_level() {
-        let temp_dir = tempfile::tempdir().unwrap();
-        let recipe_path = temp_dir.path().join("root.recipe.js");
-
-        // Root-level recipe - just tests basic execution
-        let recipe_code = r#"
-            console.log("Executing at root level");
-
-            const files = await Fabrik.glob("*.toml");
-            console.log("Found", files.length, "toml files");
-
-            if (files.length === 0) {
-                throw new Error("Expected to find some .toml files");
-            }
-        "#;
-
-        tokio::fs::write(&recipe_path, recipe_code).await.unwrap();
-
-        // Execute recipe at root level
-        let executor = RecipeExecutor::new(recipe_path);
-        executor.execute().await.unwrap();
+        // Should timeout
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("timed out"));
     }
 }

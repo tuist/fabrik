@@ -1,10 +1,17 @@
-# Script Caching
+# Standard Recipes
 
 Cache any script execution (bash, node, python, etc.) with automatic invalidation based on inputs, outputs, and environment variables.
 
-## What is Script Caching?
+## What Are Standard Recipes?
 
-Script caching allows you to cache arbitrary script executions that fall outside traditional build systems. While Fabrik integrates with build tools like Gradle and Bazel, many build workflows include custom scripts that aren't covered by those tools.
+Standard recipes are scripts in any language (bash, node, python, ruby, etc.) that use FABRIK annotations for content-addressed caching. Unlike portable recipes (which run in Fabrik's embedded JavaScript runtime), standard recipes:
+
+- ✅ Use your system's installed runtimes (bash, node, python, etc.)
+- ✅ Support any scripting language with a shebang line
+- ✅ Cache execution results based on inputs, outputs, and environment variables
+- ✅ Work with existing scripts - just add FABRIK annotations
+
+While Fabrik integrates with build tools like Gradle and Bazel, many build workflows include custom scripts that aren't covered by those tools. Standard recipes fill this gap.
 
 **Examples:**
 - Running TypeScript compiler (`tsc`) directly
@@ -15,6 +22,18 @@ Script caching allows you to cache arbitrary script executions that fall outside
 - Docker image builds
 
 With script caching, you declare inputs and outputs using special comments in your scripts, and Fabrik handles the rest.
+
+## Standard vs Portable Recipes
+
+| Feature | Standard Recipes | Portable Recipes |
+|---------|------------------|------------------|
+| **Runtime** | System (bash, node, python) | Embedded (QuickJS in Fabrik) |
+| **Languages** | Any with shebang | JavaScript only |
+| **Dependencies** | Requires runtime installed | Zero dependencies |
+| **Startup** | Slower (~10-100ms) | Fast (~1ms) |
+| **Distribution** | Files only | Git repos via `@` syntax |
+| **Caching** | FABRIK annotations | FABRIK annotations |
+| **APIs** | System commands | Fabrik APIs (`fabrik:fs`) |
 
 ## How It Works
 
