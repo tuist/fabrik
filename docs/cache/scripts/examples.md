@@ -160,7 +160,7 @@ npm ci
 # build.sh
 #FABRIK input "src/**/*.ts"
 #FABRIK input "tsconfig.json"
-#FABRIK depends "./install.sh" use-outputs=true
+#FABRIK depends "./install.sh" use-outputs=#true
 #FABRIK output "dist/"
 
 npm run build
@@ -171,7 +171,7 @@ npm run build
 #!/usr/bin/env bash
 # test.sh
 #FABRIK input "tests/**/*.test.ts"
-#FABRIK depends "./build.sh" use-outputs=true
+#FABRIK depends "./build.sh" use-outputs=#true
 #FABRIK output "coverage/"
 
 npm test -- --coverage

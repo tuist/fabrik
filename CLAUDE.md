@@ -992,7 +992,7 @@ Fabrik provides **content-addressed caching for arbitrary scripts** (bash, node,
 #FABRIK input "package.json"
 #FABRIK output "dist/"
 #FABRIK env "NODE_ENV"
-#FABRIK depends "./build-deps.sh" use-outputs=true
+#FABRIK depends "./build-deps.sh" use-outputs=#true
 
 # Build TypeScript project
 npm run build
@@ -1004,7 +1004,7 @@ npm run build
 - `#FABRIK output "path"` - Declare output paths to archive/restore (files or directories)
 - `#FABRIK env "VAR_NAME"` - Track environment variable (invalidates cache when value changes)
 - `#FABRIK depends "script.sh"` - Declare dependency on another script
-- `#FABRIK depends "script.sh" use-outputs=true` - Add dependency outputs as inputs
+- `#FABRIK depends "script.sh" use-outputs=#true` - Add dependency outputs as inputs
 - `#FABRIK cache disable` - Disable caching for this script
 - `#FABRIK cache ttl="7d"` - Set cache expiration (e.g., "2h", "7d", "30d")
 - `#FABRIK cache key="custom"` - Override cache key computation
