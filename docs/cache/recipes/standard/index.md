@@ -30,10 +30,8 @@ With script caching, you declare inputs and outputs using special comments in yo
 | **Runtime** | System (bash, node, python) | Embedded (QuickJS in Fabrik) |
 | **Languages** | Any with shebang | JavaScript only |
 | **Dependencies** | Requires runtime installed | Zero dependencies |
-| **Startup** | Slower (~10-100ms) | Fast (~1ms) |
-| **Distribution** | Files only | Git repos via `@` syntax |
-| **Caching** | FABRIK annotations | FABRIK annotations |
-| **APIs** | System commands | Fabrik APIs (`fabrik:fs`) |
+| **Distribution** | Managed manually | Managed by Fabrik (via `@` syntax) |
+| **Caching** | FABRIK annotations | FABRIK annotations + runtime JS APIs |
 
 ## How It Works
 
