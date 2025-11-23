@@ -32,7 +32,8 @@ tar = "0.4"
 zstd = "0.13"
 walkdir = "2"
 tempfile = "3"
-tonic = "0.12"
+tonic = "0.14"
+tonic-prost = "0.14"
 prost = "0.14"
 prost-types = "0.14"
 tokio-stream = "0.1"
@@ -73,5 +74,5 @@ uuid = { version = "1", features = ["v4"] }
 rand = "0.8"
 
 [build-dependencies]
-tonic-build = "0.12"
+tonic-prost-build = "0.14"
 cbindgen = "0.29"

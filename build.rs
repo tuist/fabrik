@@ -1,6 +1,6 @@
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Compile XCBBuildService proto files
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .build_client(false) // We only need the server side
         .compile_protos(
@@ -10,7 +10,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Compile Bazel Remote Execution API proto files
     // Use our custom google.rpc.Status to avoid path issues
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .build_client(false) // We only need the server side
         .compile_well_known_types(true)
@@ -25,7 +25,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
 
     // Compile P2P proto files
-    tonic_build::configure()
+    tonic_prost_build::configure()
         .build_server(true)
         .build_client(true) // We need both server and client for P2P
         .compile_protos(&["proto/p2p.proto"], &["proto"])?;
