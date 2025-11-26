@@ -171,8 +171,8 @@ fn generate_secret(length: usize) -> Result<()> {
     }
 
     // Generate random bytes
-    let mut rng = rand::thread_rng();
-    let random_bytes: Vec<u8> = (0..length).map(|_| rng.gen()).collect();
+    let mut rng = rand::rng();
+    let random_bytes: Vec<u8> = (0..length).map(|_| rng.random()).collect();
 
     // Encode as hexadecimal
     let secret = random_bytes

@@ -53,7 +53,7 @@ mdns-sd = "0.11"
 notify-rust = "4.11"
 hmac = "0.12"
 hostname = "0.4"
-rand = "0.8"
+rand = "0.9"
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.30", features = ["signal"] }
@@ -71,7 +71,7 @@ serial_test = "3"
 assert_cmd = "2"
 predicates = "3"
 uuid = { version = "1", features = ["v4"] }
-rand = "0.8"
+rand = "0.9"
 
 [build-dependencies]
 tonic-prost-build = "0.14"
