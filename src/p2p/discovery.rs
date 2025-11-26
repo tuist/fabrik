@@ -2,9 +2,8 @@
 use crate::config::P2PConfig;
 use crate::p2p::{Peer, PeerInfo};
 use anyhow::{Context, Result};
-use mdns_sd::{ServiceDaemon, ServiceEvent, ServiceInfo};
+use mdns_sd::{ResolvedService, ServiceDaemon, ServiceEvent, ServiceInfo};
 use std::collections::HashMap;
-use std::net::IpAddr;
 use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::sync::RwLock;
@@ -151,8 +150,8 @@ impl DiscoveryService {
         Ok(())
     }
 
-    /// Extract peer info from mDNS service info
-    fn extract_peer_info(info: &ServiceInfo) -> Option<PeerInfo> {
+    /// Extract peer info from mDNS resolved service
+    fn extract_peer_info(info: &ResolvedService) -> Option<PeerInfo> {
         let machine_id = info.get_property_val_str("machine_id")?.to_string();
         let hostname = info.get_hostname().to_string();
         let port = info.get_port();
@@ -161,8 +160,8 @@ impl DiscoveryService {
         let address = info
             .get_addresses()
             .iter()
-            .find(|addr| matches!(addr, IpAddr::V4(_)))?
-            .to_owned();
+            .find(|addr| addr.is_ipv4())?
+            .to_ip_addr();
 
         Some(PeerInfo {
             machine_id,
