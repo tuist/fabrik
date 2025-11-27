@@ -20,10 +20,7 @@ const testResults = {
   timestamp: new Date().toISOString()
 };
 
-// Create coverage directory
-await Fabrik.exec("mkdir", ["-p", "coverage"]);
-
-// Generate coverage report
+// Generate coverage report (parent directories created automatically)
 const coverage = {
   lines: { total: sourceFiles.length * 100, covered: sourceFiles.length * 85, pct: 85 },
   statements: { total: sourceFiles.length * 120, covered: sourceFiles.length * 102, pct: 85 },

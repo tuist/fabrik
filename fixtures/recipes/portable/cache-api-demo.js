@@ -31,8 +31,8 @@ const exitCode = await Fabrik.exec("echo", ["Hello from Fabrik!"]);
 console.log("[fabrik] Command exit code:", exitCode);
 
 // Example 6: Using Fabrik.writeFile() (accepts strings like Node.js)
+// Parent directories are created automatically
 console.log("[fabrik] Writing file with Fabrik.writeFile()...");
-await Fabrik.exec("mkdir", ["-p", "output"]);
 const manifest = {
   recipe: "cache-api-demo.js",
   timestamp: new Date().toISOString(),

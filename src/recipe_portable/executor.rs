@@ -123,6 +123,12 @@ mod tests {
         let temp_dir = tempfile::tempdir().unwrap();
         let recipe_path = temp_dir.path().join("root.recipe.js");
 
+        // Create a test.toml file in the temp directory
+        // (glob now resolves relative to the recipe directory)
+        tokio::fs::write(temp_dir.path().join("test.toml"), "[test]\nvalue = 1")
+            .await
+            .unwrap();
+
         // Root-level recipe - just tests basic execution
         let recipe_code = r#"
             console.log("Executing at root level");

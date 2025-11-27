@@ -4,10 +4,8 @@
 
 console.log("[fabrik] Generating output files...");
 
-// Create output directory
-await Fabrik.exec("mkdir", ["-p", "generated"]);
-
 // Write files using Fabrik API (accepts strings like Node.js)
+// Parent directories are created automatically
 await Fabrik.writeFile("generated/file1.txt", "Content from portable recipe - file 1\n");
 await Fabrik.writeFile("generated/file2.txt", "Content from portable recipe - file 2\n");
 

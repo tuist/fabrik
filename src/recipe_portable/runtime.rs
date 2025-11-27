@@ -9,7 +9,7 @@ use rquickjs::{
     loader::{BuiltinLoader, BuiltinResolver, ModuleLoader},
     AsyncContext, AsyncRuntime, Function, Module,
 };
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use tokio::process::Command;
 
 use super::cache::{self, CacheOptions};
@@ -44,69 +44,122 @@ pub async fn create_fabrik_runtime_with_dir(
 
     let context = AsyncContext::full(&runtime).await?;
 
-    // Store recipe directory in context for use by cache APIs
+    // Store recipe directory in context for use by cache APIs and file operations
     let recipe_dir_clone = recipe_dir.clone();
+
+    // Helper to resolve paths relative to recipe directory
+    fn resolve_path(base: &Path, path: &str) -> PathBuf {
+        let p = Path::new(path);
+        if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            base.join(p)
+        }
+    }
 
     // Register Fabrik APIs
     async_with!(context => |ctx| {
         // Create Fabrik global object
         let fabrik = rquickjs::Object::new(ctx.clone())?;
 
-        // File I/O functions - use closures for Async wrapper
-        fabrik.set("readFile", Function::new(ctx.clone(), Async(|path: String| async move {
-            let data = tokio::fs::read(&path).await?;
-            Ok::<Vec<u8>, rquickjs::Error>(data)
-        })))?;
+        // Clone recipe_dir for each closure that needs it
+        let dir_for_read = recipe_dir_clone.clone();
+        let dir_for_write = recipe_dir_clone.clone();
+        let dir_for_exists = recipe_dir_clone.clone();
+        let dir_for_glob = recipe_dir_clone.clone();
+        let dir_for_exec = recipe_dir_clone.clone();
+        let dir_for_hash = recipe_dir_clone.clone();
 
-        // writeFile accepts string or byte array, like Node.js
-        fabrik.set("writeFile", Function::new(ctx.clone(), Async(|path: String, data: String| async move {
-            tokio::fs::write(&path, data.as_bytes()).await?;
-            Ok::<(), rquickjs::Error>(())
-        })))?;
-
-        fabrik.set("exists", Function::new(ctx.clone(), Async(|path: String| async move {
-            Ok::<bool, rquickjs::Error>(tokio::fs::metadata(&path).await.is_ok())
-        })))?;
-
-        fabrik.set("glob", Function::new(ctx.clone(), Async(|pattern: String| async move {
-            match glob::glob(&pattern) {
-                Ok(iter) => {
-                    let paths = iter
-                        .filter_map(|entry| entry.ok())
-                        .map(|path| path.to_string_lossy().to_string())
-                        .collect::<Vec<String>>();
-                    Ok(paths)
-                },
-                Err(_) => Err(rquickjs::Error::Exception),
+        // File I/O functions - resolve paths relative to recipe directory
+        fabrik.set("readFile", Function::new(ctx.clone(), Async(move |path: String| {
+            let resolved = resolve_path(&dir_for_read, &path);
+            async move {
+                let data = tokio::fs::read(&resolved).await?;
+                Ok::<Vec<u8>, rquickjs::Error>(data)
             }
         })))?;
 
-        // Process execution - returns just exit code for now
+        // writeFile accepts string, like Node.js
+        fabrik.set("writeFile", Function::new(ctx.clone(), Async(move |path: String, data: String| {
+            let resolved = resolve_path(&dir_for_write, &path);
+            async move {
+                // Create parent directories if needed
+                if let Some(parent) = resolved.parent() {
+                    let _ = tokio::fs::create_dir_all(parent).await;
+                }
+                tokio::fs::write(&resolved, data.as_bytes()).await?;
+                Ok::<(), rquickjs::Error>(())
+            }
+        })))?;
+
+        fabrik.set("exists", Function::new(ctx.clone(), Async(move |path: String| {
+            let resolved = resolve_path(&dir_for_exists, &path);
+            async move {
+                Ok::<bool, rquickjs::Error>(tokio::fs::metadata(&resolved).await.is_ok())
+            }
+        })))?;
+
+        fabrik.set("glob", Function::new(ctx.clone(), Async(move |pattern: String| {
+            let base = dir_for_glob.clone();
+            async move {
+                // Resolve glob pattern relative to recipe directory
+                let resolved_pattern = resolve_path(&base, &pattern);
+                let pattern_str = resolved_pattern.to_string_lossy().to_string();
+                match glob::glob(&pattern_str) {
+                    Ok(iter) => {
+                        let paths = iter
+                            .filter_map(|entry| entry.ok())
+                            .map(|path| {
+                                // Return paths relative to recipe directory
+                                path.strip_prefix(&base)
+                                    .map(|p| p.to_string_lossy().to_string())
+                                    .unwrap_or_else(|_| path.to_string_lossy().to_string())
+                            })
+                            .collect::<Vec<String>>();
+                        Ok(paths)
+                    },
+                    Err(_) => Err(rquickjs::Error::Exception),
+                }
+            }
+        })))?;
+
+        // Process execution - runs in recipe directory
         // TODO: Return stdout/stderr as well
-        fabrik.set("exec", Function::new(ctx.clone(), Async(|command: String, args: Option<Vec<String>>| async move {
-            let args = args.unwrap_or_default();
+        fabrik.set("exec", Function::new(ctx.clone(), Async(move |command: String, args: Option<Vec<String>>| {
+            let cwd = dir_for_exec.clone();
+            async move {
+                let args = args.unwrap_or_default();
 
-            tracing::debug!("[fabrik] Executing: {} {:?}", command, args);
+                tracing::debug!("[fabrik] Executing in {:?}: {} {:?}", cwd, command, args);
 
-            let output = match Command::new(&command).args(&args).output().await {
-                Ok(o) => o,
-                Err(_) => return Err(rquickjs::Error::Exception),
-            };
+                let output = match Command::new(&command)
+                    .args(&args)
+                    .current_dir(&cwd)
+                    .output()
+                    .await
+                {
+                    Ok(o) => o,
+                    Err(_) => return Err(rquickjs::Error::Exception),
+                };
 
-            // Return just exit code for now
-            Ok::<i32, rquickjs::Error>(output.status.code().unwrap_or(-1))
+                // Return just exit code for now
+                Ok::<i32, rquickjs::Error>(output.status.code().unwrap_or(-1))
+            }
         })))?;
 
         // Hashing
-        fabrik.set("hashFile", Function::new(ctx.clone(), Async(|path: String| async move {
-            use sha2::{Digest, Sha256};
+        fabrik.set("hashFile", Function::new(ctx.clone(), Async(move |path: String| {
+            let resolved = resolve_path(&dir_for_hash, &path);
+            async move {
+                use sha2::{Digest, Sha256};
 
-            let data = match tokio::fs::read(&path).await {
-                Ok(d) => d,
-                Err(_) => return Err(rquickjs::Error::Exception),
-            };
-            let hash = Sha256::digest(&data);
-            Ok::<String, rquickjs::Error>(hex::encode(hash))
+                let data = match tokio::fs::read(&resolved).await {
+                    Ok(d) => d,
+                    Err(_) => return Err(rquickjs::Error::Exception),
+                };
+                let hash = Sha256::digest(&data);
+                Ok::<String, rquickjs::Error>(hex::encode(hash))
+            }
         })))?;
 
         // Cache operations (placeholders)

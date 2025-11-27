@@ -8,10 +8,7 @@ const target = "default";
 
 console.log("[fabrik] Building for environment:", buildEnv + ", target:", target);
 
-// Create output directory
-await Fabrik.exec("mkdir", ["-p", "build"]);
-
-// Generate environment-specific build
+// Generate environment-specific build (parent directories created automatically)
 const buildConfig = {
   environment: buildEnv,
   target: target,

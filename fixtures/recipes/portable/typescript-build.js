@@ -8,10 +8,7 @@ console.log("[fabrik] Building simulated TypeScript project...");
 const simulatedFiles = ["src/index.ts", "src/utils.ts", "src/types.ts"];
 console.log("[fabrik] Found", simulatedFiles.length, "TypeScript files");
 
-// Create dist directory
-await Fabrik.exec("mkdir", ["-p", "dist"]);
-
-// Simulate compilation by creating .js files
+// Simulate compilation by creating .js files (parent directories created automatically)
 for (const tsFile of simulatedFiles) {
   const jsFile = "dist/" + tsFile.replace("src/", "").replace(".ts", ".js");
   const content = "// Compiled from " + tsFile + "\nexport default {};\n";

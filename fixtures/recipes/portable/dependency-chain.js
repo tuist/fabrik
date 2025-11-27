@@ -4,9 +4,7 @@
 
 console.log("[fabrik] Running dependency chain recipe...");
 
-// Create final output directory
-await Fabrik.exec("mkdir", ["-p", "final"]);
-
+// Parent directories are created automatically by Fabrik.writeFile
 const content =
   "Dependency chain recipe completed.\n" +
   "This demonstrates the concept of recipes depending on other recipes.\n" +

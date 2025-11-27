@@ -8,10 +8,8 @@ console.log("[fabrik] Processing input files...");
 const inputFiles = await Fabrik.glob("*.txt");
 console.log("[fabrik] Found", inputFiles.length, "input files");
 
-// Create output directory
-await Fabrik.exec("mkdir", ["-p", "output"]);
-
 // Process each input file (or simulate if none found)
+// Parent directories are created automatically by Fabrik.writeFile
 if (inputFiles.length === 0) {
   console.log("[fabrik] No input files found, generating sample output");
   await Fabrik.writeFile("output/sample.txt", "Sample output generated\n");
