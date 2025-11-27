@@ -170,6 +170,13 @@ jobs:
           # Verify installation
           ls -la $HOME/.local/bin/protoc*
 
+      - name: Install LLVM (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          brew install llvm
+          echo "LIBCLANG_PATH=$(brew --prefix llvm)/lib" >> $GITHUB_ENV
+          echo "LLVM_CONFIG_PATH=$(brew --prefix llvm)/bin/llvm-config" >> $GITHUB_ENV
+
       - name: Install cross-compilation tools (Linux)
         if: runner.os == 'Linux'
         run: |
