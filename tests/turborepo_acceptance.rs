@@ -34,6 +34,7 @@ fn test_turborepo_cache_with_daemon() {
     // Use TurboRepo fixture
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
+        .join("build-systems")
         .join("turborepo");
 
     if !fixture_path.exists() {

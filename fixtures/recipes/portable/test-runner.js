@@ -1,20 +1,18 @@
 // Simulated test runner recipe
-// FABRIK input "src/**/*.{js,ts}"
-// FABRIK input "tests/**/*.test.{js,ts}"
+// This demonstrates a portable recipe that generates test results
 // FABRIK output "coverage/"
-// FABRIK env "CI"
+// FABRIK cache ttl="1h"
 
 import { mkdirSync, writeFileSync } from 'fs';
-import { glob } from 'fabrik:fs';
 
-console.log("Running test suite...");
+console.log("[fabrik] Running simulated test suite...");
 
-// Find test files
-const testFiles = await glob("tests/**/*.test.{js,ts}");
-const sourceFiles = await glob("src/**/*.{js,ts}");
+// Simulate test files found
+const testFiles = ["auth.test.js", "utils.test.js", "api.test.js"];
+const sourceFiles = ["auth.js", "utils.js", "api.js", "index.js"];
 
-console.log(`Found ${testFiles.length} test files`);
-console.log(`Found ${sourceFiles.length} source files`);
+console.log(`[fabrik] Found ${testFiles.length} test files`);
+console.log(`[fabrik] Found ${sourceFiles.length} source files`);
 
 // Simulate test execution
 const testResults = {
@@ -22,8 +20,7 @@ const testResults = {
   passed: testFiles.length * 9,
   failed: testFiles.length * 1,
   duration: 2.5,
-  timestamp: new Date().toISOString(),
-  ci: process.env.CI === "true"
+  timestamp: new Date().toISOString()
 };
 
 // Create coverage directory
@@ -40,6 +37,6 @@ const coverage = {
 writeFileSync("coverage/coverage-summary.json", JSON.stringify(coverage, null, 2));
 writeFileSync("coverage/test-results.json", JSON.stringify(testResults, null, 2));
 
-console.log(`Tests: ${testResults.passed}/${testResults.total} passed`);
-console.log(`Coverage: ${coverage.lines.pct}% lines, ${coverage.functions.pct}% functions`);
-console.log("Coverage report saved to coverage/");
+console.log(`[fabrik] Tests: ${testResults.passed}/${testResults.total} passed`);
+console.log(`[fabrik] Coverage: ${coverage.lines.pct}% lines, ${coverage.functions.pct}% functions`);
+console.log("[fabrik] Coverage report saved to coverage/");

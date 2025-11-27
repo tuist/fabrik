@@ -29,6 +29,7 @@ fn test_bazel_cache_with_daemon() {
     // Use simple fixture
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
+        .join("build-systems")
         .join("bazel")
         .join("simple");
 
@@ -95,6 +96,7 @@ fn test_bazel_version_with_daemon() {
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
+        .join("build-systems")
         .join("bazel")
         .join("simple");
 
@@ -127,6 +129,7 @@ fn test_bazel_help_with_daemon() {
 
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
+        .join("build-systems")
         .join("bazel")
         .join("simple");
 
