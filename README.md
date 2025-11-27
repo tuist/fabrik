@@ -2,6 +2,9 @@
 
 Vendor and environment-agnostic technology to optimize developer, CI, and agentic workflows.
 
+> [!IMPORTANT]
+> This project is in the ideation phase. We may open PRs and address issues, but we're not actively monitoring repository activity.
+
 ## 🎯 What is Fabrik?
 
 Fabrik is **the Kubernetes of development environments**—a universal orchestration layer that optimizes builds, tests, and scripts across any environment. Whether you're running locally, in CI, or powering agentic workflows, Fabrik provides transparent caching and execution optimization without locking you into specific vendors or platforms.
