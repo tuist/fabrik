@@ -12,7 +12,7 @@ use crate::bazel::{
 };
 use crate::cli::DaemonArgs;
 use crate::config::FabrikConfig;
-use crate::eviction::EvictionConfig;
+use crate::eviction::{spawn_background_eviction, BackgroundEvictionConfig, EvictionConfig};
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
 use crate::storage;
@@ -98,8 +98,16 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     )?;
 
     // Initialize shared storage backend with eviction
-    let storage = storage::create_storage_with_eviction(&config.cache_dir, eviction_config)?;
+    let storage =
+        storage::create_storage_with_eviction(&config.cache_dir, eviction_config.clone())?;
     let storage = Arc::new(storage);
+
+    // Spawn background eviction task
+    let eviction_handle = {
+        let bg_config = BackgroundEvictionConfig::from_eviction_config(eviction_config);
+        spawn_background_eviction(storage.clone(), bg_config)
+    };
+    info!("[fabrik] Background eviction task started");
 
     // Initialize P2P manager if enabled
     let p2p_manager = if let Some(ref fc) = file_config {
@@ -296,7 +304,11 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         info!("Received Ctrl+C, shutting down gracefully...");
     }
 
-    // Shutdown P2P services first
+    // Shutdown background eviction task first
+    info!("[fabrik] Shutting down background eviction task...");
+    eviction_handle.shutdown().await;
+
+    // Shutdown P2P services
     if let Some(p2p) = p2p_manager {
         if let Err(e) = p2p.shutdown().await {
             tracing::warn!("Failed to shutdown P2P services: {}", e);

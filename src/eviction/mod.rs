@@ -7,9 +7,10 @@
 //!
 //! ## Architecture
 //!
-//! Eviction is triggered:
-//! 1. **On PUT**: When cache size exceeds `max_size`, evict until under threshold
-//! 2. **Background task**: Periodic cleanup of expired TTL entries
+//! Eviction runs asynchronously in a background task:
+//! - Periodically checks cache size (default: every 30 seconds)
+//! - When cache exceeds `max_size`, evicts until 90% of max_size
+//! - Non-blocking: `put()` operations are never delayed by eviction
 //!
 //! ## Configuration
 //!
@@ -26,8 +27,14 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
 use tracing::{debug, info};
 
+mod background;
 mod policy;
 
+pub use background::{spawn_background_eviction, BackgroundEvictionConfig, EvictableStorage};
+
+// Re-export for public API (may be used by consumers)
+#[allow(unused_imports)]
+pub use background::BackgroundEvictionHandle;
 pub use policy::{EvictionCandidate, EvictionPolicy, LfuPolicy, LruPolicy, TtlPolicy};
 
 /// Eviction statistics
@@ -226,11 +233,13 @@ impl EvictionManager {
     }
 
     /// Get eviction statistics
+    #[allow(dead_code)]
     pub fn stats(&self) -> Arc<EvictionStats> {
         Arc::clone(&self.stats)
     }
 
     /// Get configuration
+    #[allow(dead_code)]
     pub fn config(&self) -> &EvictionConfig {
         &self.config
     }
@@ -251,6 +260,7 @@ impl EvictionManager {
     /// Select candidates for eviction using the configured policy
     ///
     /// Returns a list of (id, size) tuples to evict, ordered by eviction priority
+    #[allow(dead_code)]
     pub fn select_candidates(
         &self,
         candidates: &[EvictionCandidate],

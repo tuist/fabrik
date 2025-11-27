@@ -1,5 +1,5 @@
 use super::{Storage, StorageStats};
-use crate::eviction::{EvictionCandidate, EvictionConfig, EvictionManager};
+use crate::eviction::{EvictableStorage, EvictionCandidate, EvictionConfig, EvictionManager};
 use anyhow::{Context, Result};
 use crossbeam_channel::{bounded, Sender};
 use rocksdb::{IteratorMode, Options, DB};
@@ -92,6 +92,7 @@ pub struct FilesystemStorage {
     db: Arc<DB>,
     touch_sender: Sender<TouchMessage>,
     worker_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    #[allow(dead_code)]
     eviction_manager: Option<Arc<EvictionManager>>,
 }
 
@@ -100,6 +101,7 @@ impl FilesystemStorage {
     ///
     /// Opens RocksDB database with column families for metadata tracking.
     /// Spawns a background worker for batched access tracking.
+    #[allow(dead_code)]
     pub fn new<P: AsRef<Path>>(cache_dir: P) -> Result<Self> {
         Self::with_eviction(cache_dir, None)
     }
@@ -302,6 +304,7 @@ impl FilesystemStorage {
     /// configured policy until the cache is under the target size.
     ///
     /// Returns the number of objects evicted and total bytes freed.
+    #[allow(dead_code)]
     pub fn run_eviction_if_needed(&self) -> Result<(usize, u64)> {
         let Some(ref eviction_manager) = self.eviction_manager else {
             return Ok((0, 0));
@@ -370,6 +373,7 @@ impl FilesystemStorage {
     ///
     /// Unlike `run_eviction_if_needed`, this will evict objects even if
     /// the cache is under max_size.
+    #[allow(dead_code)]
     pub fn force_eviction(&self, bytes_to_free: u64) -> Result<(usize, u64)> {
         let Some(ref eviction_manager) = self.eviction_manager else {
             anyhow::bail!("Eviction manager not configured");
@@ -416,6 +420,7 @@ impl FilesystemStorage {
     }
 
     /// Get eviction statistics
+    #[allow(dead_code)]
     pub fn eviction_stats(&self) -> Option<(u64, u64, u64)> {
         self.eviction_manager.as_ref().map(|m| {
             let stats = m.stats();
@@ -428,8 +433,32 @@ impl FilesystemStorage {
     }
 
     /// Check if eviction is enabled
+    #[allow(dead_code)]
     pub fn has_eviction(&self) -> bool {
         self.eviction_manager.is_some()
+    }
+
+    /// Get the objects directory path
+    #[allow(dead_code)]
+    pub fn objects_dir(&self) -> &Path {
+        &self.objects_dir
+    }
+}
+
+/// Implementation of EvictableStorage for background eviction
+impl EvictableStorage for FilesystemStorage {
+    fn current_size(&self) -> Result<u64> {
+        let stats = self.stats()?;
+        Ok(stats.total_bytes)
+    }
+
+    fn get_eviction_candidates(&self) -> Result<Vec<EvictionCandidate>> {
+        // Call the existing method
+        FilesystemStorage::get_eviction_candidates(self)
+    }
+
+    fn delete_object(&self, id: &[u8]) -> Result<()> {
+        self.delete(id)
     }
 }
 
@@ -474,14 +503,9 @@ impl Drop for FilesystemStorage {
 
 impl Storage for FilesystemStorage {
     fn put(&self, id: &[u8], data: &[u8]) -> Result<()> {
-        // Check if eviction is needed before adding new data
-        // This ensures we don't exceed max_size
-        if let Err(e) = self.run_eviction_if_needed() {
-            warn!(
-                "[fabrik] Eviction check failed (continuing with put): {}",
-                e
-            );
-        }
+        // Note: Eviction is handled by a background task (spawn_background_eviction)
+        // to avoid blocking put() operations. The background task periodically
+        // checks cache size and evicts objects according to the configured policy.
 
         let path = self.id_to_path(id);
 

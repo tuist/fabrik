@@ -13,7 +13,7 @@ use crate::bazel::{
 };
 use crate::cli::ExecArgs;
 use crate::config_discovery::populate_build_tool_env_vars;
-use crate::eviction::EvictionConfig;
+use crate::eviction::{spawn_background_eviction, BackgroundEvictionConfig, EvictionConfig};
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
 use crate::storage;
@@ -46,8 +46,16 @@ pub async fn run(args: ExecArgs) -> Result<()> {
     )?;
 
     // Initialize shared storage backend with eviction
-    let storage = storage::create_storage_with_eviction(&config.cache_dir, eviction_config)?;
+    let storage =
+        storage::create_storage_with_eviction(&config.cache_dir, eviction_config.clone())?;
     let storage = Arc::new(storage);
+
+    // Spawn background eviction task
+    let eviction_handle = {
+        let bg_config = BackgroundEvictionConfig::from_eviction_config(eviction_config);
+        spawn_background_eviction(storage.clone(), bg_config)
+    };
+    info!("[fabrik] Background eviction task started");
 
     // Start HTTP server (for Metro, Gradle, Nx, TurboRepo)
     let http_storage = storage.clone();
@@ -165,9 +173,13 @@ pub async fn run(args: ExecArgs) -> Result<()> {
     }
 
     // Shutdown servers
-    info!("Shutting down cache servers...");
+    info!("[fabrik] Shutting down cache servers...");
     http_handle.abort();
     grpc_handle.abort();
+
+    // Shutdown background eviction task
+    info!("[fabrik] Shutting down background eviction task...");
+    eviction_handle.shutdown().await;
 
     // Give them a moment to cleanup
     tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;

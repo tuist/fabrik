@@ -61,10 +61,14 @@ default_ttl = "7d"  # Evict objects older than 7 days
 
 ## How Eviction Works
 
-1. **Trigger**: Eviction runs automatically when a `put()` operation would cause the cache to exceed `max_size`
-2. **Target**: Fabrik evicts until the cache is at 90% of `max_size` (configurable via `target_ratio`)
-3. **Selection**: Objects are selected based on the configured policy
-4. **Batch Processing**: Up to 1000 objects are evicted per run to avoid blocking
+Eviction runs **asynchronously in a background task**, ensuring that `put()` operations are never blocked by eviction:
+
+1. **Background Task**: A dedicated tokio task periodically checks cache size (default: every 30 seconds)
+2. **Trigger**: When cache exceeds `max_size`, the background task evicts objects
+3. **Target**: Fabrik evicts until the cache is at 90% of `max_size` (configurable via `target_ratio`)
+4. **Selection**: Objects are selected based on the configured policy
+5. **Batch Processing**: Up to 1000 objects are evicted per run to avoid overwhelming the system
+6. **Non-blocking**: `put()` operations proceed immediately without waiting for eviction
 
 ### Metadata Tracking
 
@@ -148,7 +152,7 @@ FabrikCache* cache = fabrik_cache_init_with_eviction(
 4. **Consider TTL for compliance**: Use TTL policy when you need predictable cache expiration
 
 > [!NOTE]
-> Eviction is triggered only on `put()` operations. To force immediate eviction, you can use the admin API (if enabled) or restart the daemon.
+> Eviction runs asynchronously in the background every 30 seconds. The cache may temporarily exceed `max_size` between eviction runs.
 
 > [!WARNING]
 > Setting `max_size` too low may cause frequent eviction and reduce cache hit rates. Monitor your cache performance after changing eviction settings.

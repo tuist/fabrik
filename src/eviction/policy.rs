@@ -29,6 +29,7 @@ pub trait EvictionPolicy: Send + Sync {
 
     /// Filter candidates that should be considered for eviction
     /// Default: consider all candidates
+    #[allow(dead_code)]
     fn filter_candidates(&self, candidates: &[EvictionCandidate]) -> Vec<EvictionCandidate> {
         candidates.to_vec()
     }
@@ -74,6 +75,7 @@ impl EvictionPolicy for LfuPolicy {
 #[derive(Debug)]
 pub struct TtlPolicy {
     /// TTL in seconds
+    #[allow(dead_code)]
     ttl_secs: u64,
 }
 
@@ -89,6 +91,7 @@ impl TtlPolicy {
             .as_secs() as i64
     }
 
+    #[allow(dead_code)]
     fn is_expired(&self, created_at: i64) -> bool {
         let now = Self::current_timestamp();
         let age = now - created_at;

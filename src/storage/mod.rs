@@ -51,6 +51,7 @@ pub struct StorageStats {
 ///
 /// Currently only supports filesystem storage. Future versions may add
 /// support for cloud storage backends (S3, GCS, etc.)
+#[allow(dead_code)]
 pub fn create_storage(cache_dir: &str) -> Result<FilesystemStorage> {
     info!("[fabrik] Initializing storage backend: filesystem");
     info!("[fabrik] Cache directory: {}", cache_dir);
