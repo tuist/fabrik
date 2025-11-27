@@ -242,9 +242,12 @@ mod tests {
         let recipe = RemoteRecipe::parse("@tuist/recipes/build.js@v1.0.0").unwrap();
         let cache_dir = recipe.cache_dir().unwrap();
 
-        // Should end with: fabrik/recipes/github.com/tuist/recipes/v1.0.0
-        assert!(cache_dir
-            .to_string_lossy()
-            .contains("fabrik/recipes/github.com/tuist/recipes/v1.0.0"));
+        // Should contain these path components (cross-platform)
+        let cache_dir_str = cache_dir.to_string_lossy();
+        assert!(cache_dir_str.contains("fabrik"));
+        assert!(cache_dir_str.contains("recipes"));
+        assert!(cache_dir_str.contains("github.com"));
+        assert!(cache_dir_str.contains("tuist"));
+        assert!(cache_dir_str.contains("v1.0.0"));
     }
 }
