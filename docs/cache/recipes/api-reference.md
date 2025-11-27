@@ -25,6 +25,138 @@ These modules provide Fabrik-specific functionality:
 
 ---
 
+## Fabrik Global Object
+
+The `Fabrik` global object is automatically available in all recipes and provides core functionality for file operations, process execution, and caching.
+
+### `Fabrik.readFile(path)`
+
+Read a file as a byte array.
+
+**Parameters:**
+- `path` (string): Path to the file
+
+**Returns:**
+- `Promise<Uint8Array>`: File contents as bytes
+
+**Example:**
+```javascript
+const data = await Fabrik.readFile("config.json");
+const text = new TextDecoder().decode(data);
+```
+
+---
+
+### `Fabrik.writeFile(path, data)`
+
+Write data to a file.
+
+**Parameters:**
+- `path` (string): Path to the file
+- `data` (Uint8Array): Data to write
+
+**Returns:**
+- `Promise<void>`
+
+**Example:**
+```javascript
+const data = new TextEncoder().encode("Hello World");
+await Fabrik.writeFile("output.txt", data);
+```
+
+---
+
+### `Fabrik.exists(path)`
+
+Check if a file or directory exists.
+
+**Parameters:**
+- `path` (string): Path to check
+
+**Returns:**
+- `Promise<boolean>`: `true` if exists, `false` otherwise
+
+**Example:**
+```javascript
+if (await Fabrik.exists("dist/")) {
+  console.log("Build output exists");
+}
+```
+
+---
+
+### `Fabrik.glob(pattern)`
+
+Find files matching a glob pattern.
+
+**Parameters:**
+- `pattern` (string): Glob pattern
+
+**Returns:**
+- `Promise<string[]>`: Array of matching file paths
+
+**Example:**
+```javascript
+const tsFiles = await Fabrik.glob("src/**/*.ts");
+console.log(`Found ${tsFiles.length} TypeScript files`);
+```
+
+---
+
+### `Fabrik.exec(command, args)`
+
+Execute a command and return the exit code.
+
+**Parameters:**
+- `command` (string): Command to execute
+- `args` (string[], optional): Command arguments
+
+**Returns:**
+- `Promise<number>`: Exit code (0 = success)
+
+**Example:**
+```javascript
+const exitCode = await Fabrik.exec("npm", ["run", "build"]);
+if (exitCode !== 0) {
+  throw new Error(`Build failed with exit code ${exitCode}`);
+}
+```
+
+> [!TIP]
+> For commands that need stdout/stderr capture, use LLRT's `child_process` module.
+
+---
+
+### `Fabrik.hashFile(path)`
+
+Compute SHA256 hash of a file.
+
+**Parameters:**
+- `path` (string): Path to the file
+
+**Returns:**
+- `Promise<string>`: SHA256 hash as hex string (64 characters)
+
+**Example:**
+```javascript
+const hash = await Fabrik.hashFile("package-lock.json");
+console.log(`Package lock hash: ${hash.slice(0, 8)}`);
+```
+
+---
+
+### `Fabrik.cache`
+
+Low-level cache operations object. Contains:
+- `Fabrik.cache.get(hash)` - Get artifact from cache
+- `Fabrik.cache.put(hash, data)` - Store artifact in cache
+- `Fabrik.cache.has(hash)` - Check if artifact exists
+
+> [!NOTE]
+> These are low-level APIs. Most recipes should use `runCached()` from `fabrik:cache` instead.
+
+---
+
 ## fabrik:cache
 
 Content-addressed caching APIs for recipe optimization.
@@ -54,13 +186,15 @@ Run an action only if cache miss. Automatically handles cache checking, action e
 **Example:**
 
 ```javascript
-import { spawn } from 'child_process';
 import { runCached } from 'fabrik:cache';
 
 const result = await runCached(
   async () => {
     // Build logic (only runs on cache miss)
-    await spawn("npm", ["run", "build"]);
+    const exitCode = await Fabrik.exec("npm", ["run", "build"]);
+    if (exitCode !== 0) {
+      throw new Error("Build failed");
+    }
   },
   {
     inputs: ["src/**/*.ts", "tsconfig.json"],
@@ -98,7 +232,6 @@ Check if action needs to run based on cache state. Useful when you want to contr
 **Example:**
 
 ```javascript
-import { spawn } from 'child_process';
 import { needsRun } from 'fabrik:cache';
 
 const shouldRun = await needsRun({
@@ -108,7 +241,10 @@ const shouldRun = await needsRun({
 
 if (shouldRun) {
   console.log("Source changed, rebuilding...");
-  await spawn("cargo", ["build", "--release"]);
+  const exitCode = await Fabrik.exec("cargo", ["build", "--release"]);
+  if (exitCode !== 0) {
+    throw new Error("Build failed");
+  }
 } else {
   console.log("Nothing changed, skipping build");
 }
@@ -180,7 +316,7 @@ const previousHash = "abc123..."; // Stored somewhere
 
 if (currentHash !== previousHash) {
   console.log("Dependencies changed, reinstalling...");
-  await spawn("npm", ["install"]);
+  await Fabrik.exec("npm", ["install"]);
 }
 
 // Use hash as cache key component
@@ -330,25 +466,34 @@ await mkdir("build", { recursive: true });
 
 ### child_process (Process Spawning)
 
+> [!NOTE]
+> LLRT's `child_process` module is provided for Node.js compatibility but may have different behavior than Node.js. For simpler process execution, consider using the global `Fabrik.exec()` function.
+
 ```javascript
 import { spawn } from 'child_process';
 
-// Spawn process
-const result = await spawn("npm", ["install"]);
+// Spawn process using LLRT's child_process module
+// See LLRT documentation for exact API behavior
+const child = spawn("npm", ["install"]);
+```
 
-if (result.exitCode === 0) {
+**Alternative: Fabrik.exec() (recommended)**
+
+The global `Fabrik.exec()` function provides simpler process execution:
+
+```javascript
+// Simpler process execution via Fabrik global
+const exitCode = await Fabrik.exec("npm", ["install"]);
+
+if (exitCode === 0) {
   console.log("Command succeeded");
-  console.log("stdout:", result.stdout);
 } else {
-  console.error("Command failed:", result.stderr);
-  throw new Error(`Exit code: ${result.exitCode}`);
+  throw new Error(`Command failed with exit code: ${exitCode}`);
 }
 ```
 
-**Result object:**
-- `exitCode` (number): Process exit code
-- `stdout` (string): Standard output
-- `stderr` (string): Standard error
+> [!TIP]
+> `Fabrik.exec()` currently returns only the exit code. Support for capturing stdout/stderr may be added in a future release.
 
 ---
 
@@ -435,7 +580,6 @@ Here's a comprehensive recipe using multiple APIs:
 
 ```javascript
 import { existsSync } from 'fs';
-import { spawn } from 'child_process';
 import { join } from 'path';
 import { runCached, needsRun } from 'fabrik:cache';
 import { glob, hashFile } from 'fabrik:fs';
@@ -455,16 +599,19 @@ const depsChanged = await needsRun({
 
 if (depsChanged) {
   console.log("Installing dependencies...");
-  await spawn("npm", ["install"]);
+  const exitCode = await Fabrik.exec("npm", ["install"]);
+  if (exitCode !== 0) {
+    throw new Error("npm install failed");
+  }
 }
 
 // Build TypeScript (with caching)
 const buildResult = await runCached(
   async () => {
     console.log("Compiling TypeScript...");
-    const result = await spawn("npm", ["run", "build"]);
-    
-    if (result.exitCode !== 0) {
+    const exitCode = await Fabrik.exec("npm", ["run", "build"]);
+
+    if (exitCode !== 0) {
       throw new Error("TypeScript compilation failed");
     }
   },
