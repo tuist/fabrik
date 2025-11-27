@@ -8,8 +8,7 @@ use std::time::Instant;
 
 use crate::cli::RunArgs;
 use crate::cli_utils::fabrik_prefix;
-use crate::recipe::{RecipeExecutor, RemoteRecipe};
-use crate::script::{
+use crate::recipe::{
     annotations::parse_annotations,
     cache::{create_metadata, ScriptCache},
     cache_key::compute_cache_key,
@@ -17,6 +16,7 @@ use crate::script::{
     executor::ScriptExecutor,
     outputs::{archive_outputs, extract_outputs},
 };
+use crate::recipe_portable::{RecipeExecutor, RemoteRecipe};
 use crate::storage::default_cache_dir;
 
 pub async fn run(args: &RunArgs) -> Result<()> {
@@ -287,14 +287,14 @@ pub async fn run(args: &RunArgs) -> Result<()> {
         }
 
         // Create metadata
-        let metadata = create_metadata(crate::script::cache::CreateMetadataParams {
+        let metadata = create_metadata(crate::recipe::CreateMetadataParams {
             cache_key: cache_key.clone(),
             script_path,
             exit_code: result.exit_code,
             duration: result.duration,
             runtime: annotations.runtime.clone(),
             runtime_version: if annotations.runtime_version {
-                crate::script::inputs::get_runtime_version(&annotations.runtime).ok()
+                crate::recipe::inputs::get_runtime_version(&annotations.runtime).ok()
             } else {
                 None
             },
@@ -336,7 +336,7 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 /// Execute script without caching
 fn execute_script_no_cache(
     script_path: &Path,
-    annotations: &crate::script::ScriptAnnotations,
+    annotations: &crate::recipe::ScriptAnnotations,
     args: &[String],
     verbose: bool,
 ) -> Result<()> {

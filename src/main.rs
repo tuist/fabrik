@@ -11,8 +11,8 @@ mod http;
 mod logging;
 mod merger;
 mod p2p; // P2P cache sharing
-mod recipe; // Portable recipes (QuickJS/JavaScript)
-mod script;
+mod recipe; // Standard recipes (script caching with KDL annotations)
+mod recipe_portable; // Portable recipes (QuickJS/JavaScript)
 mod storage;
 mod xcode;
 mod xdg;
