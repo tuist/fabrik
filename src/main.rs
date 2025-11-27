@@ -7,6 +7,7 @@ mod commands;
 mod config;
 mod config_discovery;
 mod config_expansion; // Environment variable expansion for config files
+mod eviction; // Cache eviction policies (LRU, LFU, TTL)
 mod http;
 mod logging;
 mod merger;

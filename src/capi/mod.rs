@@ -20,6 +20,7 @@ use std::os::raw::{c_char, c_int};
 use std::ptr;
 use std::sync::Mutex;
 
+use crate::eviction::EvictionConfig;
 use crate::storage::{FilesystemStorage, Storage};
 
 // Thread-local error storage
@@ -86,7 +87,85 @@ pub unsafe extern "C" fn fabrik_cache_init(cache_dir: *const c_char) -> *mut Fab
         }
     };
 
-    match FilesystemStorage::new(cache_dir_str) {
+    // Use default eviction config (5GB, LFU policy, 7 days TTL)
+    let eviction_config = EvictionConfig::default();
+    match FilesystemStorage::with_eviction(cache_dir_str, Some(eviction_config)) {
+        Ok(storage) => Box::into_raw(Box::new(FabrikCache { storage })),
+        Err(e) => {
+            set_last_error(format!("Failed to initialize cache: {}", e));
+            ptr::null_mut()
+        }
+    }
+}
+
+/// Initialize a new Fabrik cache instance with custom eviction settings
+///
+/// # Arguments
+/// * `cache_dir` - Path to cache directory (NULL-terminated C string)
+/// * `max_size_bytes` - Maximum cache size in bytes (0 for default: 5GB)
+/// * `eviction_policy` - Eviction policy: 0=LRU, 1=LFU, 2=TTL (default: LFU)
+/// * `ttl_seconds` - Default TTL in seconds (0 for default: 7 days)
+///
+/// # Returns
+/// * Pointer to FabrikCache on success
+/// * NULL on error (use `fabrik_last_error()` to get error message)
+///
+/// # Safety
+/// * `cache_dir` must be a valid NULL-terminated C string
+/// * Returned pointer must be freed with `fabrik_cache_free()`
+#[no_mangle]
+pub unsafe extern "C" fn fabrik_cache_init_with_eviction(
+    cache_dir: *const c_char,
+    max_size_bytes: u64,
+    eviction_policy: c_int,
+    ttl_seconds: u64,
+) -> *mut FabrikCache {
+    clear_last_error();
+
+    if cache_dir.is_null() {
+        set_last_error("cache_dir is NULL");
+        return ptr::null_mut();
+    }
+
+    let cache_dir_str = match CStr::from_ptr(cache_dir).to_str() {
+        Ok(s) => s,
+        Err(e) => {
+            set_last_error(format!("Invalid UTF-8 in cache_dir: {}", e));
+            return ptr::null_mut();
+        }
+    };
+
+    use crate::eviction::EvictionPolicyType;
+
+    let policy = match eviction_policy {
+        0 => EvictionPolicyType::Lru,
+        1 => EvictionPolicyType::Lfu,
+        2 => EvictionPolicyType::Ttl,
+        _ => {
+            set_last_error(format!(
+                "Invalid eviction policy: {}. Must be 0 (LRU), 1 (LFU), or 2 (TTL)",
+                eviction_policy
+            ));
+            return ptr::null_mut();
+        }
+    };
+
+    let eviction_config = EvictionConfig {
+        max_size_bytes: if max_size_bytes == 0 {
+            5 * 1024 * 1024 * 1024
+        } else {
+            max_size_bytes
+        },
+        policy,
+        default_ttl_secs: if ttl_seconds == 0 {
+            7 * 24 * 60 * 60
+        } else {
+            ttl_seconds
+        },
+        ..EvictionConfig::default()
+    };
+
+    match FilesystemStorage::with_eviction(cache_dir_str, Some(eviction_config)) {
         Ok(storage) => Box::into_raw(Box::new(FabrikCache { storage })),
         Err(e) => {
             set_last_error(format!("Failed to initialize cache: {}", e));

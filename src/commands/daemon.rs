@@ -12,6 +12,7 @@ use crate::bazel::{
 };
 use crate::cli::DaemonArgs;
 use crate::config::FabrikConfig;
+use crate::eviction::EvictionConfig;
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
 use crate::storage;
@@ -74,21 +75,30 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     // Check if Unix socket is configured (for Xcode)
     let socket_path = file_config.as_ref().and_then(|fc| fc.daemon.socket.clone());
 
-    info!("Starting Fabrik daemon mode");
-    info!("Configuration:");
-    info!("  Cache directory: {}", config.cache_dir);
-    info!("  Max cache size: {}", config.max_cache_size);
-    info!("  Upstream: {:?}", config.upstream);
+    info!("[fabrik] Starting daemon mode");
+    info!("[fabrik] Configuration:");
+    info!("[fabrik]   Cache directory: {}", config.cache_dir);
+    info!("[fabrik]   Max cache size: {}", config.max_cache_size);
+    info!("[fabrik]   Eviction policy: {}", config.eviction_policy);
+    info!("[fabrik]   Default TTL: {}", config.default_ttl);
+    info!("[fabrik]   Upstream: {:?}", config.upstream);
 
     if let Some(ref socket) = socket_path {
-        info!("  Mode: Unix socket (Xcode)");
-        info!("  Socket path: {}", socket);
+        info!("[fabrik]   Mode: Unix socket (Xcode)");
+        info!("[fabrik]   Socket path: {}", socket);
     } else {
-        info!("  Mode: TCP (HTTP + gRPC)");
+        info!("[fabrik]   Mode: TCP (HTTP + gRPC)");
     }
 
-    // Initialize shared storage backend
-    let storage = storage::create_storage(&config.cache_dir)?;
+    // Initialize eviction configuration from merged config
+    let eviction_config = EvictionConfig::from_cache_config(
+        &config.max_cache_size,
+        &config.eviction_policy,
+        &config.default_ttl,
+    )?;
+
+    // Initialize shared storage backend with eviction
+    let storage = storage::create_storage_with_eviction(&config.cache_dir, eviction_config)?;
     let storage = Arc::new(storage);
 
     // Initialize P2P manager if enabled

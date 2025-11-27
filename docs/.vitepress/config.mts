@@ -25,6 +25,7 @@ export default defineConfig({
       {
         text: "Cache",
         items: [
+          { text: "Eviction", link: "/cache/eviction" },
           { text: "Peer to Peer", link: "/cache/p2p" },
           {
             text: "Build Systems",

@@ -8,6 +8,7 @@ pub mod cli_utils;
 pub mod config;
 pub mod config_discovery;
 pub mod config_expansion; // Environment variable expansion for config files
+pub mod eviction; // Cache eviction policies (LRU, LFU, TTL)
 pub mod logging;
 pub mod p2p; // P2P cache sharing
 pub mod recipe; // Script recipes with content-addressed caching (bash, node, python, etc.)
@@ -19,5 +20,8 @@ pub mod xdg;
 pub use auth::AuthProvider;
 pub use config::FabrikConfig;
 pub use config_discovery::{discover_config, hash_config, DaemonState};
+pub use eviction::{EvictionConfig, EvictionManager, EvictionPolicyType};
 pub use recipe_portable::RecipeExecutor;
-pub use storage::{create_storage, default_cache_dir, FilesystemStorage, Storage};
+pub use storage::{
+    create_storage, create_storage_with_eviction, default_cache_dir, FilesystemStorage, Storage,
+};

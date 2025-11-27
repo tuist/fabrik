@@ -3,6 +3,7 @@ use std::sync::Arc;
 use tracing::info;
 
 use crate::cli::ServerArgs;
+use crate::eviction::EvictionConfig;
 use crate::merger::MergedServerConfig;
 use crate::storage::FilesystemStorage;
 use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
@@ -18,16 +19,28 @@ pub async fn run(args: ServerArgs) -> Result<()> {
     // Merge configuration
     let config = MergedServerConfig::merge(&args, file_config);
 
-    info!("Starting Fabrik server mode");
-    info!("Configuration:");
-    info!("  Cache directory: {}", config.cache_dir);
-    info!("  Max cache size: {}", config.max_cache_size);
-    info!("  Upstream: {:?}", config.upstream);
-    info!("  gRPC bind: {}", config.grpc_bind);
+    info!("[fabrik] Starting server mode");
+    info!("[fabrik] Configuration:");
+    info!("[fabrik]   Cache directory: {}", config.cache_dir);
+    info!("[fabrik]   Max cache size: {}", config.max_cache_size);
+    info!("[fabrik]   Eviction policy: {}", config.eviction_policy);
+    info!("[fabrik]   Default TTL: {}", config.default_ttl);
+    info!("[fabrik]   Upstream: {:?}", config.upstream);
+    info!("[fabrik]   gRPC bind: {}", config.grpc_bind);
 
-    // Initialize filesystem storage
-    info!("Initializing storage at {}", config.cache_dir);
-    let storage = Arc::new(FilesystemStorage::new(&config.cache_dir)?);
+    // Initialize eviction configuration
+    let eviction_config = EvictionConfig::from_cache_config(
+        &config.max_cache_size,
+        &config.eviction_policy,
+        &config.default_ttl,
+    )?;
+
+    // Initialize filesystem storage with eviction
+    info!("[fabrik] Initializing storage at {}", config.cache_dir);
+    let storage = Arc::new(FilesystemStorage::with_eviction(
+        &config.cache_dir,
+        Some(eviction_config),
+    )?);
 
     // Create gRPC services
     let cas_service = CasService::new(storage.clone());

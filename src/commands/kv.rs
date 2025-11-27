@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::cli::{KvArgs, KvCommand};
 use crate::cli_utils::fabrik_prefix;
+use crate::eviction::EvictionConfig;
 use crate::storage::{default_cache_dir, FilesystemStorage, Storage};
 
 // JSON output structures
@@ -48,7 +49,9 @@ pub async fn run(args: &KvArgs) -> Result<()> {
         .map(std::path::PathBuf::from)
         .unwrap_or_else(default_cache_dir);
 
-    let storage = FilesystemStorage::new(&cache_dir)?;
+    // Use default eviction config for CLI commands
+    let eviction_config = EvictionConfig::default();
+    let storage = FilesystemStorage::with_eviction(&cache_dir, Some(eviction_config))?;
 
     match &args.command {
         KvCommand::Get {

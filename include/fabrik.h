@@ -96,6 +96,7 @@
  - Async batched access tracking (touch operations)
  - Snappy compression for metadata
  - Column families for efficient indexing (LRU/LFU eviction)
+ - Automatic eviction when cache exceeds max_size
  */
 typedef struct FabrikFilesystemStorage FabrikFilesystemStorage;
 
@@ -121,6 +122,29 @@ typedef struct FabrikFabrikCache {
  * Returned pointer must be freed with `fabrik_cache_free()`
  */
 fabrik_ struct FabrikFabrikCache *fabrik_cache_init(const char *aCacheDir);
+
+/*
+ Initialize a new Fabrik cache instance with custom eviction settings
+
+ # Arguments
+ * `cache_dir` - Path to cache directory (NULL-terminated C string)
+ * `max_size_bytes` - Maximum cache size in bytes (0 for default: 5GB)
+ * `eviction_policy` - Eviction policy: 0=LRU, 1=LFU, 2=TTL (default: LFU)
+ * `ttl_seconds` - Default TTL in seconds (0 for default: 7 days)
+
+ # Returns
+ * Pointer to FabrikCache on success
+ * NULL on error (use `fabrik_last_error()` to get error message)
+
+ # Safety
+ * `cache_dir` must be a valid NULL-terminated C string
+ * Returned pointer must be freed with `fabrik_cache_free()`
+ */
+fabrik_
+struct FabrikFabrikCache *fabrik_cache_init_with_eviction(const char *aCacheDir,
+                                                          uint64_t aMaxSizeBytes,
+                                                          int aEvictionPolicy,
+                                                          uint64_t aTtlSeconds);
 
 /*
  Free a Fabrik cache instance

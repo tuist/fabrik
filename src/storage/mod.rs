@@ -5,6 +5,7 @@ pub mod filesystem;
 pub use cache_dir::default_cache_dir;
 pub use filesystem::FilesystemStorage;
 
+use crate::eviction::EvictionConfig;
 use anyhow::Result;
 use std::path::PathBuf;
 use tracing::info;
@@ -46,14 +47,32 @@ pub struct StorageStats {
     pub cache_dir: PathBuf,
 }
 
-/// Create storage backend
+/// Create storage backend without eviction
 ///
 /// Currently only supports filesystem storage. Future versions may add
 /// support for cloud storage backends (S3, GCS, etc.)
 pub fn create_storage(cache_dir: &str) -> Result<FilesystemStorage> {
-    info!("Initializing storage backend: filesystem");
-    info!("Cache directory: {}", cache_dir);
+    info!("[fabrik] Initializing storage backend: filesystem");
+    info!("[fabrik] Cache directory: {}", cache_dir);
     FilesystemStorage::new(cache_dir)
+}
+
+/// Create storage backend with eviction configuration
+///
+/// When eviction config is provided, the storage will automatically
+/// evict objects when the cache exceeds `max_size`.
+pub fn create_storage_with_eviction(
+    cache_dir: &str,
+    eviction_config: EvictionConfig,
+) -> Result<FilesystemStorage> {
+    info!("[fabrik] Initializing storage backend: filesystem");
+    info!("[fabrik] Cache directory: {}", cache_dir);
+    info!(
+        "[fabrik] Eviction enabled: policy={}, max_size={}MB",
+        eviction_config.policy.as_str(),
+        eviction_config.max_size_bytes / (1024 * 1024)
+    );
+    FilesystemStorage::with_eviction(cache_dir, Some(eviction_config))
 }
 
 #[cfg(test)]
