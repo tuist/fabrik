@@ -116,15 +116,12 @@ impl RemoteRecipe {
 
         // If already cached and script exists, return immediately
         if script_path.exists() {
-            tracing::debug!(
-                "[fabrik] Remote recipe already cached: {}",
-                script_path.display()
-            );
+            tracing::debug!("Remote recipe already cached: {}", script_path.display());
             return Ok(script_path);
         }
 
         tracing::info!(
-            "[fabrik] Fetching remote recipe: {} from {}",
+            "Fetching remote recipe: {} from {}",
             self.path,
             self.git_url()
         );
@@ -164,7 +161,7 @@ impl RemoteRecipe {
             return Err(anyhow!("Script not found at {} in repository", self.path));
         }
 
-        tracing::info!("[fabrik] Remote recipe fetched successfully");
+        tracing::info!("Remote recipe fetched successfully");
 
         Ok(script_path)
     }

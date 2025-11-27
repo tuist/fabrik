@@ -12,6 +12,7 @@ use crate::bazel::{
 };
 use crate::cli::DaemonArgs;
 use crate::config::FabrikConfig;
+use crate::eviction::{spawn_background_eviction, BackgroundEvictionConfig, EvictionConfig};
 use crate::http::HttpServer;
 use crate::merger::MergedExecConfig;
 use crate::storage;
@@ -74,10 +75,12 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     // Check if Unix socket is configured (for Xcode)
     let socket_path = file_config.as_ref().and_then(|fc| fc.daemon.socket.clone());
 
-    info!("Starting Fabrik daemon mode");
+    info!("Starting daemon mode");
     info!("Configuration:");
     info!("  Cache directory: {}", config.cache_dir);
     info!("  Max cache size: {}", config.max_cache_size);
+    info!("  Eviction policy: {}", config.eviction_policy);
+    info!("  Default TTL: {}", config.default_ttl);
     info!("  Upstream: {:?}", config.upstream);
 
     if let Some(ref socket) = socket_path {
@@ -87,17 +90,32 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         info!("  Mode: TCP (HTTP + gRPC)");
     }
 
-    // Initialize shared storage backend
-    let storage = storage::create_storage(&config.cache_dir)?;
+    // Initialize eviction configuration from merged config
+    let eviction_config = EvictionConfig::from_cache_config(
+        &config.max_cache_size,
+        &config.eviction_policy,
+        &config.default_ttl,
+    )?;
+
+    // Initialize shared storage backend with eviction
+    let storage =
+        storage::create_storage_with_eviction(&config.cache_dir, eviction_config.clone())?;
     let storage = Arc::new(storage);
+
+    // Spawn background eviction task
+    let eviction_handle = {
+        let bg_config = BackgroundEvictionConfig::from_eviction_config(eviction_config);
+        spawn_background_eviction(storage.clone(), bg_config)
+    };
+    info!("Background eviction task started");
 
     // Initialize P2P manager if enabled
     let p2p_manager = if let Some(ref fc) = file_config {
         if fc.p2p.enabled {
-            info!("[fabrik] P2P cache sharing is enabled");
+            info!("P2P cache sharing is enabled");
             let p2p = crate::p2p::P2PManager::new(fc.p2p.clone()).await?;
             p2p.start().await?;
-            info!("[fabrik] P2P services started successfully");
+            info!("P2P services started successfully");
             Some(Arc::new(p2p))
         } else {
             None
@@ -286,7 +304,11 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         info!("Received Ctrl+C, shutting down gracefully...");
     }
 
-    // Shutdown P2P services first
+    // Shutdown background eviction task first
+    info!("Shutting down background eviction task...");
+    eviction_handle.shutdown().await;
+
+    // Shutdown P2P services
     if let Some(p2p) = p2p_manager {
         if let Err(e) = p2p.shutdown().await {
             tracing::warn!("Failed to shutdown P2P services: {}", e);

@@ -41,7 +41,7 @@ impl ScriptExecutor {
 
         if self.verbose {
             eprintln!(
-                "[fabrik] Executing: {} {} {}",
+                "Executing: {} {} {}",
                 annotations.runtime,
                 script_path.display(),
                 args.join(" ")
@@ -52,7 +52,7 @@ impl ScriptExecutor {
         let runtime_path = which::which(&annotations.runtime).unwrap_or_else(|e| {
             if self.verbose {
                 eprintln!(
-                    "[fabrik] Warning: Could not find '{}' in PATH: {}. Trying as-is.",
+                    "Warning: Could not find '{}' in PATH: {}. Trying as-is.",
                     annotations.runtime, e
                 );
             }
@@ -61,7 +61,7 @@ impl ScriptExecutor {
         });
 
         if self.verbose {
-            eprintln!("[fabrik] Using runtime: {}", runtime_path.display());
+            eprintln!("Using runtime: {}", runtime_path.display());
         }
 
         let mut cmd = Command::new(&runtime_path);
@@ -109,7 +109,7 @@ impl ScriptExecutor {
         }
 
         if self.verbose {
-            eprintln!("[fabrik] Command: {:?}", cmd);
+            eprintln!("Command: {:?}", cmd);
         }
 
         // Spawn process
@@ -155,7 +155,7 @@ impl ScriptExecutor {
 
         if self.verbose {
             eprintln!(
-                "[fabrik] Completed in {:.2}s with exit code {}",
+                "Completed in {:.2}s with exit code {}",
                 duration.as_secs_f64(),
                 exit_code
             );

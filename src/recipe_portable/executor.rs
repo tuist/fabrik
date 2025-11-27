@@ -22,7 +22,7 @@ impl RecipeExecutor {
     /// Recipes are plain JavaScript files that run from top to bottom.
     /// They should NOT export functions - all logic is at the root level.
     pub async fn execute(&self) -> Result<()> {
-        tracing::info!("[fabrik] Executing recipe: {:?}", self.recipe_path);
+        tracing::info!("Executing recipe: {:?}", self.recipe_path);
 
         // Read recipe file
         let recipe_code = tokio::fs::read_to_string(&self.recipe_path).await?;
@@ -49,7 +49,7 @@ impl RecipeExecutor {
         })
         .await?;
 
-        tracing::info!("[fabrik] Recipe completed successfully");
+        tracing::info!("Recipe completed successfully");
 
         Ok(())
     }

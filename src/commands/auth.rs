@@ -7,7 +7,7 @@ use crate::config::FabrikConfig;
 
 /// Login with OAuth2
 pub async fn login(config: FabrikConfig) -> Result<()> {
-    tracing::info!("[fabrik] Authenticating with OAuth2");
+    tracing::info!("Authenticating with OAuth2");
 
     let provider = AuthProvider::new(config.auth, config.url)
         .context("Failed to initialize authentication provider")?;
@@ -103,7 +103,7 @@ pub async fn token(config: FabrikConfig) -> Result<()> {
             Ok(())
         }
         Err(e) => {
-            eprintln!("[fabrik] Error: {}", e);
+            eprintln!("Error: {}", e);
             anyhow::bail!("Failed to get token");
         }
     }

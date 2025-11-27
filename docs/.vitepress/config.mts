@@ -25,6 +25,7 @@ export default defineConfig({
       {
         text: "Cache",
         items: [
+          { text: "Eviction", link: "/cache/eviction" },
           { text: "Peer to Peer", link: "/cache/p2p" },
           {
             text: "Build Systems",
@@ -104,6 +105,7 @@ export default defineConfig({
           { text: "CLI Commands", link: "/reference/cli" },
           { text: "Configuration File", link: "/reference/config-file" },
           { text: "API Reference", link: "/reference/api" },
+          { text: "C API", link: "/reference/c-api" },
         ],
       },
     ],

@@ -1,15 +1,16 @@
 use super::{Storage, StorageStats};
+use crate::eviction::{EvictableStorage, EvictionCandidate, EvictionConfig, EvictionManager};
 use anyhow::{Context, Result};
 use crossbeam_channel::{bounded, Sender};
-use rocksdb::{Options, DB};
+use rocksdb::{IteratorMode, Options, DB};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use tracing::debug;
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use tracing::{debug, info, warn};
 
 /// RocksDB column families for metadata storage
 ///
@@ -84,12 +85,15 @@ struct TouchMessage {
 /// - Async batched access tracking (touch operations)
 /// - Snappy compression for metadata
 /// - Column families for efficient indexing (LRU/LFU eviction)
+/// - Automatic eviction when cache exceeds max_size
 #[derive(Clone)]
 pub struct FilesystemStorage {
     objects_dir: PathBuf,
     db: Arc<DB>,
     touch_sender: Sender<TouchMessage>,
     worker_handle: Arc<Mutex<Option<JoinHandle<()>>>>,
+    #[allow(dead_code)]
+    eviction_manager: Option<Arc<EvictionManager>>,
 }
 
 impl FilesystemStorage {
@@ -97,7 +101,19 @@ impl FilesystemStorage {
     ///
     /// Opens RocksDB database with column families for metadata tracking.
     /// Spawns a background worker for batched access tracking.
+    #[allow(dead_code)]
     pub fn new<P: AsRef<Path>>(cache_dir: P) -> Result<Self> {
+        Self::with_eviction(cache_dir, None)
+    }
+
+    /// Create a new filesystem storage with eviction configuration
+    ///
+    /// When eviction config is provided, the storage will automatically
+    /// evict objects when the cache exceeds `max_size`.
+    pub fn with_eviction<P: AsRef<Path>>(
+        cache_dir: P,
+        eviction_config: Option<EvictionConfig>,
+    ) -> Result<Self> {
         let cache_dir = cache_dir.as_ref();
         let objects_dir = cache_dir.join("objects");
         let db_path = cache_dir.join("metadata");
@@ -182,11 +198,15 @@ impl FilesystemStorage {
             }
         });
 
+        // Create eviction manager if config provided
+        let eviction_manager = eviction_config.map(|config| Arc::new(EvictionManager::new(config)));
+
         Ok(Self {
             objects_dir,
             db,
             touch_sender,
             worker_handle: Arc::new(Mutex::new(Some(worker_handle))),
+            eviction_manager,
         })
     }
 
@@ -253,6 +273,193 @@ impl FilesystemStorage {
             .unwrap()
             .as_secs() as i64
     }
+
+    /// Get all eviction candidates with their metadata
+    ///
+    /// Returns all objects in the cache with metadata needed for eviction decisions.
+    /// Used by the eviction manager to select which objects to evict.
+    pub fn get_eviction_candidates(&self) -> Result<Vec<EvictionCandidate>> {
+        let mut candidates = Vec::new();
+        let iter = self.db.iterator(IteratorMode::Start);
+
+        for item in iter {
+            let (key, value) = item?;
+            if let Ok(metadata) = ObjectMetadata::from_bytes(&value) {
+                candidates.push(EvictionCandidate {
+                    id: key.to_vec(),
+                    size: metadata.size,
+                    accessed_at: metadata.accessed_at,
+                    access_count: metadata.access_count,
+                    created_at: metadata.created_at,
+                });
+            }
+        }
+
+        Ok(candidates)
+    }
+
+    /// Run eviction if needed
+    ///
+    /// Checks if the cache exceeds max_size and evicts objects according to the
+    /// configured policy until the cache is under the target size.
+    ///
+    /// Returns the number of objects evicted and total bytes freed.
+    #[allow(dead_code)]
+    pub fn run_eviction_if_needed(&self) -> Result<(usize, u64)> {
+        let Some(ref eviction_manager) = self.eviction_manager else {
+            return Ok((0, 0));
+        };
+
+        let stats = self.stats()?;
+        if !eviction_manager.needs_eviction(stats.total_bytes) {
+            debug!(
+                "Cache size {}MB is under limit {}MB, no eviction needed",
+                stats.total_bytes / (1024 * 1024),
+                eviction_manager.config().max_size_bytes / (1024 * 1024)
+            );
+            return Ok((0, 0));
+        }
+
+        let bytes_to_evict = eviction_manager.bytes_to_evict(stats.total_bytes);
+        info!(
+            "Cache size {}MB exceeds limit {}MB, evicting {}MB",
+            stats.total_bytes / (1024 * 1024),
+            eviction_manager.config().max_size_bytes / (1024 * 1024),
+            bytes_to_evict / (1024 * 1024)
+        );
+
+        let start = Instant::now();
+
+        // Get all candidates
+        let candidates = self.get_eviction_candidates()?;
+
+        // Select candidates to evict
+        let to_evict = eviction_manager.select_candidates(&candidates, bytes_to_evict);
+
+        // Evict selected objects
+        let mut evicted_count = 0usize;
+        let mut evicted_bytes = 0u64;
+
+        for candidate in &to_evict {
+            match self.delete(&candidate.id) {
+                Ok(()) => {
+                    evicted_count += 1;
+                    evicted_bytes += candidate.size;
+                    eviction_manager.record_eviction(candidate.size);
+                    debug!(
+                        "Evicted object {} ({} bytes)",
+                        hex::encode(&candidate.id),
+                        candidate.size
+                    );
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to evict object {}: {}",
+                        hex::encode(&candidate.id),
+                        e
+                    );
+                }
+            }
+        }
+
+        eviction_manager.record_run();
+        let duration_ms = start.elapsed().as_millis() as u64;
+        eviction_manager.log_summary(evicted_count, evicted_bytes, duration_ms);
+
+        Ok((evicted_count, evicted_bytes))
+    }
+
+    /// Force eviction to free the specified amount of space
+    ///
+    /// Unlike `run_eviction_if_needed`, this will evict objects even if
+    /// the cache is under max_size.
+    #[allow(dead_code)]
+    pub fn force_eviction(&self, bytes_to_free: u64) -> Result<(usize, u64)> {
+        let Some(ref eviction_manager) = self.eviction_manager else {
+            anyhow::bail!("Eviction manager not configured");
+        };
+
+        let start = Instant::now();
+        info!(
+            "Force eviction requested: freeing {}MB",
+            bytes_to_free / (1024 * 1024)
+        );
+
+        // Get all candidates
+        let candidates = self.get_eviction_candidates()?;
+
+        // Select candidates to evict
+        let to_evict = eviction_manager.select_candidates(&candidates, bytes_to_free);
+
+        // Evict selected objects
+        let mut evicted_count = 0usize;
+        let mut evicted_bytes = 0u64;
+
+        for candidate in &to_evict {
+            match self.delete(&candidate.id) {
+                Ok(()) => {
+                    evicted_count += 1;
+                    evicted_bytes += candidate.size;
+                    eviction_manager.record_eviction(candidate.size);
+                }
+                Err(e) => {
+                    warn!(
+                        "Failed to evict object {}: {}",
+                        hex::encode(&candidate.id),
+                        e
+                    );
+                }
+            }
+        }
+
+        eviction_manager.record_run();
+        let duration_ms = start.elapsed().as_millis() as u64;
+        eviction_manager.log_summary(evicted_count, evicted_bytes, duration_ms);
+
+        Ok((evicted_count, evicted_bytes))
+    }
+
+    /// Get eviction statistics
+    #[allow(dead_code)]
+    pub fn eviction_stats(&self) -> Option<(u64, u64, u64)> {
+        self.eviction_manager.as_ref().map(|m| {
+            let stats = m.stats();
+            (
+                stats.get_evictions_total(),
+                stats.get_bytes_evicted(),
+                stats.get_eviction_runs(),
+            )
+        })
+    }
+
+    /// Check if eviction is enabled
+    #[allow(dead_code)]
+    pub fn has_eviction(&self) -> bool {
+        self.eviction_manager.is_some()
+    }
+
+    /// Get the objects directory path
+    #[allow(dead_code)]
+    pub fn objects_dir(&self) -> &Path {
+        &self.objects_dir
+    }
+}
+
+/// Implementation of EvictableStorage for background eviction
+impl EvictableStorage for FilesystemStorage {
+    fn current_size(&self) -> Result<u64> {
+        let stats = self.stats()?;
+        Ok(stats.total_bytes)
+    }
+
+    fn get_eviction_candidates(&self) -> Result<Vec<EvictionCandidate>> {
+        // Call the existing method
+        FilesystemStorage::get_eviction_candidates(self)
+    }
+
+    fn delete_object(&self, id: &[u8]) -> Result<()> {
+        self.delete(id)
+    }
 }
 
 impl Drop for FilesystemStorage {
@@ -296,6 +503,10 @@ impl Drop for FilesystemStorage {
 
 impl Storage for FilesystemStorage {
     fn put(&self, id: &[u8], data: &[u8]) -> Result<()> {
+        // Note: Eviction is handled by a background task (spawn_background_eviction)
+        // to avoid blocking put() operations. The background task periodically
+        // checks cache size and evicts objects according to the configured policy.
+
         let path = self.id_to_path(id);
 
         // Create parent directory

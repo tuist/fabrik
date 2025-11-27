@@ -130,7 +130,7 @@ pub async fn create_fabrik_runtime_with_dir(
             async move {
                 let args = args.unwrap_or_default();
 
-                tracing::debug!("[fabrik] Executing in {:?}: {} {:?}", cwd, command, args);
+                tracing::debug!("Executing in {:?}: {} {:?}", cwd, command, args);
 
                 let output = match Command::new(&command)
                     .args(&args)
@@ -166,19 +166,19 @@ pub async fn create_fabrik_runtime_with_dir(
         let cache = rquickjs::Object::new(ctx.clone())?;
 
         cache.set("get", Function::new(ctx.clone(), Async(|hash: String| async move {
-            tracing::debug!("[fabrik] Cache GET: {}", hash);
+            tracing::debug!("Cache GET: {}", hash);
             // TODO: Integrate with actual cache storage
             Ok::<Option<Vec<u8>>, rquickjs::Error>(None)
         })))?;
 
         cache.set("put", Function::new(ctx.clone(), Async(|hash: String, data: Vec<u8>| async move {
-            tracing::debug!("[fabrik] Cache PUT: {} ({} bytes)", hash, data.len());
+            tracing::debug!("Cache PUT: {} ({} bytes)", hash, data.len());
             // TODO: Integrate with actual cache storage
             Ok::<(), rquickjs::Error>(())
         })))?;
 
         cache.set("has", Function::new(ctx.clone(), Async(|hash: String| async move {
-            tracing::debug!("[fabrik] Cache HAS: {}", hash);
+            tracing::debug!("Cache HAS: {}", hash);
             // TODO: Integrate with actual cache storage
             Ok::<bool, rquickjs::Error>(false)
         })))?;
@@ -316,7 +316,7 @@ mod js_module_fabrik_cache {
 
         if is_cached {
             // Cache hit - restore outputs
-            tracing::info!("[fabrik] Cache HIT: {}", &cache_key[..8]);
+            tracing::info!("Cache HIT: {}", &cache_key[..8]);
 
             let restored = cache::restore_outputs(
                 &cache_options.outputs,
@@ -338,7 +338,7 @@ mod js_module_fabrik_cache {
             result_obj.set("restoredFiles", restored_array)?;
         } else {
             // Cache miss - run action
-            tracing::info!("[fabrik] Cache MISS: {}", &cache_key[..8]);
+            tracing::info!("Cache MISS: {}", &cache_key[..8]);
 
             let start = Instant::now();
 
@@ -372,7 +372,7 @@ mod js_module_fabrik_cache {
             .map_err(|e| Exception::throw_message(&ctx, &format!("Failed to update KV: {}", e)))?;
 
             tracing::info!(
-                "[fabrik] Cached {} outputs for key {}",
+                "Cached {} outputs for key {}",
                 archived.len(),
                 &cache_key[..8]
             );

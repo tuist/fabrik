@@ -2,15 +2,6 @@
 
 The Fabrik C API provides a thread-safe interface for integrating Fabrik cache into C/C++ applications and other toolchains.
 
-## Features
-
-- ✅ Thread-safe operations
-- ✅ Content-addressed storage
-- ✅ Simple error handling
-- ✅ Cross-platform (Linux, macOS, Windows)
-- ✅ Zero-copy where possible
-- ✅ Comprehensive error messages
-
 ## Installation
 
 ### From Releases
@@ -132,7 +123,7 @@ typedef struct FabrikCache FabrikCache;
 
 #### `fabrik_cache_init`
 
-Initialize a new cache instance.
+Initialize a new cache instance with default eviction settings (5GB max size, LFU policy, 7 days TTL).
 
 ```c
 FabrikCache* fabrik_cache_init(const char *cache_dir);
@@ -152,6 +143,50 @@ if (!cache) {
     fprintf(stderr, "Init failed: %s\n", fabrik_last_error());
 }
 ```
+
+---
+
+#### `fabrik_cache_init_with_eviction`
+
+Initialize a new cache instance with custom eviction settings.
+
+```c
+FabrikCache* fabrik_cache_init_with_eviction(
+    const char *cache_dir,
+    uint64_t max_size_bytes,
+    int eviction_policy,
+    uint64_t ttl_seconds
+);
+```
+
+**Parameters:**
+- `cache_dir`: Path to cache directory (NULL-terminated C string)
+- `max_size_bytes`: Maximum cache size in bytes (0 for default: 5GB)
+- `eviction_policy`: Eviction policy (0=LRU, 1=LFU, 2=TTL)
+- `ttl_seconds`: Default TTL in seconds (0 for default: 7 days)
+
+**Returns:**
+- Pointer to `FabrikCache` on success
+- `NULL` on error (use `fabrik_last_error()` for details)
+
+**Example:**
+```c
+// 10GB cache with LRU eviction and 14 day TTL
+FabrikCache *cache = fabrik_cache_init_with_eviction(
+    "/home/user/.cache/fabrik",
+    10ULL * 1024 * 1024 * 1024,  // 10GB
+    0,                           // LRU
+    14 * 24 * 60 * 60           // 14 days
+);
+if (!cache) {
+    fprintf(stderr, "Init failed: %s\n", fabrik_last_error());
+}
+```
+
+**Eviction Policies:**
+- `0` (LRU): Least Recently Used - evicts objects not accessed for longest time
+- `1` (LFU): Least Frequently Used - evicts objects with lowest access count (default)
+- `2` (TTL): Time To Live - evicts objects older than specified TTL
 
 ---
 

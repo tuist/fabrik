@@ -62,7 +62,7 @@ impl DiscoveryService {
         let port = self.config.bind_port;
 
         tracing::info!(
-            "[fabrik] Advertising P2P service as '{}' on port {}",
+            "Advertising P2P service as '{}' on port {}",
             instance_name,
             port
         );
@@ -89,7 +89,7 @@ impl DiscoveryService {
 
     /// Start discovering peers
     async fn start_discovery(&self) -> Result<()> {
-        tracing::info!("[fabrik] Starting P2P peer discovery");
+        tracing::info!("Starting P2P peer discovery");
 
         let receiver = self
             .mdns
@@ -121,7 +121,7 @@ impl DiscoveryService {
                                 && !peers_lock.contains_key(&peer_info.machine_id)
                             {
                                 tracing::warn!(
-                                    "[fabrik] Max peers limit reached ({}), ignoring peer {}",
+                                    "Max peers limit reached ({}), ignoring peer {}",
                                     max_peers,
                                     peer_info.hostname
                                 );
@@ -129,7 +129,7 @@ impl DiscoveryService {
                             }
 
                             tracing::info!(
-                                "[fabrik] Discovered peer: {} at {}:{}",
+                                "Discovered peer: {} at {}:{}",
                                 peer_info.hostname,
                                 peer_info.address,
                                 peer_info.port
@@ -139,7 +139,7 @@ impl DiscoveryService {
                         }
                     }
                     ServiceEvent::ServiceRemoved(_, fullname) => {
-                        tracing::info!("[fabrik] Peer removed: {}", fullname);
+                        tracing::info!("Peer removed: {}", fullname);
                         // We could remove the peer here, but we'll let it expire naturally
                     }
                     _ => {}
@@ -197,7 +197,7 @@ impl DiscoveryService {
 
     /// Shutdown discovery service
     pub async fn shutdown(&self) -> Result<()> {
-        tracing::info!("[fabrik] Shutting down P2P discovery service");
+        tracing::info!("Shutting down P2P discovery service");
         self.mdns.shutdown().ok();
         Ok(())
     }

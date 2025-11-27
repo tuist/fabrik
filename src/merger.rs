@@ -14,6 +14,8 @@ use crate::config::FabrikConfig;
 pub struct MergedExecConfig {
     pub cache_dir: String,
     pub max_cache_size: String,
+    pub eviction_policy: String,
+    pub default_ttl: String,
     pub upstream: Vec<String>,
     pub upstream_timeout: String,
     pub jwt_token: Option<String>,
@@ -82,6 +84,8 @@ impl MergedExecConfig {
                 .config_max_cache_size
                 .clone()
                 .unwrap_or_else(|| file.cache.max_size.clone()),
+            eviction_policy: file.cache.eviction_policy.clone(),
+            default_ttl: file.cache.default_ttl.clone(),
             upstream: args
                 .config_upstream
                 .clone()
