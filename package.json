@@ -10,7 +10,7 @@
   },
   "keywords": [],
   "author": "",
-  "packageManager": "pnpm@10.23.0",
+  "packageManager": "pnpm@10.24.0",
   "devDependencies": {
     "vitepress": "^1.5.0"
   }
