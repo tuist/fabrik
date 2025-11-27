@@ -1,7 +1,7 @@
 /// Acceptance tests for Fabrik script caching
 ///
 /// These tests validate the end-to-end behavior of script caching using the
-/// fixture scripts in fixtures/cache/scripts/
+/// fixture scripts in fixtures/cache/recipes/
 use assert_cmd::Command;
 use predicates::prelude::*;
 use std::fs;
@@ -27,7 +27,7 @@ impl TestWorkspace {
         let temp_dir = TempDir::new().unwrap();
         let cache_dir = TempDir::new().unwrap();
         let project_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-        let fixtures_dir = project_root.join("fixtures/cache/scripts");
+        let fixtures_dir = project_root.join("fixtures/cache/recipes");
 
         Self {
             temp_dir,

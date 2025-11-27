@@ -66,14 +66,20 @@ pub async fn run(args: &RunArgs) -> Result<()> {
         anyhow::bail!("Script not found: {}", script);
     }
 
-    // Check if this is a local portable recipe (.js file)
+    // Check if this is a local portable recipe (.js file without fabrik shebang)
     // Portable recipes are executed with QuickJS runtime
+    // If the .js file has a shebang like "#!/usr/bin/env -S fabrik run node",
+    // it should use the standard recipe system with the external node runtime
     if script_path
         .extension()
         .map(|ext| ext == "js")
         .unwrap_or(false)
     {
-        return run_local_portable_recipe(script_path, args).await;
+        // Check shebang to determine if this is a standard recipe or portable recipe
+        if !has_fabrik_run_shebang(script_path)? {
+            return run_local_portable_recipe(script_path, args).await;
+        }
+        // Otherwise, fall through to standard recipe execution
     }
 
     // Parse annotations
@@ -573,6 +579,31 @@ async fn run_remote_recipe(recipe_ref: &str, args: &RunArgs) -> Result<()> {
         .with_context(|| format!("Failed to execute remote recipe: {}", recipe_ref))?;
 
     Ok(())
+}
+
+/// Check if a script file has a `fabrik run <runtime>` shebang
+///
+/// This is used to distinguish between:
+/// - Standard recipes: `#!/usr/bin/env -S fabrik run node` -> use external node runtime
+/// - Portable recipes: No fabrik shebang -> use QuickJS runtime
+fn has_fabrik_run_shebang(script_path: &Path) -> Result<bool> {
+    use std::io::{BufRead, BufReader};
+
+    let file = std::fs::File::open(script_path)
+        .with_context(|| format!("Failed to open script: {}", script_path.display()))?;
+
+    let reader = BufReader::new(file);
+
+    if let Some(Ok(first_line)) = reader.lines().next() {
+        // Check for various fabrik run shebang patterns
+        // e.g., "#!/usr/bin/env -S fabrik run node"
+        // e.g., "#!/usr/bin/env fabrik run python"
+        if first_line.starts_with("#!") && first_line.contains("fabrik run") {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 /// Execute a local portable recipe (.js file with QuickJS runtime)
