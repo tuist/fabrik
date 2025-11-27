@@ -220,7 +220,7 @@ pub struct EvictionManager {
 impl EvictionManager {
     pub fn new(config: EvictionConfig) -> Self {
         info!(
-            "[fabrik] Eviction manager initialized: policy={}, max_size={}MB, target_ratio={}",
+            "Eviction manager initialized: policy={}, max_size={}MB, target_ratio={}",
             config.policy.as_str(),
             config.max_size_bytes / (1024 * 1024),
             config.target_ratio
@@ -292,7 +292,7 @@ impl EvictionManager {
         }
 
         debug!(
-            "[fabrik] Selected {} candidates for eviction ({} bytes)",
+            "Selected {} candidates for eviction ({} bytes)",
             selected.len(),
             total_size
         );
@@ -314,13 +314,13 @@ impl EvictionManager {
     pub fn log_summary(&self, evicted_count: usize, evicted_bytes: u64, duration_ms: u64) {
         if evicted_count > 0 {
             info!(
-                "[fabrik] Eviction complete: evicted {} objects ({} MB) in {}ms",
+                "Eviction complete: evicted {} objects ({} MB) in {}ms",
                 evicted_count,
                 evicted_bytes / (1024 * 1024),
                 duration_ms
             );
         } else {
-            debug!("[fabrik] Eviction check complete: no objects evicted");
+            debug!("Eviction check complete: no objects evicted");
         }
     }
 }

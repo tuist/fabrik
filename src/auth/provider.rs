@@ -284,7 +284,7 @@ impl AuthProvider {
                 self.oauth2_url.as_ref().expect("OAuth2 URL should be set")
             );
             if let Ok(Some(_)) = wrapper.get_token(&token_key) {
-                tracing::debug!("[fabrik] Auto-detected OAuth2 (token found in storage)");
+                tracing::debug!("Auto-detected OAuth2 (token found in storage)");
                 return Ok(ConfigAuthProvider::OAuth2);
             }
         }
@@ -372,7 +372,7 @@ impl AuthProvider {
             ))?
             .clone();
 
-        tracing::info!("[fabrik] Starting OAuth2 device authorization flow (RFC 8628)");
+        tracing::info!("Starting OAuth2 device authorization flow (RFC 8628)");
 
         let oauth2_url = self.oauth2_url.clone();
 
@@ -402,7 +402,7 @@ impl AuthProvider {
             .await
             .map_err(|e| AuthenticationError::OAuth2Error(format!("Task join error: {}", e)))??;
 
-        tracing::info!("[fabrik] Successfully authenticated");
+        tracing::info!("Successfully authenticated");
 
         Ok(())
     }
@@ -426,12 +426,12 @@ impl AuthProvider {
                 );
                 wrapper.delete_token(&token_key)?;
 
-                tracing::info!("[fabrik] Successfully logged out");
+                tracing::info!("Successfully logged out");
                 Ok(())
             }
             ConfigAuthProvider::Token => {
                 // For token-based auth, we don't store anything, so nothing to delete
-                tracing::info!("[fabrik] Token-based authentication doesn't require logout");
+                tracing::info!("Token-based authentication doesn't require logout");
                 Ok(())
             }
         }

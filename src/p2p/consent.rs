@@ -85,7 +85,7 @@ impl ConsentManager {
     /// Request consent from user via notification
     async fn request_consent(&self, peer_info: &PeerInfo, hash: &str) -> Result<bool> {
         tracing::info!(
-            "[fabrik] Requesting consent from user for peer {}",
+            "Requesting consent from user for peer {}",
             peer_info.hostname
         );
 
@@ -109,13 +109,13 @@ impl ConsentManager {
                 // So we default to "allow once" on notification acknowledgment
                 // A future improvement could use platform-specific notification APIs
 
-                tracing::info!("[fabrik] User acknowledged notification, allowing once");
+                tracing::info!("User acknowledged notification, allowing once");
                 self.set_consent(&peer_info.machine_id, ConsentState::Once)
                     .await?;
                 true
             }
             Err(e) => {
-                tracing::warn!("[fabrik] Failed to show notification: {}", e);
+                tracing::warn!("Failed to show notification: {}", e);
                 // If notification fails, check mode
                 match self.config.consent_mode.as_str() {
                     "notify-once" | "notify-always" => {

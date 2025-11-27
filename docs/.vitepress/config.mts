@@ -105,6 +105,7 @@ export default defineConfig({
           { text: "CLI Commands", link: "/reference/cli" },
           { text: "Configuration File", link: "/reference/config-file" },
           { text: "API Reference", link: "/reference/api" },
+          { text: "C API", link: "/reference/c-api" },
         ],
       },
     ],

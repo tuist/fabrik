@@ -2150,6 +2150,12 @@ fabrik config show --config config.toml --config-upstream s3://override
 - Use `clippy` for linting (zero warnings policy)
 - Prioritize safety, idiomatic patterns, and zero-cost abstractions
 
+### Logging Conventions
+- Use the `tracing` crate (`info!`, `debug!`, `warn!`, `error!`) for all logging
+- **Do NOT add `[fabrik]` prefix to log messages** - the custom `FabrikFormatter` in `src/logging.rs` automatically adds `(fabrik)` to all log output
+- For CLI output (`println!`/`eprintln!`), use `fabrik_prefix()` from `src/cli_utils.rs` which provides colored output
+- Use structured fields for machine-parseable logs (see `src/logging.rs` for field constants)
+
 ### Project Principles
 - **Performance**: Low latency (target: <10ms p99), high throughput
 - **Reliability**: Data integrity, fault tolerance, graceful degradation

@@ -75,19 +75,19 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     // Check if Unix socket is configured (for Xcode)
     let socket_path = file_config.as_ref().and_then(|fc| fc.daemon.socket.clone());
 
-    info!("[fabrik] Starting daemon mode");
-    info!("[fabrik] Configuration:");
-    info!("[fabrik]   Cache directory: {}", config.cache_dir);
-    info!("[fabrik]   Max cache size: {}", config.max_cache_size);
-    info!("[fabrik]   Eviction policy: {}", config.eviction_policy);
-    info!("[fabrik]   Default TTL: {}", config.default_ttl);
-    info!("[fabrik]   Upstream: {:?}", config.upstream);
+    info!("Starting daemon mode");
+    info!("Configuration:");
+    info!("  Cache directory: {}", config.cache_dir);
+    info!("  Max cache size: {}", config.max_cache_size);
+    info!("  Eviction policy: {}", config.eviction_policy);
+    info!("  Default TTL: {}", config.default_ttl);
+    info!("  Upstream: {:?}", config.upstream);
 
     if let Some(ref socket) = socket_path {
-        info!("[fabrik]   Mode: Unix socket (Xcode)");
-        info!("[fabrik]   Socket path: {}", socket);
+        info!("  Mode: Unix socket (Xcode)");
+        info!("  Socket path: {}", socket);
     } else {
-        info!("[fabrik]   Mode: TCP (HTTP + gRPC)");
+        info!("  Mode: TCP (HTTP + gRPC)");
     }
 
     // Initialize eviction configuration from merged config
@@ -107,15 +107,15 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
         let bg_config = BackgroundEvictionConfig::from_eviction_config(eviction_config);
         spawn_background_eviction(storage.clone(), bg_config)
     };
-    info!("[fabrik] Background eviction task started");
+    info!("Background eviction task started");
 
     // Initialize P2P manager if enabled
     let p2p_manager = if let Some(ref fc) = file_config {
         if fc.p2p.enabled {
-            info!("[fabrik] P2P cache sharing is enabled");
+            info!("P2P cache sharing is enabled");
             let p2p = crate::p2p::P2PManager::new(fc.p2p.clone()).await?;
             p2p.start().await?;
-            info!("[fabrik] P2P services started successfully");
+            info!("P2P services started successfully");
             Some(Arc::new(p2p))
         } else {
             None
@@ -305,7 +305,7 @@ pub async fn run(args: DaemonArgs) -> Result<()> {
     }
 
     // Shutdown background eviction task first
-    info!("[fabrik] Shutting down background eviction task...");
+    info!("Shutting down background eviction task...");
     eviction_handle.shutdown().await;
 
     // Shutdown P2P services

@@ -48,7 +48,7 @@ impl P2PManager {
 
         // Initialize discovery service if enabled
         let discovery = if config.discovery {
-            tracing::info!("[fabrik] Initializing P2P discovery service");
+            tracing::info!("Initializing P2P discovery service");
             Some(Arc::new(DiscoveryService::new(config.clone()).await?))
         } else {
             None
@@ -56,10 +56,7 @@ impl P2PManager {
 
         // Initialize P2P server if advertising
         let server = if config.advertise {
-            tracing::info!(
-                "[fabrik] Initializing P2P server on port {}",
-                config.bind_port
-            );
+            tracing::info!("Initializing P2P server on port {}", config.bind_port);
             Some(Arc::new(P2PServer::new(config.clone()).await?))
         } else {
             None
@@ -89,7 +86,7 @@ impl P2PManager {
             server.start().await?;
         }
 
-        tracing::info!("[fabrik] P2P services started successfully");
+        tracing::info!("P2P services started successfully");
         Ok(())
     }
 
@@ -116,7 +113,7 @@ impl P2PManager {
 
     /// Shutdown P2P services
     pub async fn shutdown(&self) -> Result<()> {
-        tracing::info!("[fabrik] Shutting down P2P services");
+        tracing::info!("Shutting down P2P services");
 
         if let Some(server) = &self.server {
             server.shutdown().await?;

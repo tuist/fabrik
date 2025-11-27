@@ -313,7 +313,7 @@ impl FilesystemStorage {
         let stats = self.stats()?;
         if !eviction_manager.needs_eviction(stats.total_bytes) {
             debug!(
-                "[fabrik] Cache size {}MB is under limit {}MB, no eviction needed",
+                "Cache size {}MB is under limit {}MB, no eviction needed",
                 stats.total_bytes / (1024 * 1024),
                 eviction_manager.config().max_size_bytes / (1024 * 1024)
             );
@@ -322,7 +322,7 @@ impl FilesystemStorage {
 
         let bytes_to_evict = eviction_manager.bytes_to_evict(stats.total_bytes);
         info!(
-            "[fabrik] Cache size {}MB exceeds limit {}MB, evicting {}MB",
+            "Cache size {}MB exceeds limit {}MB, evicting {}MB",
             stats.total_bytes / (1024 * 1024),
             eviction_manager.config().max_size_bytes / (1024 * 1024),
             bytes_to_evict / (1024 * 1024)
@@ -347,14 +347,14 @@ impl FilesystemStorage {
                     evicted_bytes += candidate.size;
                     eviction_manager.record_eviction(candidate.size);
                     debug!(
-                        "[fabrik] Evicted object {} ({} bytes)",
+                        "Evicted object {} ({} bytes)",
                         hex::encode(&candidate.id),
                         candidate.size
                     );
                 }
                 Err(e) => {
                     warn!(
-                        "[fabrik] Failed to evict object {}: {}",
+                        "Failed to evict object {}: {}",
                         hex::encode(&candidate.id),
                         e
                     );
@@ -381,7 +381,7 @@ impl FilesystemStorage {
 
         let start = Instant::now();
         info!(
-            "[fabrik] Force eviction requested: freeing {}MB",
+            "Force eviction requested: freeing {}MB",
             bytes_to_free / (1024 * 1024)
         );
 
@@ -404,7 +404,7 @@ impl FilesystemStorage {
                 }
                 Err(e) => {
                     warn!(
-                        "[fabrik] Failed to evict object {}: {}",
+                        "Failed to evict object {}: {}",
                         hex::encode(&candidate.id),
                         e
                     );

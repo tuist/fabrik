@@ -2,16 +2,6 @@
 
 The Fabrik C API provides a thread-safe interface for integrating Fabrik cache into C/C++ applications and other toolchains.
 
-## Features
-
-- ✅ Thread-safe operations
-- ✅ Content-addressed storage
-- ✅ Automatic cache eviction (LRU, LFU, TTL)
-- ✅ Simple error handling
-- ✅ Cross-platform (Linux, macOS, Windows)
-- ✅ Zero-copy where possible
-- ✅ Comprehensive error messages
-
 ## Installation
 
 ### From Releases

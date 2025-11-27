@@ -40,7 +40,7 @@ impl P2PClient {
         }
 
         tracing::info!(
-            "[fabrik] Querying {} P2P peers in parallel for hash {}",
+            "Querying {} P2P peers in parallel for hash {}",
             peers.len(),
             &hash[..8]
         );
@@ -60,7 +60,7 @@ impl P2PClient {
                         let _ = tx.send(Ok((peer.info.hostname.clone(), data))).await;
                     }
                     Err(e) => {
-                        tracing::debug!("[fabrik] P2P peer {} failed: {}", peer.info.hostname, e);
+                        tracing::debug!("P2P peer {} failed: {}", peer.info.hostname, e);
                     }
                 }
             });
@@ -71,7 +71,7 @@ impl P2PClient {
         // Wait for first success
         if let Some(result) = rx.recv().await {
             let (hostname, data) = result?;
-            tracing::info!("[fabrik] P2P HIT from {} ({}bytes)", hostname, data.len());
+            tracing::info!("P2P HIT from {} ({}bytes)", hostname, data.len());
             return Ok(data);
         }
 

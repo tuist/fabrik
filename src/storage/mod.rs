@@ -53,8 +53,8 @@ pub struct StorageStats {
 /// support for cloud storage backends (S3, GCS, etc.)
 #[allow(dead_code)]
 pub fn create_storage(cache_dir: &str) -> Result<FilesystemStorage> {
-    info!("[fabrik] Initializing storage backend: filesystem");
-    info!("[fabrik] Cache directory: {}", cache_dir);
+    info!("Initializing storage backend: filesystem");
+    info!("Cache directory: {}", cache_dir);
     FilesystemStorage::new(cache_dir)
 }
 
@@ -66,10 +66,10 @@ pub fn create_storage_with_eviction(
     cache_dir: &str,
     eviction_config: EvictionConfig,
 ) -> Result<FilesystemStorage> {
-    info!("[fabrik] Initializing storage backend: filesystem");
-    info!("[fabrik] Cache directory: {}", cache_dir);
+    info!("Initializing storage backend: filesystem");
+    info!("Cache directory: {}", cache_dir);
     info!(
-        "[fabrik] Eviction enabled: policy={}, max_size={}MB",
+        "Eviction enabled: policy={}, max_size={}MB",
         eviction_config.policy.as_str(),
         eviction_config.max_size_bytes / (1024 * 1024)
     );

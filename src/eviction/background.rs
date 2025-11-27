@@ -87,13 +87,13 @@ impl BackgroundEvictionHandle {
             // Wait for the task to finish with a timeout
             match tokio::time::timeout(Duration::from_secs(5), handle).await {
                 Ok(Ok(())) => {
-                    debug!("[fabrik] Background eviction task stopped");
+                    debug!("Background eviction task stopped");
                 }
                 Ok(Err(e)) => {
-                    warn!("[fabrik] Background eviction task panicked: {}", e);
+                    warn!("Background eviction task panicked: {}", e);
                 }
                 Err(_) => {
-                    warn!("[fabrik] Background eviction task did not stop in time");
+                    warn!("Background eviction task did not stop in time");
                 }
             }
         }
@@ -127,7 +127,7 @@ pub fn spawn_background_eviction<S: EvictableStorage>(
     });
 
     info!(
-        "[fabrik] Background eviction task started (interval: {:?})",
+        "Background eviction task started (interval: {:?})",
         check_interval
     );
 
@@ -153,10 +153,10 @@ async fn run_eviction_loop<S: EvictableStorage>(
             _ = tokio::time::sleep(config.check_interval) => {}
             _ = notify.notified() => {
                 if shutdown.load(Ordering::SeqCst) {
-                    debug!("[fabrik] Background eviction task received shutdown signal");
+                    debug!("Background eviction task received shutdown signal");
                     break;
                 }
-                debug!("[fabrik] Background eviction triggered manually");
+                debug!("Background eviction triggered manually");
             }
         }
 
@@ -167,11 +167,11 @@ async fn run_eviction_loop<S: EvictableStorage>(
 
         // Run eviction check
         if let Err(e) = run_eviction_cycle(&storage, &eviction_manager, &config.eviction_config) {
-            warn!("[fabrik] Background eviction cycle failed: {}", e);
+            warn!("Background eviction cycle failed: {}", e);
         }
     }
 
-    info!("[fabrik] Background eviction task stopped");
+    info!("Background eviction task stopped");
 }
 
 /// Run a single eviction cycle
@@ -184,7 +184,7 @@ fn run_eviction_cycle<S: EvictableStorage>(
 
     if !eviction_manager.needs_eviction(current_size) {
         debug!(
-            "[fabrik] Cache size {}MB is under limit {}MB, no eviction needed",
+            "Cache size {}MB is under limit {}MB, no eviction needed",
             current_size / (1024 * 1024),
             config.max_size_bytes / (1024 * 1024)
         );
@@ -193,7 +193,7 @@ fn run_eviction_cycle<S: EvictableStorage>(
 
     let bytes_to_evict = eviction_manager.bytes_to_evict(current_size);
     info!(
-        "[fabrik] Cache size {}MB exceeds limit {}MB, evicting {}MB",
+        "Cache size {}MB exceeds limit {}MB, evicting {}MB",
         current_size / (1024 * 1024),
         config.max_size_bytes / (1024 * 1024),
         bytes_to_evict / (1024 * 1024)
@@ -241,14 +241,14 @@ fn run_eviction_cycle<S: EvictableStorage>(
                 evicted_bytes += candidate.size;
                 eviction_manager.record_eviction(candidate.size);
                 debug!(
-                    "[fabrik] Evicted object {} ({} bytes)",
+                    "Evicted object {} ({} bytes)",
                     hex::encode(&candidate.id),
                     candidate.size
                 );
             }
             Err(e) => {
                 warn!(
-                    "[fabrik] Failed to evict object {}: {}",
+                    "Failed to evict object {}: {}",
                     hex::encode(&candidate.id),
                     e
                 );

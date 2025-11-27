@@ -1,9 +1,9 @@
 /// CLI utilities for consistent output formatting
 use std::io::IsTerminal;
 
-/// Get a colored [fabrik] prefix
+/// Get a colored prefix
 ///
-/// Returns bright cyan [fabrik] if stderr is a TTY, plain text otherwise.
+/// Returns bright cyan if stderr is a TTY, plain text otherwise.
 pub fn fabrik_prefix() -> &'static str {
     if std::io::stderr().is_terminal() {
         // Bright cyan for the entire prefix

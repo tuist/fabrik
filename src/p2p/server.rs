@@ -67,7 +67,7 @@ impl P2PServer {
 
         let bind_addr = self.bind_addr;
 
-        tracing::info!("[fabrik] P2P gRPC server listening on {}", bind_addr);
+        tracing::info!("P2P gRPC server listening on {}", bind_addr);
 
         tokio::spawn(async move {
             Server::builder()
@@ -139,7 +139,7 @@ impl P2pCache for P2PCacheService {
 
         // Verify authentication
         if let Err(e) = self.verify_auth(&req.hash, req.timestamp, &req.signature) {
-            tracing::warn!("[fabrik] P2P auth failed: {}", e);
+            tracing::warn!("P2P auth failed: {}", e);
             return Err(Status::unauthenticated(format!(
                 "Authentication failed: {}",
                 e
@@ -164,7 +164,7 @@ impl P2pCache for P2PCacheService {
 
         if !has_consent {
             tracing::info!(
-                "[fabrik] P2P request denied (no consent) from {}",
+                "P2P request denied (no consent) from {}",
                 req.requester_hostname
             );
             return Ok(Response::new(ExistsResponse {
@@ -181,7 +181,7 @@ impl P2pCache for P2PCacheService {
         let found = artifact_path.exists();
 
         tracing::info!(
-            "[fabrik] P2P exists check from {}: hash={} found={}",
+            "P2P exists check from {}: hash={} found={}",
             req.requester_hostname,
             &req.hash[..8],
             found
@@ -201,7 +201,7 @@ impl P2pCache for P2PCacheService {
 
         // Verify authentication
         if let Err(e) = self.verify_auth(&req.hash, req.timestamp, &req.signature) {
-            tracing::warn!("[fabrik] P2P auth failed: {}", e);
+            tracing::warn!("P2P auth failed: {}", e);
             return Err(Status::unauthenticated(format!(
                 "Authentication failed: {}",
                 e
@@ -226,7 +226,7 @@ impl P2pCache for P2PCacheService {
 
         if !has_consent {
             tracing::info!(
-                "[fabrik] P2P request denied (no consent) from {}",
+                "P2P request denied (no consent) from {}",
                 req.requester_hostname
             );
             let (tx, rx) = tokio::sync::mpsc::channel(1);
@@ -252,7 +252,7 @@ impl P2pCache for P2PCacheService {
             let artifact_path = std::path::Path::new(&cache_dir).join(&hash);
 
             if !artifact_path.exists() {
-                tracing::warn!("[fabrik] P2P artifact not found: {}", hash);
+                tracing::warn!("P2P artifact not found: {}", hash);
                 return;
             }
 
@@ -261,7 +261,7 @@ impl P2pCache for P2PCacheService {
                 Ok(data) => {
                     let total_size = data.len() as i64;
                     tracing::info!(
-                        "[fabrik] P2P serving artifact to {}: hash={} size={}",
+                        "P2P serving artifact to {}: hash={} size={}",
                         hostname,
                         &hash[..8],
                         total_size
@@ -283,7 +283,7 @@ impl P2pCache for P2PCacheService {
                     }
                 }
                 Err(e) => {
-                    tracing::error!("[fabrik] Failed to read artifact: {}", e);
+                    tracing::error!("Failed to read artifact: {}", e);
                 }
             }
         });
@@ -297,7 +297,7 @@ impl P2pCache for P2PCacheService {
     ) -> Result<Response<HelloResponse>, Status> {
         let req = request.into_inner();
 
-        tracing::debug!("[fabrik] P2P hello from {}", req.hostname);
+        tracing::debug!("P2P hello from {}", req.hostname);
 
         Ok(Response::new(HelloResponse {
             machine_id: self.machine_id.clone(),

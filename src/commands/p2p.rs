@@ -59,10 +59,10 @@ async fn list_peers(config: &FabrikConfig, verbose: bool, json: bool) -> Result<
             .collect();
         println!("{}", serde_json::to_string_pretty(&peers_json)?);
     } else if peers.is_empty() {
-        println!("[fabrik] No P2P peers discovered");
-        println!("[fabrik] Make sure other instances are running with P2P enabled");
+        println!("No P2P peers discovered");
+        println!("Make sure other instances are running with P2P enabled");
     } else {
-        println!("[fabrik] Discovered {} peer(s):\n", peers.len());
+        println!("Discovered {} peer(s):\n", peers.len());
         for peer in peers {
             println!("  • {}", peer.display_name());
             if verbose {
@@ -100,7 +100,7 @@ async fn show_status(config: &FabrikConfig, json: bool) -> Result<()> {
         });
         println!("{}", serde_json::to_string_pretty(&status)?);
     } else {
-        println!("[fabrik] P2P Cache Sharing Status\n");
+        println!("P2P Cache Sharing Status\n");
         println!("  Enabled: {}", config.p2p.enabled);
         println!("  Advertise: {}", config.p2p.advertise);
         println!("  Discovery: {}", config.p2p.discovery);
@@ -120,9 +120,9 @@ async fn approve_peer(config: &FabrikConfig, peer: &str, permanent: bool) -> Res
     consent_manager.approve_peer(peer, permanent).await?;
 
     if permanent {
-        println!("[fabrik] Permanently approved peer: {}", peer);
+        println!("Permanently approved peer: {}", peer);
     } else {
-        println!("[fabrik] Approved peer for this session: {}", peer);
+        println!("Approved peer for this session: {}", peer);
     }
 
     Ok(())
@@ -133,16 +133,16 @@ async fn deny_peer(config: &FabrikConfig, peer: &str) -> Result<()> {
 
     consent_manager.deny_peer(peer).await?;
 
-    println!("[fabrik] Denied peer: {}", peer);
+    println!("Denied peer: {}", peer);
 
     Ok(())
 }
 
 async fn clear_consents(config: &FabrikConfig, force: bool) -> Result<()> {
     if !force {
-        println!("[fabrik] This will clear all stored P2P consents.");
-        println!("[fabrik] You will need to re-approve peers next time they request access.");
-        print!("[fabrik] Continue? [y/N] ");
+        println!("This will clear all stored P2P consents.");
+        println!("You will need to re-approve peers next time they request access.");
+        print!("Continue? [y/N] ");
 
         use std::io::{self, BufRead};
         let stdin = io::stdin();
@@ -150,7 +150,7 @@ async fn clear_consents(config: &FabrikConfig, force: bool) -> Result<()> {
         let response = lines.next().unwrap_or(Ok(String::new()))?;
 
         if !response.trim().eq_ignore_ascii_case("y") {
-            println!("[fabrik] Cancelled");
+            println!("Cancelled");
             return Ok(());
         }
     }
@@ -159,7 +159,7 @@ async fn clear_consents(config: &FabrikConfig, force: bool) -> Result<()> {
 
     consent_manager.clear_consents().await?;
 
-    println!("[fabrik] Cleared all P2P consents");
+    println!("Cleared all P2P consents");
 
     Ok(())
 }

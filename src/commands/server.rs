@@ -20,14 +20,14 @@ pub async fn run(args: ServerArgs) -> Result<()> {
     // Merge configuration
     let config = MergedServerConfig::merge(&args, file_config);
 
-    info!("[fabrik] Starting server mode");
-    info!("[fabrik] Configuration:");
-    info!("[fabrik]   Cache directory: {}", config.cache_dir);
-    info!("[fabrik]   Max cache size: {}", config.max_cache_size);
-    info!("[fabrik]   Eviction policy: {}", config.eviction_policy);
-    info!("[fabrik]   Default TTL: {}", config.default_ttl);
-    info!("[fabrik]   Upstream: {:?}", config.upstream);
-    info!("[fabrik]   gRPC bind: {}", config.grpc_bind);
+    info!("Starting server mode");
+    info!("Configuration:");
+    info!("  Cache directory: {}", config.cache_dir);
+    info!("  Max cache size: {}", config.max_cache_size);
+    info!("  Eviction policy: {}", config.eviction_policy);
+    info!("  Default TTL: {}", config.default_ttl);
+    info!("  Upstream: {:?}", config.upstream);
+    info!("  gRPC bind: {}", config.grpc_bind);
 
     // Initialize eviction configuration
     let eviction_config = EvictionConfig::from_cache_config(
@@ -37,7 +37,7 @@ pub async fn run(args: ServerArgs) -> Result<()> {
     )?;
 
     // Initialize filesystem storage with eviction
-    info!("[fabrik] Initializing storage at {}", config.cache_dir);
+    info!("Initializing storage at {}", config.cache_dir);
     let storage = Arc::new(FilesystemStorage::with_eviction(
         &config.cache_dir,
         Some(eviction_config.clone()),
@@ -48,7 +48,7 @@ pub async fn run(args: ServerArgs) -> Result<()> {
         let bg_config = BackgroundEvictionConfig::from_eviction_config(eviction_config);
         spawn_background_eviction(storage.clone(), bg_config)
     };
-    info!("[fabrik] Background eviction task started");
+    info!("Background eviction task started");
 
     // Create gRPC services
     let cas_service = CasService::new(storage.clone());
@@ -74,30 +74,30 @@ pub async fn run(args: ServerArgs) -> Result<()> {
             {
                 tokio::select! {
                     _ = signal::ctrl_c() => {
-                        info!("[fabrik] Received Ctrl+C, shutting down gracefully...");
+                        info!("Received Ctrl+C, shutting down gracefully...");
                     }
                     _ = async {
                         use tokio::signal::unix::{signal, SignalKind};
                         let mut sigterm = signal(SignalKind::terminate()).expect("Failed to setup SIGTERM handler");
                         sigterm.recv().await
                     } => {
-                        info!("[fabrik] Received SIGTERM, shutting down gracefully...");
+                        info!("Received SIGTERM, shutting down gracefully...");
                     }
                 }
             }
             #[cfg(not(unix))]
             {
                 signal::ctrl_c().await.expect("Failed to listen for Ctrl+C");
-                info!("[fabrik] Received Ctrl+C, shutting down gracefully...");
+                info!("Received Ctrl+C, shutting down gracefully...");
             }
         });
 
     server.await?;
 
     // Shutdown background eviction task
-    info!("[fabrik] Shutting down background eviction task...");
+    info!("Shutting down background eviction task...");
     eviction_handle.shutdown().await;
 
-    info!("[fabrik] Server shutdown complete");
+    info!("Server shutdown complete");
     Ok(())
 }
