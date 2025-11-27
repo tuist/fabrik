@@ -57,11 +57,43 @@ export default defineConfig({
             ],
           },
           {
-            text: "Scripts",
+            text: "Recipes",
+            collapsed: true,
             items: [
-              { text: "Introduction", link: "/cache/scripts/" },
-              { text: "Configuration Reference", link: "/cache/scripts/reference" },
-              { text: "Examples", link: "/cache/scripts/examples" },
+              {
+                text: "Standard",
+                collapsed: true,
+                items: [
+                  { text: "Introduction", link: "/cache/recipes/standard/" },
+                  {
+                    text: "Annotations Reference",
+                    link: "/cache/recipes/standard/annotations",
+                  },
+                  {
+                    text: "Examples",
+                    link: "/cache/recipes/standard/examples",
+                  },
+                ],
+              },
+              {
+                text: "Portable",
+                collapsed: true,
+                items: [
+                  { text: "Introduction", link: "/cache/recipes/portable/" },
+                  {
+                    text: "JavaScript API Reference",
+                    link: "/cache/recipes/api-reference",
+                  },
+                  {
+                    text: "Syntax Reference",
+                    link: "/cache/recipes/portable/syntax",
+                  },
+                  {
+                    text: "Examples",
+                    link: "/cache/recipes/portable/examples",
+                  },
+                ],
+              },
             ],
           },
         ],

@@ -1,10 +1,29 @@
-# Configuration Reference
+# Annotations Reference
 
-Complete reference for all `#FABRIK` directives used in script caching.
+Complete reference for all FABRIK annotations used in standard recipes.
 
 ## Overview
 
-Directives are declared as comments in your script using the `#FABRIK` prefix. The syntax is based on [KDL (KDL Document Language)](https://kdl.dev/), but you don't need to understand KDL to use them - just follow the examples below.
+Annotations are declared as comments in your script using the `FABRIK` keyword, prefixed with your language's comment symbol. The syntax is based on [KDL (KDL Document Language)](https://kdl.dev/), but you don't need to understand KDL to use them - just follow the examples below.
+
+**Comment syntax varies by language:**
+
+```bash
+# Bash, Python, Ruby
+#FABRIK input "src/**/*.py"
+```
+
+```javascript
+// Node.js, JavaScript
+//FABRIK input "src/**/*.js"
+```
+
+```
+; Lisp, Clojure
+;FABRIK input "src/**/*.clj"
+```
+
+The pattern is always: `<comment-symbol>FABRIK <directive> <arguments>`
 
 ## Input Tracking
 

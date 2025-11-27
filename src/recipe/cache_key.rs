@@ -103,7 +103,7 @@ fn normalize_script_content(path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::script::annotations::{HashMethod, InputSpec};
+    use crate::recipe::annotations::{HashMethod, InputSpec};
     use tempfile::TempDir;
 
     #[test]

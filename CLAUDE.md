@@ -845,6 +845,317 @@ for instance in fabrik_instances:
 
 **Protocol Support:** Fabrik must implement HTTP, gRPC, S3-compatible, and OCI registry APIs to support all build tools.
 
+## Portable Recipes
+
+### Overview
+
+Fabrik supports **portable recipes** - cross-platform JavaScript automation scripts that run on an embedded QuickJS runtime. Recipes provide two types of caching:
+
+1. **Script Recipes**: Platform-specific scripts (bash, python, node, etc.) with KDL annotations for content-addressed caching
+2. **Portable Recipes**: Cross-platform JavaScript/TypeScript recipes using LLRT modules for Node.js compatibility
+
+### Runtime Architecture
+
+**QuickJS + LLRT Integration:**
+- **Runtime**: QuickJS (via rquickjs 0.10 from git)
+- **Node.js Compatibility**: LLRT (Low Latency Runtime) modules for fs, child_process, buffer, path
+- **Custom APIs**: Fabrik-specific APIs for caching and build operations
+- **Module System**: ES modules with dynamic imports
+
+**Dependencies:**
+```toml
+rquickjs = { git = "https://github.com/DelSkayn/rquickjs.git", features = ["array-buffer", "allocator", "loader", "macro", "futures", "classes"] }
+llrt_fs = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_child_process = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_buffer = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_path = { git = "https://github.com/awslabs/llrt", branch = "main" }
+llrt_utils = { git = "https://github.com/awslabs/llrt", branch = "main", features = ["fs"] }
+```
+
+### Recipe API Surface
+
+**Node.js-Compatible APIs** (via LLRT modules):
+```javascript
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFile, writeFile } from 'fs/promises';
+import { Buffer } from 'buffer';
+import { spawn } from 'child_process';
+import { basename, dirname, join } from 'path';
+```
+
+**Fabrik-Specific APIs** (imported from `fabrik:*` modules):
+
+```javascript
+// fabrik:cache - Content-addressed caching APIs
+import { runCached, needsRun } from 'fabrik:cache';
+
+/**
+ * Run action only if cache miss (uses both KV + cache storage)
+ *
+ * Computes hash from inputs/env, checks cache, runs action on miss,
+ * stores outputs in cache.
+ */
+await runCached(
+  // Action to run on cache miss
+  async () => {
+    // Your build logic here
+    const { spawn } = await import('child_process');
+    await spawn("npm", ["run", "build"]);
+  },
+  // Metadata for cache key computation + optional config overrides
+  {
+    inputs: ["src/**/*.ts", "tsconfig.json"],
+    outputs: ["dist/"],
+    env: ["NODE_ENV"],
+
+    // Optional: Override cache configuration at runtime
+    // (defaults to fabrik.toml discovered from script directory)
+    cacheDir: ".custom-cache",           // Override cache directory
+    upstream: ["grpc://custom.cache"],   // Override upstream cache
+    ttl: "7d"                            // Cache expiration
+  }
+);
+
+/**
+ * Check if action needs to run (uses only KV storage)
+ *
+ * Computes hash from inputs/env, checks KV store.
+ * Caller decides what to do with the result.
+ */
+const needed = await needsRun({
+  inputs: ["src/**/*.ts"],
+  env: ["NODE_ENV"],
+
+  // Optional: Override cache configuration
+  cacheDir: ".custom-cache"
+});
+
+if (needed) {
+  console.log("Files changed, rebuilding...");
+  // Your logic here
+} else {
+  console.log("Nothing changed, skipping build");
+}
+
+// Low-level KV operations (for advanced use cases)
+import { get, set, has } from 'fabrik:kv';
+
+const hash = "abc123...";
+await set(hash, { timestamp: Date.now() });
+const value = await get(hash);  // Returns stored value or null
+const exists = await has(hash); // Returns boolean
+
+// Low-level cache operations (for advanced use cases)
+import { get as getArtifact, put as putArtifact } from 'fabrik:storage';
+
+const artifact = await getArtifact(hash);  // Returns Uint8Array | null
+await putArtifact(hash, new Uint8Array([...]));
+
+// File utilities
+import { glob, hashFile } from 'fabrik:fs';
+
+const files = await glob("src/**/*.ts");  // Returns string[]
+const hash = await hashFile("package.json");  // Returns SHA256 hex
+```
+
+### Recipe Execution Patterns
+
+**IMPORTANT: Recipes execute at root-level only - they do NOT export functions.**
+
+All recipe code executes directly when the file is loaded. There are no targets, no function exports, just sequential execution:
+
+```javascript
+// build.recipe.js
+import { spawn } from 'child_process';
+import { runCached, needsRun } from 'fabrik:cache';
+import { glob } from 'fabrik:fs';
+
+console.log("Building Rust project...");
+
+// Use runCached() for build - automatically handles caching
+await runCached(
+  async () => {
+    console.log("Running cargo build...");
+    const result = await spawn("cargo", ["build", "--release"]);
+    if (result.exitCode !== 0) {
+      throw new Error("Build failed!");
+    }
+  },
+  {
+    inputs: ["src/**/*.rs", "Cargo.toml", "Cargo.lock"],
+    outputs: ["target/release/"],
+    env: ["RUSTFLAGS"]
+  }
+);
+
+// Use needsRun() for tests - caller controls the logic
+const needsTest = await needsRun({
+  inputs: ["src/**/*.rs", "tests/**/*.rs"],
+  env: ["RUST_TEST_THREADS"]
+});
+
+if (needsTest) {
+  console.log("Running tests...");
+  const testResult = await spawn("cargo", ["test"]);
+  if (testResult.exitCode !== 0) {
+    throw new Error("Tests failed!");
+  }
+} else {
+  console.log("No changes detected, skipping tests");
+}
+
+console.log("Build complete!");
+```
+
+**Execution:**
+```bash
+# Simply run the recipe - all code executes from top to bottom
+fabrik run build.recipe.js
+```
+
+**Why no exported functions?**
+- Recipes are meant to be simple, linear automation scripts
+- No need for complex target orchestration
+- If you need multiple entry points, create multiple recipe files
+- Keep recipes focused and composable
+
+### Recipe Configuration
+
+**Configuration Discovery:**
+
+When a recipe calls `runCached()` or `needsRun()`, Fabrik automatically discovers configuration:
+
+1. **Start from recipe location**: Look for `fabrik.toml` in the directory containing the recipe file
+2. **Traverse up**: If not found, walk up parent directories (same as `fabrik daemon`)
+3. **Global fallback**: Use `~/.config/fabrik/config.toml` if no project config found
+4. **Runtime override**: Configuration passed to API calls takes precedence
+
+**Configuration Precedence** (highest to lowest):
+1. Runtime parameters passed to `runCached()`/`needsRun()` (highest)
+2. Project `fabrik.toml` (discovered from recipe directory)
+3. Global `~/.config/fabrik/config.toml` (lowest)
+
+**Example directory structure:**
+```
+/home/user/projects/myproject/
+├── fabrik.toml                    # Project config (auto-discovered)
+├── scripts/
+│   └── build.recipe.js           # Recipe discovers ../fabrik.toml
+└── tools/
+    └── deploy.recipe.js          # Also discovers ../../fabrik.toml
+```
+
+**Configuration Options:**
+
+```javascript
+// build.recipe.js
+import { runCached } from 'fabrik:cache';
+
+// Option 1: Use discovered config (simplest)
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"]
+  }
+);
+
+// Option 2: Override cache directory at runtime
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"],
+    cacheDir: ".custom-cache"  // Override
+  }
+);
+
+// Option 3: Override upstream cache at runtime
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"],
+    upstream: [
+      "grpc://cache-us-east.example.com:7070",
+      "grpc://cache-eu-west.example.com:7070"
+    ]
+  }
+);
+
+// Option 4: Mix discovered config with runtime overrides
+await runCached(
+  async () => { /* build logic */ },
+  {
+    inputs: ["src/**/*.ts"],
+    outputs: ["dist/"],
+    ttl: "14d",                    // Override TTL
+    cacheDir: process.env.CACHE_DIR // Dynamic override
+  }
+);
+```
+
+**Supported Runtime Overrides:**
+
+| Option | Type | Description | Example |
+|--------|------|-------------|---------|
+| `cacheDir` | string | Local cache directory | `.fabrik-cache` |
+| `upstream` | string[] | Upstream cache servers | `["grpc://cache.example.com:7070"]` |
+| `ttl` | string | Cache expiration | `"7d"`, `"2h"`, `"30m"` |
+| `hashMethod` | string | How to hash input files | `"content"`, `"mtime"`, `"size"` |
+
+**Benefits:**
+- ✅ **Zero config**: Works out of the box with discovered `fabrik.toml`
+- ✅ **Flexible**: Override per-recipe when needed
+- ✅ **Dynamic**: Use environment variables for runtime config
+- ✅ **Portable**: Same recipe works across different projects
+
+### Implementation Details
+
+**Module Loader Registration** (src/recipe/runtime.rs):
+```rust
+// Register LLRT modules with rquickjs
+let resolver = BuiltinResolver::default()
+    .with_module("fs")
+    .with_module("fs/promises")
+    .with_module("child_process")
+    .with_module("path");
+
+let mut module_loader = ModuleLoader::default();
+module_loader
+    .add_module("fs", llrt_fs::FsModule)
+    .add_module("fs/promises", llrt_fs::FsPromisesModule)
+    .add_module("child_process", llrt_child_process::ChildProcessModule)
+    .add_module("path", llrt_path::PathModule);
+
+// Initialize buffer globals (Buffer, Blob, File, atob, btoa)
+llrt_buffer::init(&ctx)?;
+```
+
+**Recipe Execution** (src/recipe/executor.rs):
+```rust
+// Root-level execution only: wrap entire recipe in async IIFE
+let wrapped_code = format!("(async () => {{ {} }})();", recipe_code);
+let promise: rquickjs::Promise = ctx.eval(wrapped_code.as_bytes())?;
+promise.into_future::<()>().await?;
+
+// That's it! No function-based execution, no targets.
+```
+
+### Future Enhancements
+
+**Planned:**
+- [ ] TypeScript support via swc compilation
+- [ ] Replace `Fabrik.exec()` with proper cache-aware APIs (see API design discussion)
+- [ ] Integrate cache operations with actual Fabrik storage
+- [ ] Content-addressed caching based on inputs/outputs
+- [ ] More LLRT modules (net, http, crypto, etc.)
+
+**Not Planned (use LLRT modules instead):**
+- ❌ Custom fs implementation (use LLRT's `fs` module)
+- ❌ Custom process spawning (use LLRT's `child_process` module)
+- ❌ Custom path utilities (use LLRT's `path` module)
+
 ## Configuration
 
 ### Configuration Precedence (industry standard)
@@ -973,9 +1284,16 @@ fabrik cache <status|clean|list|stats> [OPTIONS]
 ```
 Inspect and manage the script cache (status, clean, list entries, view statistics).
 
-### Script Cache Feature
+### Fabrik Recipes
 
-Fabrik provides **content-addressed caching for arbitrary scripts** (bash, node, python, etc.) using KDL annotations embedded in the script file itself. This enables caching for any scripted build steps, not just build system artifacts.
+Fabrik provides two types of **recipes** for cached automation:
+
+1. **Script Recipes** - Quick automation using any scripting language
+2. **Portable Recipes** - Cross-platform automation using TypeScript/Deno
+
+#### Script Recipes
+
+Script recipes provide **content-addressed caching for arbitrary scripts** (bash, python, node, ruby, etc.) using KDL annotations embedded in the script file itself. This enables caching for any scripted build steps, not just build system artifacts.
 
 **Key Features:**
 - **Content-addressed**: Cache keyed by script content + inputs + environment variables
@@ -1092,6 +1410,195 @@ cache_key = SHA256(
 | **Outputs** | Build tool tracks | User declares |
 | **Dependencies** | Build tool graph | User declares |
 | **Portability** | Tied to build tool | Works anywhere |
+
+#### Portable Recipes
+
+Portable recipes are **cross-platform automation scripts** written in TypeScript/JavaScript that run on Fabrik's embedded Deno runtime. Unlike script recipes (which require platform-specific runtimes like bash, python, node), portable recipes are guaranteed to work on any operating system.
+
+**Key Features:**
+- **True cross-platform**: Same code works on Windows, macOS, and Linux
+- **No external runtime**: Deno is embedded in Fabrik binary
+- **TypeScript support**: Full IDE features (autocomplete, type checking)
+- **Fabrik API**: Access to cache, execution, and glob primitives via `fabrik:*` modules
+- **Shareable**: Can be published to registry and versioned
+- **Sandboxed**: Secure execution environment
+
+**Example Portable Recipe:**
+```typescript
+// build.recipe.ts
+import { $, run, glob } from "fabrik:runtime";
+import { get, put, has } from "fabrik:cache";
+
+// Metadata (for cache invalidation)
+export const recipe = {
+  name: "typescript-build",
+  version: "1.0.0",
+  inputs: ["src/**/*.ts", "package.json", "tsconfig.json"],
+  outputs: ["dist/"],
+  env: ["NODE_ENV"],
+  cacheTtl: "7d",
+};
+
+/**
+ * Install dependencies
+ */
+export async function install() {
+  console.log("[fabrik] Installing dependencies...");
+  await $`npm install`;
+}
+
+/**
+ * Build TypeScript project
+ */
+export async function build() {
+  await install();
+
+  console.log("[fabrik] Building TypeScript...");
+  await $`npm run build`;
+
+  const files = await glob("dist/**/*");
+  console.log(`[fabrik] Generated ${files.length} output files`);
+}
+
+/**
+ * Run tests
+ */
+export async function test() {
+  console.log("[fabrik] Running tests...");
+  const exitCode = await run("npm", ["test"]);
+
+  if (exitCode !== 0) {
+    throw new Error(`Tests failed with exit code ${exitCode}`);
+  }
+}
+
+/**
+ * Complete pipeline
+ */
+export async function all() {
+  await build();
+  await test();
+}
+```
+
+**Fabrik API Modules:**
+
+```typescript
+// fabrik:runtime - Execution primitives
+import { $, run, glob, hashFile } from "fabrik:runtime";
+
+// Template literal for shell commands
+await $`npm install`;                    // Returns exit code
+await $`tsc --build`;
+
+// Explicit command execution
+const exitCode = await run("npm", ["test"]);
+
+// File globbing
+const files = await glob("src/**/*.ts"); // Returns string[]
+
+// Content hashing
+const hash = hashFile("package.json");   // Returns SHA256 hex
+```
+
+```typescript
+// fabrik:cache - Direct cache access
+import { get, put, has } from "fabrik:cache";
+
+// Check if artifact exists
+if (await has("abc123...")) {
+  console.log("Cache hit!");
+}
+
+// Get artifact from cache
+const data = await get("abc123...");  // Returns Uint8Array | null
+
+// Put artifact into cache
+await put("abc123...", new Uint8Array([...]));
+```
+
+```typescript
+// fabrik:config - Runtime configuration
+import { getConfig } from "fabrik:config";
+
+const config = getConfig();
+console.log("Cache dir:", config.cacheDir);
+console.log("Upstream:", config.upstream);
+```
+
+**CLI Usage:**
+```bash
+# Run portable recipe target
+fabrik run build.recipe.ts build
+
+# Run default target (exported as default)
+fabrik run build.recipe.ts
+
+# Install from registry
+fabrik recipe install @tuist/typescript-build
+
+# Run installed recipe
+fabrik run @tuist/typescript-build build
+
+# Publish to registry
+fabrik recipe publish build.recipe.ts
+```
+
+**File Naming Convention:**
+- Script recipes: `build.sh`, `test.py`, `deploy.rb` (with `#FABRIK` annotations)
+- Portable recipes: `build.recipe.ts`, `test.recipe.js` (Deno/TypeScript)
+
+**Comparison: Script vs Portable Recipes**
+
+| Feature | Script Recipes | Portable Recipes |
+|---------|---------------|------------------|
+| **Languages** | bash, python, ruby, node, etc. | TypeScript/JavaScript only |
+| **Runtime** | External (must be installed) | Embedded Deno (always available) |
+| **Cross-platform** | ⚠️ Depends on script | ✅ Guaranteed |
+| **IDE Support** | Basic | ✅ Full LSP, autocomplete, types |
+| **Shareable** | ❌ Not easily | ✅ Can publish to registry |
+| **Learning Curve** | Low (use existing scripts) | Medium (learn TypeScript) |
+| **Use Case** | Quick automation, existing scripts | Production workflows, team sharing |
+
+**When to use Script Recipes:**
+- You have existing build scripts (bash, python, etc.)
+- Quick one-off automation
+- Platform-specific tasks (only runs on Linux/macOS)
+- Team already uses specific scripting language
+
+**When to use Portable Recipes:**
+- Need cross-platform compatibility (Windows + macOS + Linux)
+- Want to publish and share with team
+- Production-grade workflows
+- Prefer TypeScript/JavaScript ecosystem
+- Want IDE autocomplete and type safety
+
+**Migration Path:**
+
+```bash
+# Start with script recipe (existing Python script)
+$ cat build.py
+#!/usr/bin/env python3
+#FABRIK input "tests/**/*.py"
+import subprocess
+subprocess.run(["pytest"])
+
+$ fabrik run build.py  # Works on Unix with Python installed
+
+# Later: Convert to portable recipe for team
+$ cat build.recipe.ts
+import { $ } from "fabrik:runtime";
+
+export const recipe = {
+  inputs: ["tests/**/*.py"],
+};
+
+export async function test() {
+  await $`pytest`;  // Now works on Windows too!
+}
+
+$ fabrik run build.recipe.ts test  # Works everywhere
+```
 
 ### Daemon Architecture (Activation-Based)
 

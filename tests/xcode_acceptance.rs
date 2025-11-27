@@ -35,6 +35,7 @@ fn test_xcode_with_unix_socket() {
     // Use Xcode fixture
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
+        .join("build-systems")
         .join("xcode")
         .join("ios-app");
 

@@ -1,10 +1,17 @@
-# Script Caching
+# Standard Recipes
 
 Cache any script execution (bash, node, python, etc.) with automatic invalidation based on inputs, outputs, and environment variables.
 
-## What is Script Caching?
+## What Are Standard Recipes?
 
-Script caching allows you to cache arbitrary script executions that fall outside traditional build systems. While Fabrik integrates with build tools like Gradle and Bazel, many build workflows include custom scripts that aren't covered by those tools.
+Standard recipes are scripts in any language (bash, node, python, ruby, etc.) that use [FABRIK annotations](/cache/recipes/standard/annotations) for content-addressed caching. Unlike [portable recipes](/cache/recipes/portable/) (which run in Fabrik's embedded JavaScript runtime), standard recipes:
+
+- ✅ Use your system's installed runtimes (bash, node, python, etc.)
+- ✅ Support any scripting language with a shebang line
+- ✅ Cache execution results based on inputs, outputs, and environment variables
+- ✅ Work with existing scripts - just add FABRIK annotations
+
+While Fabrik integrates with build tools like Gradle and Bazel, many build workflows include custom scripts that aren't covered by those tools. Standard recipes fill this gap.
 
 **Examples:**
 - Running TypeScript compiler (`tsc`) directly
@@ -14,7 +21,17 @@ Script caching allows you to cache arbitrary script executions that fall outside
 - Deployment scripts
 - Docker image builds
 
-With script caching, you declare inputs and outputs using special comments in your scripts, and Fabrik handles the rest.
+With standard recipes, you declare inputs and outputs using [FABRIK annotations](/cache/recipes/standard/annotations), and Fabrik handles the rest.
+
+## Standard vs Portable Recipes
+
+| Feature | Standard Recipes | [Portable Recipes](/cache/recipes/portable/) |
+|---------|------------------|------------------|
+| **Runtime** | System (bash, node, python) | Embedded (QuickJS in Fabrik) |
+| **Languages** | Any with shebang | JavaScript only |
+| **Dependencies** | Requires runtime installed | Zero dependencies |
+| **Distribution** | Managed manually | Managed by Fabrik (via `@` syntax) |
+| **Caching** | [FABRIK annotations](/cache/recipes/standard/annotations) | [FABRIK annotations](/cache/recipes/standard/annotations) + runtime JS APIs |
 
 ## How It Works
 
@@ -43,11 +60,9 @@ Run it with Fabrik:
 ```bash
 # First run - cache miss, executes script
 fabrik run build.sh
-# Output: Cache key: script-abc123 | MISS ✗ | 2.45s (exit: 0)
 
 # Second run - cache hit, restores outputs instantly
 fabrik run build.sh
-# Output: Cache key: script-abc123 | HIT ✓ | 0.01s (exit: 0)
 ```
 
 Change an input file, and the cache automatically invalidates:
@@ -58,7 +73,6 @@ echo "export const foo = 42;" >> src/index.ts
 
 # Cache miss - script executes again
 fabrik run build.sh
-# Output: Cache key: script-def456 | MISS ✗ | 2.50s (exit: 0)
 ```
 
 ## Key Features

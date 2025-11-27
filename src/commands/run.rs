@@ -1,13 +1,14 @@
 /// `fabrik run` command implementation
 ///
-/// Executes scripts with caching based on KDL annotations.
+/// Executes scripts with caching based on KDL annotations,
+/// or runs portable recipes (QuickJS) from local or remote sources.
 use anyhow::{Context, Result};
 use std::path::Path;
 use std::time::Instant;
 
 use crate::cli::RunArgs;
 use crate::cli_utils::fabrik_prefix;
-use crate::script::{
+use crate::recipe::{
     annotations::parse_annotations,
     cache::{create_metadata, ScriptCache},
     cache_key::compute_cache_key,
@@ -15,6 +16,7 @@ use crate::script::{
     executor::ScriptExecutor,
     outputs::{archive_outputs, extract_outputs},
 };
+use crate::recipe_portable::{RecipeExecutor, RemoteRecipe};
 use crate::storage::default_cache_dir;
 
 pub async fn run(args: &RunArgs) -> Result<()> {
@@ -52,10 +54,32 @@ pub async fn run(args: &RunArgs) -> Result<()> {
     }
 
     let (cli_runtime, script) = args.parse_runtime_and_script();
+
+    // Check if this is a remote recipe (starts with @)
+    if script.starts_with('@') {
+        return run_remote_recipe(&script, args).await;
+    }
+
     let script_path = Path::new(&script);
 
     if !script_path.exists() {
         anyhow::bail!("Script not found: {}", script);
+    }
+
+    // Check if this is a local portable recipe (.js file without fabrik shebang)
+    // Portable recipes are executed with QuickJS runtime
+    // If the .js file has a shebang like "#!/usr/bin/env -S fabrik run node",
+    // it should use the standard recipe system with the external node runtime
+    if script_path
+        .extension()
+        .map(|ext| ext == "js")
+        .unwrap_or(false)
+    {
+        // Check shebang to determine if this is a standard recipe or portable recipe
+        if !has_fabrik_run_shebang(script_path)? {
+            return run_local_portable_recipe(script_path, args).await;
+        }
+        // Otherwise, fall through to standard recipe execution
     }
 
     // Parse annotations
@@ -279,14 +303,14 @@ pub async fn run(args: &RunArgs) -> Result<()> {
         }
 
         // Create metadata
-        let metadata = create_metadata(crate::script::cache::CreateMetadataParams {
+        let metadata = create_metadata(crate::recipe::CreateMetadataParams {
             cache_key: cache_key.clone(),
             script_path,
             exit_code: result.exit_code,
             duration: result.duration,
             runtime: annotations.runtime.clone(),
             runtime_version: if annotations.runtime_version {
-                crate::script::inputs::get_runtime_version(&annotations.runtime).ok()
+                crate::recipe::inputs::get_runtime_version(&annotations.runtime).ok()
             } else {
                 None
             },
@@ -328,7 +352,7 @@ pub async fn run(args: &RunArgs) -> Result<()> {
 /// Execute script without caching
 fn execute_script_no_cache(
     script_path: &Path,
-    annotations: &crate::script::ScriptAnnotations,
+    annotations: &crate::recipe::ScriptAnnotations,
     args: &[String],
     verbose: bool,
 ) -> Result<()> {
@@ -499,6 +523,119 @@ async fn run_stats(cache_dir: &std::path::Path) -> Result<()> {
             (stats.total_size_bytes as f64 / stats.total_entries as f64) / 1_000_000.0
         );
     }
+
+    Ok(())
+}
+
+/// Execute a remote recipe (from Git repository)
+async fn run_remote_recipe(recipe_ref: &str, args: &RunArgs) -> Result<()> {
+    if args.verbose {
+        eprintln!("{} Parsing remote recipe: {}", fabrik_prefix(), recipe_ref);
+    }
+
+    // Parse remote recipe reference
+    let remote = RemoteRecipe::parse(recipe_ref)
+        .with_context(|| format!("Failed to parse remote recipe: {}", recipe_ref))?;
+
+    if args.verbose {
+        eprintln!(
+            "{} Remote recipe: {}/{}/{} (ref: {})",
+            fabrik_prefix(),
+            remote.host,
+            remote.org,
+            remote.repo,
+            remote.git_ref.as_deref().unwrap_or("main")
+        );
+    }
+
+    // Fetch repository to local cache
+    if args.verbose {
+        eprintln!("{} Fetching from {}", fabrik_prefix(), remote.git_url());
+    }
+
+    let script_path = remote
+        .fetch()
+        .await
+        .with_context(|| format!("Failed to fetch remote recipe: {}", recipe_ref))?;
+
+    if args.verbose {
+        eprintln!(
+            "{} Recipe cached at: {}",
+            fabrik_prefix(),
+            script_path.display()
+        );
+    }
+
+    // Execute recipe with RecipeExecutor
+    let executor = RecipeExecutor::new(script_path);
+
+    if args.verbose {
+        eprintln!("{} Executing recipe at root level", fabrik_prefix());
+    }
+
+    executor
+        .execute()
+        .await
+        .with_context(|| format!("Failed to execute remote recipe: {}", recipe_ref))?;
+
+    Ok(())
+}
+
+/// Check if a script file has a `fabrik run <runtime>` shebang
+///
+/// This is used to distinguish between:
+/// - Standard recipes: `#!/usr/bin/env -S fabrik run node` -> use external node runtime
+/// - Portable recipes: No fabrik shebang -> use QuickJS runtime
+fn has_fabrik_run_shebang(script_path: &Path) -> Result<bool> {
+    use std::io::{BufRead, BufReader};
+
+    let file = std::fs::File::open(script_path)
+        .with_context(|| format!("Failed to open script: {}", script_path.display()))?;
+
+    let reader = BufReader::new(file);
+
+    if let Some(Ok(first_line)) = reader.lines().next() {
+        // Check for various fabrik run shebang patterns
+        // e.g., "#!/usr/bin/env -S fabrik run node"
+        // e.g., "#!/usr/bin/env fabrik run python"
+        if first_line.starts_with("#!") && first_line.contains("fabrik run") {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
+}
+
+/// Execute a local portable recipe (.js file with QuickJS runtime)
+async fn run_local_portable_recipe(script_path: &Path, args: &RunArgs) -> Result<()> {
+    if args.verbose {
+        eprintln!(
+            "{} Running local portable recipe: {}",
+            fabrik_prefix(),
+            script_path.display()
+        );
+    }
+
+    // Get absolute path for the recipe
+    let absolute_path = if script_path.is_absolute() {
+        script_path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(script_path)
+    };
+
+    // Execute recipe with RecipeExecutor (QuickJS runtime)
+    let executor = RecipeExecutor::new(absolute_path);
+
+    if args.verbose {
+        eprintln!("{} Executing recipe with QuickJS runtime", fabrik_prefix());
+    }
+
+    executor.execute().await.with_context(|| {
+        format!(
+            "Failed to execute portable recipe: {}",
+            script_path.display()
+        )
+    })?;
 
     Ok(())
 }

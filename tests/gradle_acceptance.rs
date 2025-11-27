@@ -26,6 +26,7 @@ fn test_gradle_cache_with_daemon() {
     // Use Gradle fixture
     let fixture_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("fixtures")
+        .join("build-systems")
         .join("gradle")
         .join("app");
 
