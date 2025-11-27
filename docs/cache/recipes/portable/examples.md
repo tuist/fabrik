@@ -6,7 +6,7 @@ This page shows practical examples of **portable recipes** - JavaScript recipes 
 
 Portable recipes are JavaScript files that:
 - ✅ Run in Fabrik's embedded runtime (no Node.js/Deno installation needed)
-- ✅ Have access to Fabrik APIs (`fabrik:fs`, `child_process`)
+- ✅ Have access to Fabrik cache APIs (`fabrik:cache`, `fabrik:kv`, `fabrik:fs`)
 - ✅ Can be distributed via Git repositories using `@` syntax
 - ✅ Support content-addressed caching with FABRIK annotations
 - ✅ Start instantly (~1ms vs ~50ms for Node.js)
