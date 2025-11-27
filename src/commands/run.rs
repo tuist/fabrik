@@ -66,6 +66,16 @@ pub async fn run(args: &RunArgs) -> Result<()> {
         anyhow::bail!("Script not found: {}", script);
     }
 
+    // Check if this is a local portable recipe (.js file)
+    // Portable recipes are executed with QuickJS runtime
+    if script_path
+        .extension()
+        .map(|ext| ext == "js")
+        .unwrap_or(false)
+    {
+        return run_local_portable_recipe(script_path, args).await;
+    }
+
     // Parse annotations
     if args.verbose {
         eprintln!("{} Parsing annotations from {}", fabrik_prefix(), script);
@@ -561,6 +571,40 @@ async fn run_remote_recipe(recipe_ref: &str, args: &RunArgs) -> Result<()> {
         .execute()
         .await
         .with_context(|| format!("Failed to execute remote recipe: {}", recipe_ref))?;
+
+    Ok(())
+}
+
+/// Execute a local portable recipe (.js file with QuickJS runtime)
+async fn run_local_portable_recipe(script_path: &Path, args: &RunArgs) -> Result<()> {
+    if args.verbose {
+        eprintln!(
+            "{} Running local portable recipe: {}",
+            fabrik_prefix(),
+            script_path.display()
+        );
+    }
+
+    // Get absolute path for the recipe
+    let absolute_path = if script_path.is_absolute() {
+        script_path.to_path_buf()
+    } else {
+        std::env::current_dir()?.join(script_path)
+    };
+
+    // Execute recipe with RecipeExecutor (QuickJS runtime)
+    let executor = RecipeExecutor::new(absolute_path);
+
+    if args.verbose {
+        eprintln!("{} Executing recipe with QuickJS runtime", fabrik_prefix());
+    }
+
+    executor.execute().await.with_context(|| {
+        format!(
+            "Failed to execute portable recipe: {}",
+            script_path.display()
+        )
+    })?;
 
     Ok(())
 }

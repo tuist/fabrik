@@ -1,14 +1,74 @@
-# Remote Recipe Syntax Reference
+# Portable Recipe Syntax Reference
 
-## Format
+Portable recipes are JavaScript files executed in Fabrik's embedded QuickJS runtime. They can be run locally or fetched from Git repositories.
 
+## Local Recipes
+
+Run any `.js` file directly with Fabrik's embedded QuickJS runtime:
+
+```bash
+fabrik run <path/to/recipe.js>
 ```
-@[host/]org/repo/path/script.js[@ref]
+
+### Examples
+
+```bash
+# Run a recipe in the current directory
+fabrik run build.js
+
+# Run a recipe in a subdirectory
+fabrik run scripts/deploy.js
+
+# Run with verbose output
+fabrik run --verbose build.js
+
+# Absolute path
+fabrik run /path/to/my/recipe.js
 ```
 
-## Components
+### How It Works
 
-### Required Components
+When you run a `.js` file with `fabrik run`:
+
+1. Fabrik detects the `.js` extension
+2. Loads the file into the embedded QuickJS runtime
+3. Provides access to Fabrik APIs (`fabrik:cache`, `fabrik:kv`, `fabrik:fs`)
+4. Provides Node.js-compatible APIs (`fs`, `child_process`, `path`)
+5. Executes the recipe
+
+### Example Recipe
+
+```javascript
+// build.js
+import { spawn } from 'child_process';
+import { glob } from 'fabrik:fs';
+
+console.log("Building project...");
+
+const files = await glob("src/**/*.ts");
+console.log(`Found ${files.length} TypeScript files`);
+
+const result = await spawn("npm", ["run", "build"]);
+if (result.exitCode !== 0) {
+    throw new Error("Build failed!");
+}
+
+console.log("Build complete!");
+```
+
+---
+
+## Remote Recipes
+
+Fetch and run recipes directly from Git repositories using the `@` prefix syntax:
+
+```bash
+fabrik run @[host/]org/repo/path/script.js[@ref]
+```
+
+### Components
+
+#### Required Components
 
 **`@` Prefix**
 All remote recipes must start with `@` to differentiate them from local file paths.
@@ -22,7 +82,7 @@ The repository name.
 **Path** (`path/script.js`)
 The path to the recipe file within the repository. Can include subdirectories.
 
-### Optional Components
+#### Optional Components
 
 **Host** (`host`)
 The Git server hostname. Defaults to `github.com` if not specified.
@@ -40,51 +100,51 @@ Examples:
 - `@v1.0.0` (tag)
 - `@abc123def` (commit SHA)
 
-## Syntax Examples
+### Remote Syntax Examples
 
-### GitHub (Default Host)
+#### GitHub (Default Host)
 
 ```bash
 # Simple (uses main branch)
-@tuist/recipes/build.js
+fabrik run @tuist/recipes/build.js
 
 # With version tag
-@tuist/recipes/build.js@v1.0.0
+fabrik run @tuist/recipes/build.js@v1.0.0
 
 # Nested path
-@tuist/recipes/scripts/deploy/production.js
+fabrik run @tuist/recipes/scripts/deploy/production.js
 
 # With branch
-@tuist/recipes/build.js@develop
+fabrik run @tuist/recipes/build.js@develop
 ```
 
-### GitLab
+#### GitLab
 
 ```bash
 # Simple
-@gitlab.com/myorg/myrepo/build.js
+fabrik run @gitlab.com/myorg/myrepo/build.js
 
 # With version
-@gitlab.com/myorg/myrepo/build.js@v2.0.0
+fabrik run @gitlab.com/myorg/myrepo/build.js@v2.0.0
 
 # Nested path
-@gitlab.com/myorg/myrepo/ci/deploy.js@release
+fabrik run @gitlab.com/myorg/myrepo/ci/deploy.js@release
 ```
 
-### Self-Hosted Git
+#### Self-Hosted Git
 
 ```bash
 # Company Git server
-@git.company.com/team/project/build.js
+fabrik run @git.company.com/team/project/build.js
 
 # With specific commit
-@git.company.com/team/project/build.js@abc123def
+fabrik run @git.company.com/team/project/build.js@abc123def
 
 # Nested path
-@git.company.com/team/project/scripts/test.js@main
+fabrik run @git.company.com/team/project/scripts/test.js@main
 ```
 
-## Cache Directory Structure
+### Cache Directory Structure
 
 Remote recipes are cached following XDG Base Directory conventions:
 
@@ -112,7 +172,7 @@ Remote recipes are cached following XDG Base Directory conventions:
                 └── build.js
 ```
 
-## Git URL Generation
+### Git URL Generation
 
 Fabrik converts the remote recipe syntax to HTTPS Git URLs:
 
@@ -122,13 +182,25 @@ Fabrik converts the remote recipe syntax to HTTPS Git URLs:
 | `@gitlab.com/org/repo/script.js` | `https://gitlab.com/org/repo.git` |
 | `@git.company.com/team/project/build.js` | `https://git.company.com/team/project.git` |
 
-## Cloning Behavior
+### Cloning Behavior
 
 - **Shallow Clone** - Fabrik uses `git clone --depth 1` for efficient fetching - only the latest commit is downloaded.
 - **Cached After First Fetch** - Once fetched, the recipe is cached locally. Subsequent runs reuse the cache without re-fetching.
 - **Branch Tracking** - When using a branch reference (e.g., `@main`), the cache is specific to that branch. Switching branches fetches a new copy.
 
+---
+
 ## Common Patterns
+
+### Local Development, Remote Production
+
+```bash
+# During development - iterate on local recipe
+fabrik run build.js
+
+# In CI/production - use versioned remote recipe
+fabrik run @myorg/recipes/build.js@v1.0.0
+```
 
 ### Versioned Releases
 
@@ -144,22 +216,35 @@ fabrik run @tuist/recipes/build.js@main
 
 ```bash
 # Different recipes in same repo
-@org/recipes/ci/build.js
-@org/recipes/ci/test.js
-@org/recipes/deploy/staging.js
-@org/recipes/deploy/production.js
+fabrik run @org/recipes/ci/build.js
+fabrik run @org/recipes/ci/test.js
+fabrik run @org/recipes/deploy/staging.js
+fabrik run @org/recipes/deploy/production.js
 ```
 
 ### Multi-Environment Recipes
 
 ```bash
 # Select environment via recipe path
-@company/infra/deploy/dev.js
-@company/infra/deploy/staging.js
-@company/infra/deploy/prod.js
+fabrik run @company/infra/deploy/dev.js
+fabrik run @company/infra/deploy/staging.js
+fabrik run @company/infra/deploy/prod.js
 ```
+
+---
+
+## Quick Reference
+
+| Type | Syntax | Example |
+|------|--------|---------|
+| Local recipe | `fabrik run <file.js>` | `fabrik run build.js` |
+| Remote (GitHub) | `fabrik run @org/repo/file.js` | `fabrik run @tuist/recipes/build.js` |
+| Remote with version | `fabrik run @org/repo/file.js@tag` | `fabrik run @tuist/recipes/build.js@v1.0.0` |
+| Remote (GitLab) | `fabrik run @gitlab.com/org/repo/file.js` | `fabrik run @gitlab.com/myorg/recipes/build.js` |
+| Remote (Self-hosted) | `fabrik run @host/org/repo/file.js` | `fabrik run @git.company.com/team/project/build.js` |
 
 ## Next Steps
 
-- [Examples](/cache/recipes/remote/examples) - See real-world usage
-- [Local Recipes](/cache/recipes/local/) - Learn about local script recipes
+- [Examples](/cache/recipes/portable/examples) - See real-world usage
+- [JavaScript API Reference](/cache/recipes/api-reference) - Complete API documentation
+- [Standard Recipes](/cache/recipes/standard/) - Learn about standard script recipes (bash, python, etc.)
