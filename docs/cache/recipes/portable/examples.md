@@ -582,4 +582,4 @@ fabrik run @myorg/my-recipes/build.js@v1.0.0
 
 - [JavaScript API Reference](/cache/recipes/api-reference) - Complete API documentation for portable recipe development
 - [Syntax Reference](/cache/recipes/portable/syntax) - Learn the full `@` prefix syntax for fetching portable recipes
-- [Standard Recipes](/cache/recipes/) - Learn about standard script recipes (bash, node, python) with caching annotations
+- [Standard Recipes](/cache/recipes/standard/) - Learn about standard script recipes (bash, node, python) with caching annotations

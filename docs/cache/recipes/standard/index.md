@@ -167,5 +167,5 @@ Use `--verbose` for detailed output including input/output tracking.
 
 ## Next Steps
 
-- [Configuration Reference](/cache/scripts/reference) - Complete list of all directives
-- [Examples](/cache/scripts/examples) - Real-world examples and recipes
+- [Annotations Reference](/cache/recipes/standard/annotations) - Complete list of all directives
+- [Examples](/cache/recipes/standard/examples) - Real-world examples and recipes

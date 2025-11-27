@@ -429,5 +429,5 @@ npm run stats > build-stats.json
 
 ## See Also
 
-- [Introduction](/cache/scripts/) - Overview and quick start
-- [Examples](/cache/scripts/examples) - Real-world examples
+- [Introduction](/cache/recipes/standard/) - Overview and quick start
+- [Examples](/cache/recipes/standard/examples) - Real-world examples

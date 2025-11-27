@@ -642,6 +642,6 @@ console.log(`Bundle hash: ${bundleHash.slice(0, 8)}`);
 
 ## See Also
 
-- [Remote Recipes](/cache/recipes/remote/) - Execute recipes from Git repositories
-- [Local Recipes](/cache/recipes/local/) - Script recipes with KDL annotations
+- [Portable Recipes](/cache/recipes/portable/) - Execute recipes from Git repositories
+- [Standard Recipes](/cache/recipes/standard/) - Script recipes with FABRIK annotations
 - [Configuration Reference](/reference/config-file) - Fabrik configuration options
