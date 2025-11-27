@@ -61,6 +61,7 @@ RUN cargo chef prepare --recipe-path recipe.json
 FROM chef AS builder
 
 # Install build dependencies with cache mount
+# libclang-dev is required for rquickjs (QuickJS bindings)
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt/lists,sharing=locked \
     apt-get update && \
@@ -70,6 +71,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     curl \
     unzip \
     clang \
+    libclang-dev \
     lld
 
 # Install protoc 28.3

@@ -19,8 +19,9 @@ pre-build = [
 ]
 
 [target.x86_64-unknown-linux-musl]
+# libclang-dev is required for librocksdb-sys build script
 pre-build = [
-    "apt-get update && apt-get install -y curl unzip",
+    "apt-get update && apt-get install -y curl unzip libclang-dev",
     "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip",
     "unzip protoc-28.3-linux-x86_64.zip -d /usr/local",
     "chmod +x /usr/local/bin/protoc",
@@ -37,28 +38,31 @@ pre-build = [
 ]
 
 [target.aarch64-unknown-linux-musl]
+# libclang-dev is required for librocksdb-sys build script
 pre-build = [
-    "apt-get update && apt-get install -y curl unzip",
+    "apt-get update && apt-get install -y curl unzip libclang-dev",
     "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip",
     "unzip protoc-28.3-linux-x86_64.zip -d /usr/local",
     "chmod +x /usr/local/bin/protoc",
     "rm protoc-28.3-linux-x86_64.zip",
 ]
 
-[target.armv7-unknown-linux-gnueabihf]
-pre-build = [
-    "apt-get update && apt-get install -y curl unzip",
-    "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip",
-    "unzip protoc-28.3-linux-x86_64.zip -d /usr/local",
-    "chmod +x /usr/local/bin/protoc",
-    "rm protoc-28.3-linux-x86_64.zip",
-]
+# ARMv7 targets are disabled because rquickjs doesn't have pre-built bindings for them
+# Uncomment when/if rquickjs adds armv7 support
+# [target.armv7-unknown-linux-gnueabihf]
+# pre-build = [
+#     "apt-get update && apt-get install -y curl unzip libclang-dev",
+#     "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip",
+#     "unzip protoc-28.3-linux-x86_64.zip -d /usr/local",
+#     "chmod +x /usr/local/bin/protoc",
+#     "rm protoc-28.3-linux-x86_64.zip",
+# ]
 
-[target.armv7-unknown-linux-musleabihf]
-pre-build = [
-    "apt-get update && apt-get install -y curl unzip",
-    "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip",
-    "unzip protoc-28.3-linux-x86_64.zip -d /usr/local",
-    "chmod +x /usr/local/bin/protoc",
-    "rm protoc-28.3-linux-x86_64.zip",
-]
+# [target.armv7-unknown-linux-musleabihf]
+# pre-build = [
+#     "apt-get update && apt-get install -y curl unzip libclang-dev",
+#     "curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v28.3/protoc-28.3-linux-x86_64.zip",
+#     "unzip protoc-28.3-linux-x86_64.zip -d /usr/local",
+#     "chmod +x /usr/local/bin/protoc",
+#     "rm protoc-28.3-linux-x86_64.zip",
+# ]

@@ -79,13 +79,14 @@ jobs:
             os: ubuntu-latest
             archive: tar.gz tar.xz tar.zst
 
-          # Linux ARMv7
-          - target: armv7-unknown-linux-gnueabihf
-            os: ubuntu-latest
-            archive: tar.gz tar.xz tar.zst
-          - target: armv7-unknown-linux-musleabihf
-            os: ubuntu-latest
-            archive: tar.gz tar.xz tar.zst
+          # Linux ARMv7 - DISABLED: rquickjs doesn't have pre-built bindings for armv7
+          # Uncomment when/if rquickjs adds armv7 support
+          # - target: armv7-unknown-linux-gnueabihf
+          #   os: ubuntu-latest
+          #   archive: tar.gz tar.xz tar.zst
+          # - target: armv7-unknown-linux-musleabihf
+          #   os: ubuntu-latest
+          #   archive: tar.gz tar.xz tar.zst
 
           # macOS x86_64
           - target: x86_64-apple-darwin
