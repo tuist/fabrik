@@ -2,20 +2,20 @@
 // FABRIK output "generated/"
 // FABRIK cache ttl="30d"
 
-import { mkdirSync, writeFileSync } from 'fs';
-
 console.log("[fabrik] Generating output files...");
 
 // Create output directory
-mkdirSync("generated", { recursive: true });
+await Fabrik.exec("mkdir", ["-p", "generated"]);
 
-// Generate some test files
-writeFileSync("generated/file1.txt", "Content from portable recipe - file 1\n");
-writeFileSync("generated/file2.txt", "Content from portable recipe - file 2\n");
-writeFileSync("generated/data.json", JSON.stringify({
+// Write files using Fabrik API (accepts strings like Node.js)
+await Fabrik.writeFile("generated/file1.txt", "Content from portable recipe - file 1\n");
+await Fabrik.writeFile("generated/file2.txt", "Content from portable recipe - file 2\n");
+
+const dataJson = JSON.stringify({
   generated: true,
   timestamp: new Date().toISOString(),
   recipe: "file-generator.js"
-}, null, 2));
+}, null, 2);
+await Fabrik.writeFile("generated/data.json", dataJson);
 
 console.log("[fabrik] Generated 3 files in generated/");

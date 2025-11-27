@@ -1,9 +1,6 @@
 // Simulated test runner recipe
-// This demonstrates a portable recipe that generates test results
 // FABRIK output "coverage/"
 // FABRIK cache ttl="1h"
-
-import { mkdirSync, writeFileSync } from 'fs';
 
 console.log("[fabrik] Running simulated test suite...");
 
@@ -11,12 +8,12 @@ console.log("[fabrik] Running simulated test suite...");
 const testFiles = ["auth.test.js", "utils.test.js", "api.test.js"];
 const sourceFiles = ["auth.js", "utils.js", "api.js", "index.js"];
 
-console.log(`[fabrik] Found ${testFiles.length} test files`);
-console.log(`[fabrik] Found ${sourceFiles.length} source files`);
+console.log("[fabrik] Found", testFiles.length, "test files");
+console.log("[fabrik] Found", sourceFiles.length, "source files");
 
 // Simulate test execution
 const testResults = {
-  total: testFiles.length * 10, // Simulate 10 tests per file
+  total: testFiles.length * 10,
   passed: testFiles.length * 9,
   failed: testFiles.length * 1,
   duration: 2.5,
@@ -24,7 +21,7 @@ const testResults = {
 };
 
 // Create coverage directory
-mkdirSync("coverage", { recursive: true });
+await Fabrik.exec("mkdir", ["-p", "coverage"]);
 
 // Generate coverage report
 const coverage = {
@@ -34,9 +31,9 @@ const coverage = {
   branches: { total: sourceFiles.length * 50, covered: sourceFiles.length * 40, pct: 80 }
 };
 
-writeFileSync("coverage/coverage-summary.json", JSON.stringify(coverage, null, 2));
-writeFileSync("coverage/test-results.json", JSON.stringify(testResults, null, 2));
+await Fabrik.writeFile("coverage/coverage-summary.json", JSON.stringify(coverage, null, 2));
+await Fabrik.writeFile("coverage/test-results.json", JSON.stringify(testResults, null, 2));
 
-console.log(`[fabrik] Tests: ${testResults.passed}/${testResults.total} passed`);
-console.log(`[fabrik] Coverage: ${coverage.lines.pct}% lines, ${coverage.functions.pct}% functions`);
+console.log("[fabrik] Tests:", testResults.passed + "/" + testResults.total, "passed");
+console.log("[fabrik] Coverage:", coverage.lines.pct + "% lines,", coverage.functions.pct + "% functions");
 console.log("[fabrik] Coverage report saved to coverage/");

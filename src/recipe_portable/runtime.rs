@@ -58,8 +58,9 @@ pub async fn create_fabrik_runtime_with_dir(
             Ok::<Vec<u8>, rquickjs::Error>(data)
         })))?;
 
-        fabrik.set("writeFile", Function::new(ctx.clone(), Async(|path: String, data: Vec<u8>| async move {
-            tokio::fs::write(&path, &data).await?;
+        // writeFile accepts string or byte array, like Node.js
+        fabrik.set("writeFile", Function::new(ctx.clone(), Async(|path: String, data: String| async move {
+            tokio::fs::write(&path, data.as_bytes()).await?;
             Ok::<(), rquickjs::Error>(())
         })))?;
 

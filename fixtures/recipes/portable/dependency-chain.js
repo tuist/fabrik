@@ -2,18 +2,17 @@
 // Note: Dependency resolution is not yet implemented in the runtime
 // FABRIK output "final/"
 
-import { mkdirSync, writeFileSync } from 'fs';
-
 console.log("[fabrik] Running dependency chain recipe...");
 
-// Create final output
-mkdirSync("final", { recursive: true });
+// Create final output directory
+await Fabrik.exec("mkdir", ["-p", "final"]);
 
-writeFileSync("final/chain-result.txt",
+const content =
   "Dependency chain recipe completed.\n" +
   "This demonstrates the concept of recipes depending on other recipes.\n" +
   "\n" +
-  "Timestamp: " + new Date().toISOString()
-);
+  "Timestamp: " + new Date().toISOString();
+
+await Fabrik.writeFile("final/chain-result.txt", content);
 
 console.log("[fabrik] Dependency chain complete -> final/");
