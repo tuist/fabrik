@@ -238,7 +238,7 @@ impl ScriptExecutor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::script::annotations::ScriptAnnotations;
+    use crate::recipe::annotations::ScriptAnnotations;
     use std::fs;
     use tempfile::TempDir;
 

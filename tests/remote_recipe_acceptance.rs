@@ -3,7 +3,6 @@
 // These tests verify remote recipe functionality end-to-end
 
 use anyhow::Result;
-use std::path::PathBuf;
 use tempfile::TempDir;
 use tokio::fs;
 
@@ -62,10 +61,10 @@ async function build() {
 
     // Now test remote recipe execution with file:// URL
     // Note: This is a simplified test - in real usage we'd use https:// URLs
-    let file_url = format!("file://{}", repo_path.display());
+    let _file_url = format!("file://{}", repo_path.display());
 
     // For now, just verify the RemoteRecipe parsing works
-    use fabrik::recipe::RemoteRecipe;
+    use fabrik::recipe_portable::RemoteRecipe;
 
     // Test parsing various remote recipe formats
     let simple = RemoteRecipe::parse("@tuist/recipes/build.js")?;
@@ -86,7 +85,7 @@ async function build() {
 
 #[tokio::test]
 async fn test_remote_recipe_cache_dir_structure() -> Result<()> {
-    use fabrik::recipe::RemoteRecipe;
+    use fabrik::recipe_portable::RemoteRecipe;
 
     let remote = RemoteRecipe::parse("@tuist/recipes/build.js@v1.0.0")?;
     let cache_dir = remote.cache_dir()?;
@@ -105,7 +104,7 @@ async fn test_remote_recipe_cache_dir_structure() -> Result<()> {
 
 #[tokio::test]
 async fn test_remote_recipe_parsing_errors() {
-    use fabrik::recipe::RemoteRecipe;
+    use fabrik::recipe_portable::RemoteRecipe;
 
     // Missing @ prefix
     assert!(RemoteRecipe::parse("tuist/recipes/build.js").is_err());
@@ -119,7 +118,7 @@ async fn test_remote_recipe_parsing_errors() {
 
 #[tokio::test]
 async fn test_remote_recipe_git_url_generation() -> Result<()> {
-    use fabrik::recipe::RemoteRecipe;
+    use fabrik::recipe_portable::RemoteRecipe;
 
     // GitHub (default)
     let github = RemoteRecipe::parse("@tuist/recipes/build.js")?;
@@ -141,7 +140,7 @@ async fn test_remote_recipe_git_url_generation() -> Result<()> {
 
 #[tokio::test]
 async fn test_remote_recipe_nested_paths() -> Result<()> {
-    use fabrik::recipe::RemoteRecipe;
+    use fabrik::recipe_portable::RemoteRecipe;
 
     let nested = RemoteRecipe::parse("@tuist/recipes/scripts/deploy/prod.js")?;
     assert_eq!(nested.path, "scripts/deploy/prod.js");
