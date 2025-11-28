@@ -2,6 +2,48 @@
 
 All notable changes to this project will be documented in this file.
 
+## [2.0.0] - 2025-11-28
+
+### 🐛 Bug Fixes
+
+- **(ci)** Fix build failures for Docker and cross-compilation ([4e7afb7](4e7afb75045e8207c22eacba08f8ac49f161bed4))
+- **(ci)** Install clang-14 for cross-compilation ([00e74ec](00e74ec1a968070ece724b32062074ed24a92540))
+- **(ci)** Use correct Cross.toml env passthrough syntax ([e962595](e96259571179aa1bf3674246bbd937199da38a08))
+- **(ci)** Install LLVM on macOS for libclang dependency ([b0e0cf4](b0e0cf4d227611eb6bbba79a5fbe70ff95007b53))
+- **(ci)** Disable musl targets that exceed 6-hour timeout ([9dac896](9dac896ad8c6f853fdf13673ae95f3e69fe6069a))
+- **(deps)** Update rust crate rocksdb to 0.24 (#32) ([3af9c3b](3af9c3b902a56d192b219f8c8d14159c8418c47d))
+- **(deps)** Update rust crate which to v8 (#60) ([e26b320](e26b32015409a53a7bf90cae507268e72e918b0e))
+- **(deps)** Update rust crate kdl to v6 (#59) ([e4d1381](e4d13814c5aee7e09a6b754f10620cc0677f1912))
+- **(deps)** Update tokio-prost monorepo to 0.14 (#34) ([a0ca1b5](a0ca1b57255ea2fdc7c525a0a84a7cb445eac875))
+- **(deps)** Update rust crate rand to 0.9 (#38) ([257217d](257217d0e5fe3c9c9cc3206c110c974aad3086a6))
+- **(deps)** Update rust crate mdns-sd to 0.17 (#47) ([23c6e10](23c6e10b251dc93aa66f43fc1db15759e01d95e5))
+- **(deps)** Update rust crate axum to 0.8 (#51) ([9823a47](9823a470d4609499249650bd7528f6919f669774))
+- **(deps)** Update rust crate dirs to v6 (#58) ([26932ec](26932ecacc6006fdc05c92c4469fbe50daab7d86))
+- **(docs)** Fix 12 dead links in documentation ([9bc4134](9bc41346c9b9cf78843c286f77c020240c6a5021))
+- Use valid Java 21 LTS version in mise config ([7afe57d](7afe57de22d6f913d3452ae3993dfb6c85d36812))
+
+### 📦 Dependency Updates
+
+- **(deps)** Update pnpm to v10.23.0 (#52) ([ae70e74](ae70e74522391e619b57809b8edcd84f31afa0ae))
+- **(deps)** Update npm to v11.6.3 (#50) ([142a10d](142a10d905651218faf3141a21aa366cb64f76bd))
+- **(deps)** Update dependency java to v25 (#41) ([b22655c](b22655cbdc4db935e4def9641b86b3256d345ab7))
+- **(deps)** Update jdx/mise-action action to v3 (#57) ([c42524a](c42524af68482e98ae11c42bbb9e128d0c024f07))
+- **(deps)** Update gradle to v9 (#56) ([969f465](969f465f6f97a5fedf96bc8a503cfa06d2babc3c))
+- **(deps)** Update actions/checkout action to v6 (#53) ([195cfe9](195cfe9a1d2f124392c53c958541f482a5534c87))
+- **(deps)** Update github artifact actions (#55) ([f7719c6](f7719c6fc2e1023550f70f835f6ff1786bdf99fe))
+- **(deps)** Update dependency rules_swift to v3 (#54) ([4a14212](4a1421219489ad973e37a8f24a466243db3329d3))
+- **(deps)** Update npm to v11.6.4 (#62) ([2cee159](2cee159817c50b299f5a041e7d1014c866fcb598))
+- **(deps)** Update rust crate tower-http to v0.6.7 (#61) ([81fd848](81fd84881c2190ab15a3306463b862084ce49194))
+- **(deps)** Update rust crate tower-http to v0.6.7 (#64) ([3905636](39056362ee7419dc3044106283eb2fe20759a065))
+- **(deps)** Update rust crate tower-http to v0.6.7 (#65) ([ad2467c](ad2467c6db2ca5940eb9bc48a260d7beaa015f49))
+- **(deps)** Update rust crate tower-http to v0.6.7 (#66) ([a4d6f20](a4d6f20944d42c1b135fbbac2e6d8835991caf09))
+- **(deps)** Update pnpm to v10.24.0 (#67) ([56a31b5](56a31b526f1b362ee881dc211af8c00b0930316f))
+
+### 🚀 Features
+
+- [**breaking**] Add portable recipes with QuickJS + LLRT integration (#49) ([fa088d3](fa088d33f102db227eec63ae8b4219c596a54df7))
+- Implement cache eviction with LRU, LFU, and TTL policies (#68) ([a3068ee](a3068eeb2bc483810c7fc783104182f29cfe4f3c))
+
 ## [1.1.0] - 2025-11-22
 
 ### 🐛 Bug Fixes
