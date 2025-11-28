@@ -67,17 +67,21 @@ jobs:
           - target: x86_64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz tar.xz tar.zst
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            archive: tar.gz tar.xz tar.zst
+          # Linux musl - DISABLED: Cross-compilation takes >6 hours and times out
+          # These need pre-built Docker images with clang already installed
+          # - target: x86_64-unknown-linux-musl
+          #   os: ubuntu-latest
+          #   archive: tar.gz tar.xz tar.zst
 
           # Linux ARM64
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-latest
             archive: tar.gz tar.xz tar.zst
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-            archive: tar.gz tar.xz tar.zst
+
+          # Linux ARM64 musl - DISABLED: Cross-compilation takes >6 hours and times out
+          # - target: aarch64-unknown-linux-musl
+          #   os: ubuntu-latest
+          #   archive: tar.gz tar.xz tar.zst
 
           # Linux ARMv7 - DISABLED: rquickjs doesn't have pre-built bindings for armv7
           # Uncomment when/if rquickjs adds armv7 support
