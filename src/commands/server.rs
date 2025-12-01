@@ -1,4 +1,5 @@
 use anyhow::Result;
+use std::path::PathBuf;
 use std::sync::Arc;
 use tokio::signal;
 use tokio::sync::watch;
@@ -9,6 +10,7 @@ use crate::cli::ServerArgs;
 use crate::eviction::{spawn_background_eviction, BackgroundEvictionConfig, EvictionConfig};
 use crate::fabrik_protocol::proto::fabrik_cache_server::FabrikCacheServer;
 use crate::fabrik_protocol::FabrikCacheService;
+use crate::hot_reload::HotReloadManager;
 use crate::merger::MergedServerConfig;
 use crate::storage::FilesystemStorage;
 use crate::xcode::proto::cas::casdb_service_server::CasdbServiceServer;
@@ -16,10 +18,19 @@ use crate::xcode::proto::keyvalue::key_value_db_server::KeyValueDbServer;
 use crate::xcode::{CasService, KeyValueService};
 
 pub async fn run(args: ServerArgs) -> Result<()> {
-    use crate::config_discovery::load_config_with_discovery;
+    use crate::config_discovery::{discover_config, load_config_with_discovery};
 
-    // Load config file with auto-discovery
+    // Load config file with auto-discovery and get the config path
     let file_config = load_config_with_discovery(args.config.as_deref())?;
+
+    // Determine config file path for hot-reload
+    let config_path: Option<PathBuf> = if let Some(ref path) = args.config {
+        Some(PathBuf::from(path))
+    } else {
+        // Try to discover config path
+        let current_dir = std::env::current_dir()?;
+        discover_config(&current_dir)?
+    };
 
     // Keep a copy of the full config for Fabrik protocol settings
     let full_config = file_config.clone().unwrap_or_default();
@@ -66,6 +77,29 @@ pub async fn run(args: ServerArgs) -> Result<()> {
         spawn_background_eviction(storage.clone(), bg_config)
     };
     info!("Background eviction task started");
+
+    // Set up hot-reload manager if we have a config file
+    let hot_reload = if let Some(ref path) = config_path {
+        match HotReloadManager::new(full_config.clone(), path).await {
+            Ok(manager) => {
+                info!("Hot-reload enabled for {}", path.display());
+                info!("  - File changes will auto-reload config");
+                #[cfg(unix)]
+                info!("  - Send SIGHUP to manually reload");
+                Some(manager)
+            }
+            Err(e) => {
+                tracing::warn!(
+                    "Failed to set up hot-reload: {}. Continuing without hot-reload.",
+                    e
+                );
+                None
+            }
+        }
+    } else {
+        info!("Hot-reload disabled (no config file)");
+        None
+    };
 
     // Create shutdown signal channel
     let (shutdown_tx, _) = watch::channel(false);
@@ -163,6 +197,12 @@ pub async fn run(args: ServerArgs) -> Result<()> {
     // Shutdown background eviction task
     info!("Shutting down background eviction task...");
     eviction_handle.shutdown().await;
+
+    // Shutdown hot-reload manager
+    if let Some(ref manager) = hot_reload {
+        info!("Shutting down hot-reload manager...");
+        manager.shutdown();
+    }
 
     info!("Server shutdown complete");
     Ok(())
