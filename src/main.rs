@@ -8,6 +8,8 @@ mod config;
 mod config_discovery;
 mod config_expansion; // Environment variable expansion for config files
 mod eviction; // Cache eviction policies (LRU, LFU, TTL)
+mod fabrik_protocol; // Fabrik gRPC protocol (Layer 1 <-> Layer 2 communication)
+mod hot_reload; // Hot-reload support for configuration
 mod http;
 mod logging;
 mod merger;
