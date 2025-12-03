@@ -30,6 +30,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_client(true) // We need both server and client for P2P
         .compile_protos(&["proto/p2p.proto"], &["proto"])?;
 
+    // Compile Fabrik protocol proto files (Layer 1 <-> Layer 2 communication)
+    tonic_prost_build::configure()
+        .build_server(true) // Layer 2 serves the protocol
+        .build_client(true) // Layer 1 calls Layer 2
+        .compile_protos(&["proto/fabrik.proto"], &["proto"])?;
+
     // Generate C header file using cbindgen
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR")?;
     let output_file = std::path::Path::new(&crate_dir)

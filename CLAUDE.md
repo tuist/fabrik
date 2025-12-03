@@ -1803,10 +1803,10 @@ enabled = ["gradle", "bazel", "nx", "turborepo", "sccache", "buildkit"]
 port = 0  # 0 = random port
 auto_configure = true  # Auto-set GRADLE_BUILD_CACHE_URL
 
-# Fabrik protocol (Layer 2 server, Layer 1 client)
-[fabrik]
-enabled = false  # true for Layer 2, false for Layer 1
-bind = "0.0.0.0:7070"  # gRPC bind address
+# Server configuration (Layer 1 local, Layer 2 regional)
+[server]
+layer = "local"  # "local" (Layer 1) or "regional" (Layer 2)
+bind = "0.0.0.0:7070"  # gRPC bind address (used when layer = "regional")
 
 # Observability
 [observability]
@@ -2045,9 +2045,9 @@ required = true
 [build_tools]
 enabled = []  # Empty - Layer 2 only speaks Fabrik protocol
 
-# Instead, run Fabrik protocol server
-[fabrik]
-enabled = true
+# Configure as regional (Layer 2) server
+[server]
+layer = "regional"
 bind = "0.0.0.0:7070"  # gRPC server for Fabrik protocol
 
 [observability]

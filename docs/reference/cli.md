@@ -286,8 +286,8 @@ permanent = true
 [auth]
 public_key_file = "/etc/fabrik/jwt-public-key.pem"
 
-[fabrik]
-enabled = true
+[server]
+layer = "regional"
 bind = "0.0.0.0:7070"  # gRPC server for Fabrik protocol
 
 [observability]
