@@ -282,7 +282,7 @@ async fn test_layer2_server_get_stats() {
         .await
         .expect("Failed to connect to server");
 
-    // Initial stats
+    // Initial stats (empty cache)
     let stats_request = fabrik::fabrik_protocol::proto::GetStatsRequest {
         since_timestamp: None,
     };
@@ -294,11 +294,14 @@ async fn test_layer2_server_get_stats() {
     let stats = stats_response.into_inner();
 
     println!("Initial stats:");
-    println!("  Cache hits: {}", stats.cache_hits);
-    println!("  Cache misses: {}", stats.cache_misses);
     println!("  Artifact count: {}", stats.artifact_count);
     println!("  Total bytes: {}", stats.total_bytes);
-    println!("  Uptime seconds: {}", stats.uptime_seconds);
+
+    assert_eq!(
+        stats.artifact_count, 0,
+        "Should have no artifacts initially"
+    );
+    assert_eq!(stats.total_bytes, 0, "Should have no bytes initially");
 
     // Store some data
     let test_data = b"Stats test data";
@@ -313,16 +316,6 @@ async fn test_layer2_server_get_stats() {
     let put_stream = tokio_stream::iter(put_requests);
     client.put(put_stream).await.expect("Put failed");
 
-    // Do an EXISTS (should be a hit)
-    let exists_request = fabrik::fabrik_protocol::proto::ExistsRequest { hash: hash.clone() };
-    client.exists(exists_request).await.expect("Exists failed");
-
-    // Do an EXISTS for non-existent (should be a miss)
-    let miss_request = fabrik::fabrik_protocol::proto::ExistsRequest {
-        hash: "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-    };
-    client.exists(miss_request).await.expect("Exists failed");
-
     // Get updated stats
     let stats_request2 = fabrik::fabrik_protocol::proto::GetStatsRequest {
         since_timestamp: None,
@@ -335,19 +328,18 @@ async fn test_layer2_server_get_stats() {
     let stats2 = stats_response2.into_inner();
 
     println!("\nUpdated stats:");
-    println!("  Cache hits: {}", stats2.cache_hits);
-    println!("  Cache misses: {}", stats2.cache_misses);
     println!("  Artifact count: {}", stats2.artifact_count);
     println!("  Total bytes: {}", stats2.total_bytes);
 
-    // Verify stats were updated
-    assert!(stats2.cache_hits >= 1, "Should have at least 1 cache hit");
-    assert!(
-        stats2.cache_misses >= 1,
-        "Should have at least 1 cache miss"
+    // Verify artifact was stored
+    assert_eq!(stats2.artifact_count, 1, "Should have 1 artifact");
+    assert_eq!(
+        stats2.total_bytes,
+        test_data.len() as u64,
+        "Total bytes should match data size"
     );
 
-    println!("✅ GetStats returns correct metrics");
+    println!("✅ GetStats returns correct storage stats");
 }
 
 #[tokio::test]

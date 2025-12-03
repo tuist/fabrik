@@ -9,49 +9,20 @@ use crate::fabrik_protocol::proto::{
     GetStatsRequest, GetStatsResponse, PutRequest, PutResponse,
 };
 use crate::storage::{FilesystemStorage, Storage};
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Instant;
 use tokio_stream::wrappers::ReceiverStream;
 use tonic::{Request, Response, Status, Streaming};
 use tracing::{debug, info, warn};
 
-/// Fabrik cache service metrics
-pub struct ServiceMetrics {
-    pub cache_hits: AtomicU64,
-    pub cache_misses: AtomicU64,
-    pub start_time: Instant,
-}
-
-impl Default for ServiceMetrics {
-    fn default() -> Self {
-        Self {
-            cache_hits: AtomicU64::new(0),
-            cache_misses: AtomicU64::new(0),
-            start_time: Instant::now(),
-        }
-    }
-}
-
 /// Fabrik Cache gRPC service
 pub struct FabrikCacheService {
     storage: Arc<FilesystemStorage>,
-    metrics: Arc<ServiceMetrics>,
 }
 
 impl FabrikCacheService {
     /// Create a new Fabrik cache service
     pub fn new(storage: Arc<FilesystemStorage>) -> Self {
-        Self {
-            storage,
-            metrics: Arc::new(ServiceMetrics::default()),
-        }
-    }
-
-    /// Get service metrics (will be exposed via metrics endpoint)
-    #[allow(dead_code)]
-    pub fn metrics(&self) -> Arc<ServiceMetrics> {
-        self.metrics.clone()
+        Self { storage }
     }
 
     /// Convert hash string to bytes (hex decode)
@@ -79,12 +50,10 @@ impl FabrikCache for FabrikCacheService {
         match self.storage.exists(&hash_bytes) {
             Ok(exists) => {
                 let size_bytes = if exists {
-                    self.metrics.cache_hits.fetch_add(1, Ordering::Relaxed);
                     // Touch for LRU tracking
                     let _ = self.storage.touch(&hash_bytes);
                     self.storage.size(&hash_bytes).unwrap_or(None).unwrap_or(0) as i64
                 } else {
-                    self.metrics.cache_misses.fetch_add(1, Ordering::Relaxed);
                     0
                 };
 
@@ -114,13 +83,11 @@ impl FabrikCache for FabrikCacheService {
         // Check if artifact exists
         let data = match self.storage.get(&hash_bytes) {
             Ok(Some(data)) => {
-                self.metrics.cache_hits.fetch_add(1, Ordering::Relaxed);
                 // Touch for LRU tracking
                 let _ = self.storage.touch(&hash_bytes);
                 data
             }
             Ok(None) => {
-                self.metrics.cache_misses.fetch_add(1, Ordering::Relaxed);
                 debug!("Artifact not found: {}...", hash_display);
                 return Err(Status::not_found(format!(
                     "Artifact not found: {}",
@@ -274,14 +241,12 @@ impl FabrikCache for FabrikCacheService {
             }
         };
 
-        let uptime = self.metrics.start_time.elapsed().as_secs();
-
         Ok(Response::new(GetStatsResponse {
-            cache_hits: self.metrics.cache_hits.load(Ordering::Relaxed),
-            cache_misses: self.metrics.cache_misses.load(Ordering::Relaxed),
+            cache_hits: 0,
+            cache_misses: 0,
             artifact_count: stats.total_objects,
             total_bytes: stats.total_bytes,
-            uptime_seconds: uptime,
+            uptime_seconds: 0,
         }))
     }
 }
