@@ -249,3 +249,137 @@ impl Drop for TestDaemon {
         println!("  All state cleaned up (no global state leaked)");
     }
 }
+
+/// Wait for gRPC server to be ready by attempting to connect
+/// Returns true if server is ready, false if timeout
+fn wait_for_grpc_server(port: u16) -> bool {
+    for _ in 0..50 {
+        // Try 50 times with 100ms sleep = 5 seconds max
+        if TcpStream::connect(format!("127.0.0.1:{}", port)).is_ok() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
+    false
+}
+
+/// Helper to start a Fabrik regional server (Layer 2) for testing
+/// Each test gets its own isolated server with unique ports and cache
+/// NO GLOBAL STATE - all state is in temporary directories
+#[allow(dead_code)]
+pub struct TestServer {
+    _temp_dir: TempDir,
+    #[allow(dead_code)]
+    pub cache_dir: PathBuf,
+    child: Child,
+    pub grpc_port: u16,
+}
+
+impl TestServer {
+    /// Start a new regional server (Layer 2) with isolated cache
+    /// Returns the server with a dynamically allocated gRPC port
+    #[allow(dead_code)]
+    pub fn start() -> Self {
+        Self::start_on_port(0) // 0 = random port
+    }
+
+    /// Start a new regional server on a specific port
+    /// Use port 0 for a random available port
+    #[allow(dead_code)]
+    pub fn start_on_port(port: u16) -> Self {
+        let fabrik_bin = env!("CARGO_BIN_EXE_fabrik");
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let cache_dir = temp_dir.path().join("cache");
+
+        // Create cache directory
+        std::fs::create_dir_all(&cache_dir).expect("Failed to create cache dir");
+
+        // Create a test config file for regional server
+        let config_path = temp_dir.path().join("fabrik.toml");
+
+        // Convert paths to forward slashes for TOML (Windows compatibility)
+        let cache_dir_str = cache_dir.display().to_string().replace('\\', "/");
+
+        // Find an available port
+        let bind_addr = if port == 0 {
+            // Find an available port
+            let listener =
+                std::net::TcpListener::bind("127.0.0.1:0").expect("Failed to bind to random port");
+            let actual_port = listener.local_addr().unwrap().port();
+            drop(listener); // Release the port so the server can use it
+            format!("127.0.0.1:{}", actual_port)
+        } else {
+            format!("127.0.0.1:{}", port)
+        };
+
+        let actual_port: u16 = bind_addr.split(':').next_back().unwrap().parse().unwrap();
+
+        let config_content = format!(
+            r#"
+[cache]
+dir = "{}"
+max_size = "1GB"
+
+[server]
+layer = "regional"
+bind = "{}"
+"#,
+            cache_dir_str, bind_addr
+        );
+
+        std::fs::write(&config_path, &config_content).expect("Failed to write test config");
+
+        println!("Starting test regional server:");
+        println!("  Config: {}", config_path.display());
+        println!("  Bind: {}", bind_addr);
+        println!("  Cache dir: {}", cache_dir.display());
+
+        // Start server in background
+        let child = Command::new(fabrik_bin)
+            .arg("server")
+            .arg("--config")
+            .arg(&config_path)
+            .spawn()
+            .expect("Failed to start server");
+
+        // Wait for server to start
+        let server_ready = wait_for_grpc_server(actual_port);
+        if !server_ready {
+            panic!("Server failed to become ready on port {}", actual_port);
+        }
+
+        println!("Test server started on port {}", actual_port);
+
+        Self {
+            _temp_dir: temp_dir,
+            cache_dir,
+            child,
+            grpc_port: actual_port,
+        }
+    }
+
+    /// Get the gRPC URL for connecting to this server
+    #[allow(dead_code)]
+    pub fn grpc_url(&self) -> String {
+        format!("http://127.0.0.1:{}", self.grpc_port)
+    }
+
+    /// Get the gRPC address (without protocol)
+    #[allow(dead_code)]
+    pub fn grpc_addr(&self) -> String {
+        format!("127.0.0.1:{}", self.grpc_port)
+    }
+}
+
+impl Drop for TestServer {
+    fn drop(&mut self) {
+        println!("Cleaning up test server (port: {})", self.grpc_port);
+
+        // Kill server
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+
+        // Note: Cache directory cleanup happens automatically when _temp_dir is dropped
+        println!("  Server cleaned up");
+    }
+}
