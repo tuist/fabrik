@@ -25,7 +25,7 @@ pub struct FabrikConfig {
     pub build_systems: BuildSystemsConfig,
 
     #[serde(default)]
-    pub fabrik: FabrikProtocolConfig,
+    pub server: ServerConfig,
 
     #[serde(default)]
     pub observability: ObservabilityConfig,
@@ -308,24 +308,32 @@ pub struct AdapterConfig {
     pub auto_configure: bool,
 }
 
-/// Fabrik protocol configuration
+/// Server configuration
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct FabrikProtocolConfig {
-    /// Enable Fabrik protocol server (Layer 2)
+pub struct ServerConfig {
+    /// Server layer: "local" (Layer 1) or "regional" (Layer 2)
+    /// When set to "regional", the server runs the Fabrik protocol gRPC server
     #[serde(default)]
-    pub enabled: bool,
+    pub layer: Option<String>,
 
-    /// Bind address for Fabrik gRPC server
-    #[serde(default = "default_fabrik_bind")]
+    /// Bind address for the server (used when layer = "regional")
+    #[serde(default = "default_server_bind")]
     pub bind: String,
 }
 
-impl Default for FabrikProtocolConfig {
+impl Default for ServerConfig {
     fn default() -> Self {
         Self {
-            enabled: false,
-            bind: default_fabrik_bind(),
+            layer: None, // Default to Layer 1 behavior
+            bind: default_server_bind(),
         }
+    }
+}
+
+impl ServerConfig {
+    /// Check if this is a regional (Layer 2) server
+    pub fn is_regional(&self) -> bool {
+        self.layer.as_deref() == Some("regional")
     }
 }
 
@@ -455,7 +463,7 @@ fn default_build_systems() -> Vec<String> {
     ]
 }
 
-fn default_fabrik_bind() -> String {
+fn default_server_bind() -> String {
     "0.0.0.0:7070".to_string()
 }
 
@@ -520,6 +528,16 @@ fn default_max_concurrent_peer_requests() -> usize {
 }
 
 impl FabrikConfig {
+    /// Check if this is a regional (Layer 2) server
+    pub fn is_regional(&self) -> bool {
+        self.server.is_regional()
+    }
+
+    /// Get the bind address for the regional server
+    pub fn regional_bind(&self) -> &str {
+        &self.server.bind
+    }
+
     /// Load configuration from TOML file
     pub fn from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
         let content = fs::read_to_string(&path)
@@ -604,8 +622,8 @@ impl FabrikConfig {
                 enabled: vec![], // Layer 2 doesn't run build system adapters
                 ..Default::default()
             },
-            fabrik: FabrikProtocolConfig {
-                enabled: true, // Layer 2 runs Fabrik protocol server
+            server: ServerConfig {
+                layer: Some("regional".to_string()), // Layer 2 runs Fabrik protocol server
                 bind: "0.0.0.0:7070".to_string(),
             },
             ..Default::default()
@@ -654,6 +672,13 @@ impl FabrikConfig {
                 anyhow::bail!(
                     "build_systems.enabled must contain only: gradle, bazel, nx, turborepo, sccache"
                 );
+            }
+        }
+
+        // Validate server layer
+        if let Some(ref layer) = self.server.layer {
+            if !["local", "regional"].contains(&layer.as_str()) {
+                anyhow::bail!("server.layer must be one of: local, regional");
             }
         }
 

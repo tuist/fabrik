@@ -47,14 +47,14 @@ pub async fn run(args: ServerArgs) -> Result<()> {
     info!("  Upstream: {:?}", config.upstream);
     info!("  gRPC bind: {}", config.grpc_bind);
 
-    // Check Fabrik protocol configuration
-    let fabrik_enabled = full_config.fabrik.enabled;
-    let fabrik_bind = full_config.fabrik.bind.clone();
+    // Check server layer configuration
+    let is_regional = full_config.is_regional();
+    let regional_bind = full_config.regional_bind().to_string();
 
-    if fabrik_enabled {
-        info!("Fabrik protocol: enabled on {}", fabrik_bind);
+    if is_regional {
+        info!("Server layer: regional (Layer 2) on {}", regional_bind);
     } else {
-        info!("Fabrik protocol: disabled");
+        info!("Server layer: local (Layer 1)");
     }
 
     // Initialize eviction configuration
@@ -107,33 +107,33 @@ pub async fn run(args: ServerArgs) -> Result<()> {
     // Track server handles
     let mut handles = vec![];
 
-    // Start Fabrik protocol server if enabled (Layer 2 mode)
-    if fabrik_enabled {
-        let fabrik_storage = storage.clone();
-        let fabrik_addr = fabrik_bind
+    // Start regional cache server if layer = "regional" (Layer 2 mode)
+    if is_regional {
+        let regional_storage = storage.clone();
+        let regional_addr = regional_bind
             .parse()
-            .map_err(|e| anyhow::anyhow!("Invalid Fabrik protocol bind address: {}", e))?;
+            .map_err(|e| anyhow::anyhow!("Invalid server bind address: {}", e))?;
         let mut shutdown_rx = shutdown_tx.subscribe();
 
-        info!("Starting Fabrik protocol server on {}", fabrik_addr);
+        info!("Starting regional cache server on {}", regional_addr);
         info!("  - FabrikCache service (Exists, Get, Put, Delete, GetStats)");
 
         handles.push(tokio::spawn(async move {
-            let fabrik_service = FabrikCacheService::new(fabrik_storage);
+            let fabrik_service = FabrikCacheService::new(regional_storage);
 
             Server::builder()
                 .add_service(FabrikCacheServer::new(fabrik_service))
-                .serve_with_shutdown(fabrik_addr, async move {
+                .serve_with_shutdown(regional_addr, async move {
                     let _ = shutdown_rx.changed().await;
                 })
                 .await
-                .map_err(|e| anyhow::anyhow!("Fabrik protocol server error: {}", e))
+                .map_err(|e| anyhow::anyhow!("Regional cache server error: {}", e))
         }));
     }
 
     // Start Xcode services on the legacy gRPC bind (for backward compatibility)
-    // Only start if Fabrik protocol is disabled (to avoid port conflicts)
-    if !fabrik_enabled {
+    // Only start if not running as regional server (to avoid port conflicts)
+    if !is_regional {
         let xcode_storage = storage.clone();
         let mut shutdown_rx = shutdown_tx.subscribe();
 

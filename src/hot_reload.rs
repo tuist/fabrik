@@ -20,6 +20,7 @@
 
 use crate::config::FabrikConfig;
 use anyhow::{Context, Result};
+use diffo::diff;
 use notify::{Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -109,46 +110,45 @@ impl HotReloadableConfig {
         }
     }
 
-    /// Log configuration changes
+    /// Paths that require a restart to take effect
+    const NON_RELOADABLE_PATHS: &'static [&'static str] =
+        &["cache.dir", "server.bind", "server.layer"];
+
+    /// Check if a path requires restart
+    fn requires_restart(path: &str) -> bool {
+        Self::NON_RELOADABLE_PATHS
+            .iter()
+            .any(|p| path.starts_with(p))
+    }
+
+    /// Log configuration changes using diffo for automatic diff detection
     fn log_config_changes(old: &FabrikConfig, new: &FabrikConfig) {
-        // Check upstream changes
-        if old.upstream.len() != new.upstream.len() {
-            info!(
-                "Upstream count changed: {} -> {}",
-                old.upstream.len(),
-                new.upstream.len()
-            );
+        let config_diff = match diff(old, new) {
+            Ok(d) => d,
+            Err(e) => {
+                warn!("Failed to compute config diff: {}", e);
+                return;
+            }
+        };
+
+        if config_diff.is_empty() {
+            info!("No configuration changes detected");
+            return;
         }
 
-        // Check eviction policy changes
-        if old.cache.eviction_policy != new.cache.eviction_policy {
-            info!(
-                "Eviction policy changed: {} -> {}",
-                old.cache.eviction_policy, new.cache.eviction_policy
-            );
-        }
+        info!("Configuration changes detected:");
 
-        // Check max cache size changes
-        if old.cache.max_size != new.cache.max_size {
-            info!(
-                "Max cache size changed: {} -> {}",
-                old.cache.max_size, new.cache.max_size
-            );
-        }
+        for (path, change) in config_diff.changes() {
+            let path_str = path.to_string();
 
-        // Warn about non-reloadable changes
-        if old.cache.dir != new.cache.dir {
-            warn!(
-                "Cache directory changed ({} -> {}), but this requires a restart to take effect",
-                old.cache.dir, new.cache.dir
-            );
-        }
-
-        if old.fabrik.bind != new.fabrik.bind {
-            warn!(
-                "Fabrik bind address changed ({} -> {}), but this requires a restart to take effect",
-                old.fabrik.bind, new.fabrik.bind
-            );
+            if Self::requires_restart(&path_str) {
+                warn!(
+                    "  {} changed: {:?} (requires restart to take effect)",
+                    path_str, change
+                );
+            } else {
+                info!("  {} changed: {:?}", path_str, change);
+            }
         }
     }
 }
@@ -313,8 +313,8 @@ max_size = "1GB"
 eviction_policy = "lfu"
 default_ttl = "7d"
 
-[fabrik]
-enabled = true
+[server]
+layer = "regional"
 bind = "127.0.0.1:7070"
 "#;
         fs::write(&config_path, config_content).unwrap();
@@ -341,8 +341,8 @@ max_size = "2GB"
 eviction_policy = "lru"
 default_ttl = "7d"
 
-[fabrik]
-enabled = true
+[server]
+layer = "regional"
 bind = "127.0.0.1:7070"
 "#;
         fs::write(&config_path, new_content).unwrap();

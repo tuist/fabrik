@@ -123,8 +123,8 @@ enabled = ["gradle", "bazel", "nx", "turborepo", "sccache"]
 port = 0
 auto_configure = true
 
-[fabrik]
-enabled = false
+[server]
+layer = "local"  # "local" (Layer 1) or "regional" (Layer 2)
 bind = "0.0.0.0:7070"
 
 [observability]
@@ -245,16 +245,29 @@ port = 0              # 0 = random port (recommended)
 auto_configure = true # Auto-set GRADLE_BUILD_CACHE_URL
 ```
 
-### `[fabrik]`
+### `[server]`
 
-Fabrik protocol server configuration (Layer 2 only).
+Server configuration for Layer 1 (local) or Layer 2 (regional) mode.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable Fabrik protocol gRPC server |
-| `bind` | string | `0.0.0.0:7070` | gRPC bind address |
+| `layer` | string | `"local"` | Server layer: `"local"` (Layer 1) or `"regional"` (Layer 2) |
+| `bind` | string | `0.0.0.0:7070` | gRPC bind address (used when layer = "regional") |
 
-**Note:** Enable this for Layer 2 servers. Layer 1 (local daemons) should keep this disabled.
+**Examples:**
+
+```toml
+# Layer 1 (local daemon) - default
+[server]
+layer = "local"
+
+# Layer 2 (regional server)
+[server]
+layer = "regional"
+bind = "0.0.0.0:7070"
+```
+
+**Note:** Set `layer = "regional"` for Layer 2 servers that serve the Fabrik gRPC protocol. Layer 1 (local daemons) should use the default `layer = "local"` or omit the section entirely.
 
 ### `[observability]`
 
