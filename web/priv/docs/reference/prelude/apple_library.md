@@ -26,6 +26,7 @@ merge them with `lipo`.
 | `exported_headers` | list&lt;string&gt; | no | `[]` | Headers made available to dependent targets |
 | `exported_header_dirs` | list&lt;string&gt; | no | `[]` | Header search directories made available to dependent targets |
 | `private_header_dirs` | list&lt;string&gt; | no | `[]` | Header search directories used only while compiling this target |
+| `private_headers` | list&lt;string&gt; | no | `[]` | Private header files required while compiling this target |
 | `resources` | list&lt;string&gt; | no | `[]` | Files and directory roots placed in this library's propagated resource bundle |
 | `structured_resources` | list&lt;string&gt; | no | `[]` | Resource directory roots whose own basename is preserved inside the propagated bundle |
 | `resource_bundle_name` | string | no |  | Name of the propagated resource bundle. The `.bundle` suffix is added when omitted |

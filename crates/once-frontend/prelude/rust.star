@@ -378,10 +378,10 @@ def _rust_response_file_args(ctx, args, name):
 
 def _rust_materialized_cwd_arg(arg):
     if arg.startswith(".once/"):
-        return _workspace_absolute(arg)
+        return execution_path(arg)
     parts = _split_once(arg, "=")
     if len(parts) == 2 and parts[1].startswith(".once/"):
-        return parts[0] + "=" + _workspace_absolute(parts[1])
+        return parts[0] + "=" + execution_path(parts[1])
     return arg
 
 def _rust_user_flags(ctx):
@@ -543,6 +543,8 @@ def _workspace_absolute(path):
     root = workspace_root()
     if not root:
         return path
+    if path == ".":
+        return root
     return root + "/" + path
 
 def _rust_bin_exe_deps(ctx):
@@ -1026,11 +1028,11 @@ def _rust_proc_macro_dirs(deps):
         if proc_macro:
             directory = _parent_dir(proc_macro)
             if directory:
-                dirs.append(_workspace_absolute(directory))
+                dirs.append(execution_path(directory))
         for transitive in dep.get("transitive_proc_macros") or []:
             directory = _parent_dir(transitive)
             if directory:
-                dirs.append(_workspace_absolute(directory))
+                dirs.append(execution_path(directory))
     return _unique(dirs)
 
 def _rust_add_windows_proc_macro_path(env, deps):
@@ -1091,7 +1093,7 @@ def _rust_build_script_env(ctx, rustc, target, host_triple, out_dir, script_path
         env["NUM_JOBS"] = "1"
     if "OPT_LEVEL" not in env:
         env["OPT_LEVEL"] = "0"
-    env["OUT_DIR"] = _workspace_absolute(out_dir)
+    env["OUT_DIR"] = execution_path(out_dir)
     if "PROFILE" not in env:
         env["PROFILE"] = "debug"
     env["RUSTC"] = rustc
@@ -1146,15 +1148,15 @@ def _rust_dep_metadata_exports(deps):
       ;;
   esac
 done < {stdout}
-""".format(metadata = _rust_dep_metadata_key_shell(prefix), stdout = _shell_quote(_workspace_absolute(stdout))))
+""".format(metadata = _rust_dep_metadata_key_shell(prefix), stdout = _shell_quote(execution_path(stdout))))
     return ("\n".join(snippets), _unique(inputs))
 
 def _rust_build_script_output_pipeline(runner, status, stdout):
-    runner_exec = _shell_quote(_workspace_absolute(runner))
+    runner_exec = _shell_quote(execution_path(runner))
     printf = _shell_quote(host_which("printf"))
     tee = _shell_quote(host_which("tee"))
     status_abs = _shell_quote(status)
-    stdout_abs = _shell_quote(_workspace_absolute(stdout))
+    stdout_abs = _shell_quote(execution_path(stdout))
     status_capture = "{ " + runner_exec + " 2>&1; " + printf + " '%s' \"$?\" > " + status_abs + "; }"
     return status_capture + " | " + tee + " " + stdout_abs
 
@@ -1208,7 +1210,7 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     _rust_add_windows_proc_macro_path(build_script_compile_env, deps)
     run_action(
         argv = compile_argv,
-        inputs = _unique([script_path] + dep_inputs + dependency_build_outputs + dependency_build_inputs + wrapped[1] + _rust_extra_inputs(ctx)),
+        inputs = _unique([script_path] + source_inputs + build_script_inputs + dep_inputs + dependency_build_outputs + dependency_build_inputs + wrapped[1] + _rust_extra_inputs(ctx)),
         outputs = [runner],
         env = build_script_compile_env,
         toolchain_identity = identity + linker_identity + "\x00build-script",
@@ -1216,6 +1218,7 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     )
     tool_paths = _rust_build_script_tool_paths(ctx)
     run_env = _rust_build_script_env(ctx, rustc, target, host_triple, out_dir, script_path, tool_paths)
+    status = out_dir + "/.once-build-script-status"
     metadata_exports, metadata_inputs = _rust_dep_metadata_exports(metadata_deps)
     run_script = _rust_build_script_run_shell(runner, stdout, run_env, metadata_exports)
     # Cargo's default: a build script that prints no `rerun-if` directive
@@ -1230,7 +1233,7 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     run_action(
         argv = [host_which("sh"), "-c", run_script],
         inputs = _unique([runner] + metadata_inputs + source_inputs + build_script_inputs + _rust_extra_inputs(ctx)),
-        outputs = [out_dir, stdout],
+        outputs = [out_dir, stdout, status],
         # Emptying the output directory belongs to the script's own setup, not
         # to a step before it. Declared as separate actions, the wipe ran even
         # when the script's result was already cached, and the cache hit then
@@ -1245,8 +1248,8 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
         identifier = _rust_action_identifier(ctx, "build-script"),
     )
     compile_env = _rust_compile_action_env(ctx, target, host_triple)
-    compile_env["OUT_DIR"] = _workspace_absolute(out_dir)
-    return (out_dir, [script_path, stdout], compile_env, stdout)
+    compile_env["OUT_DIR"] = execution_path(out_dir)
+    return (out_dir, [script_path, out_dir, stdout], compile_env, stdout)
 
 def _rustc_unix_read_dependency_link_searches(stdout):
     return """while IFS= read -r line; do
@@ -1254,11 +1257,14 @@ def _rustc_unix_read_dependency_link_searches(stdout):
     cargo:rustc-link-search=*|cargo::rustc-link-search=*)
       value=${{line#cargo:rustc-link-search=}}
       value=${{value#cargo::rustc-link-search=}}
+      case "$value" in
+        */.once/out/*) value={out_root}"/${{value#*/.once/out/}}" ;;
+      esac
       set -- "$@" -L "$value"
       ;;
   esac
 done < {stdout}
-""".format(stdout = _shell_quote(_workspace_absolute(stdout)))
+""".format(stdout = _shell_quote(execution_path(stdout)), out_root = _shell_quote(execution_path(".once/out")))
 
 def _rustc_unix_read_own_build_script_args(stdout):
     return """while IFS= read -r line; do
@@ -1291,11 +1297,14 @@ def _rustc_unix_read_own_build_script_args(stdout):
     cargo:rustc-link-search=*|cargo::rustc-link-search=*)
       value=${{line#cargo:rustc-link-search=}}
       value=${{value#cargo::rustc-link-search=}}
+      case "$value" in
+        */.once/out/*) value={out_root}"/${{value#*/.once/out/}}" ;;
+      esac
       set -- "$@" -L "$value"
       ;;
   esac
 done < {stdout}
-""".format(stdout = _shell_quote(_workspace_absolute(stdout)))
+""".format(stdout = _shell_quote(execution_path(stdout)), out_root = _shell_quote(execution_path(".once/out")))
 
 def _rustc_unix_build_script_args(argv, own_stdout, dependency_stdouts):
     snippets = []
@@ -1915,7 +1924,7 @@ def _rust_cargo_runtime_env(ctx):
     }
 
 def _rust_test_env(ctx, test_dir):
-    env = {"HOME": execution_path(test_dir + "/home")}
+    env = {"HOME": execution_path(_rust_scratch_dir(ctx) + "/test-home")}
     process_path = _rust_process_path()
     if process_path:
         env["PATH"] = process_path
@@ -1945,7 +1954,7 @@ def _rust_test_info(ctx, test_binary, results, log, native_results, test_dir):
         "command": {
             "argv": [test_binary] + args,
             "env": _rust_test_env(ctx, test_dir),
-            "cwd": ".",
+            "cwd": _rust_test_cwd(ctx) or ".",
         },
         "outputs": {
             "results": results,
@@ -1993,8 +2002,8 @@ use std::process::{self, Command, Output};
 
 fn main() {
     let args = env::args().collect::<Vec<_>>();
-    if args.len() < 6 {
-        eprintln!("usage: once-rust-test-runner <binary> <results> <log> <native-results> <target> [args...]");
+    if args.len() < 7 {
+        eprintln!("usage: once-rust-test-runner <binary> <results> <log> <native-results> <target> <cwd> [args...]");
         process::exit(2);
     }
     let binary = &args[1];
@@ -2002,20 +2011,21 @@ fn main() {
     let log = &args[3];
     let native_results = &args[4];
     let target = &args[5];
-    let runner_args = &args[6..];
+    let cwd = &args[6];
+    let runner_args = &args[7..];
 
     create_parent(results);
     create_parent(log);
     create_parent(native_results);
 
-    let list_output = Command::new(binary).args(runner_args).arg("--list").output();
+    let list_output = test_command(binary, cwd, runner_args).arg("--list").output();
     let list_text = match &list_output {
         Ok(output) => output_text(output),
         Err(error) => format!("failed to list tests: {error}\\n"),
     };
     let cases = parse_list(&list_text);
 
-    let run_output = Command::new(binary).args(runner_args).output();
+    let run_output = test_command(binary, cwd, runner_args).output();
     let (run_text, exit_code, passed) = match run_output {
         Ok(output) => {
             let code = output.status.code().unwrap_or(1);
@@ -2029,7 +2039,17 @@ fn main() {
     fs::write(log, &run_text).expect("write log");
     fs::write(native_results, format!("$ {binary} --list\\n{list_text}\\n$ {binary}\\n{run_text}")).expect("write native results");
     fs::write(results, report).expect("write results");
+    if !passed {
+        eprint!("{run_text}");
+    }
     process::exit(exit_code);
+}
+
+fn test_command(binary: &str, cwd: &str, runner_args: &[String]) -> Command {
+    let mut command = Command::new(binary);
+    command.args(runner_args);
+    command.current_dir(cwd);
+    command
 }
 
 fn create_parent(path: &str) {
@@ -2156,13 +2176,13 @@ def _rust_test_impl(ctx):
     results = test_dir + "/test_results.json"
     log = test_dir + "/rust-libtest.log"
     native_results = test_dir + "/native_results.txt"
+    _, _, host_triple = _rustc_toolchain(_rust_target(ctx))
     provider["test_info"] = _rust_test_info(ctx, provider["test_binary"], results, log, native_results, test_dir)
 
     if ctx["capability"] != "test":
         return provider
 
     target = _rust_target(ctx)
-    _, _, host_triple = _rustc_toolchain(target)
     if target and target != host_triple:
         fail(ctx["label"]["id"] + ": rust_test execution supports the host target only; remove `target` or run the cross-compiled test binary with a platform runner")
 
@@ -2217,6 +2237,7 @@ def _rust_test_impl(ctx):
             execution_path(log),
             execution_path(native_results),
             ctx["label"]["id"],
+            ".",
         ] + _rust_attr(ctx, "args", []) + _rust_test_filter_args(ctx),
         inputs = _unique(
             [runner, staged_test_binary] +
@@ -2225,7 +2246,9 @@ def _rust_test_impl(ctx):
             _rust_test_package_inputs(ctx) +
             (provider.get("transitive_data") or [])
         ),
-        outputs = [test_dir, results, log, native_results],
+        outputs = [test_dir],
+        clean_paths = [_rust_scratch_dir(ctx) + "/test-home"],
+        create_dirs = [_rust_scratch_dir(ctx) + "/test-home"],
         cwd = _rust_test_cwd(ctx),
         env = _rust_test_env(ctx, test_dir),
         toolchain_identity = runner_identity + "\x00once.rust_test.run.v1",
@@ -3236,6 +3259,7 @@ def _cargo_workspace_target_enabled(target, node):
     return True
 
 def _cargo_workspace_attrs(package, target, node, source_root, aliases):
+    package_inputs = _cargo_package_source_globs(source_root)
     attrs = {
         "crate_name": _cargo_crate_name(package, target),
         "crate_root": source_root + "/" + _cargo_source_rel(package, target),
@@ -3243,6 +3267,8 @@ def _cargo_workspace_attrs(package, target, node, source_root, aliases):
         "features": node.get("features") or [],
         "rustc_env": _cargo_rustc_env(package, target, source_root),
         "cargo_package": package["name"],
+        "compile_data": package_inputs,
+        "_build_script_inputs": package_inputs,
     }
     if aliases:
         attrs["crate_aliases"] = aliases

@@ -1790,6 +1790,17 @@ def _xcode_swift_package_target_header_dirs(package_path, target):
         headers = glob([root + target_path + "/**/*.h"])
     return _unique([_parent_dir(header) for header in headers if _parent_dir(header) and not _xcode_swift_package_target_path_is_excluded(root, target_path, excluded, header)])
 
+def _xcode_swift_package_target_private_headers(package_path, target):
+    target_path = _xcode_swift_package_target_path(target)
+    root = package_path + "/" if package_path else ""
+    excluded = target.get("exclude") or []
+    absolute = _xcode_abs(root + target_path)
+    if package_path.startswith(".once/"):
+        headers = [_xcode_workspace_relative(path) for path in host_command([host_which("find"), absolute, "-name", "*.h", "-type", "f"]).split("\n") if path]
+    else:
+        headers = glob([root + target_path + "/**/*.h"])
+    return _unique([header for header in headers if not _xcode_swift_package_target_path_is_excluded(root, target_path, excluded, header)])
+
 def _xcode_swift_package_target_datamodels(package_path, target):
     target_path = _xcode_swift_package_target_path(target)
     root = package_path + "/" + target_path
@@ -2186,6 +2197,7 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
                     "clang_flags": ["-std=c++17"] + flags["clang"],
                     "exported_header_dirs": _xcode_swift_package_include_dirs(package_path, target),
                     "private_header_dirs": _xcode_swift_package_target_header_dirs(package_path, target),
+                    "private_headers": _xcode_swift_package_target_private_headers(package_path, target),
                     "prebuild_actions": prebuild_actions,
                     "resources": resource_paths,
                     "structured_resources": structured_resource_paths,
@@ -3213,6 +3225,9 @@ def _xcode_application_attrs(ctx, target, settings, subs, platform, files):
     product_name = _xcode_product_name(settings, target, subs)
     if product_name:
         attrs["product_name"] = product_name
+    module_name = _xcode_resolve_vars(_xcode_scalar(settings.get("PRODUCT_MODULE_NAME")), subs)
+    if module_name and not module_name.startswith("$(") and not module_name.startswith("${"):
+        attrs["module_name"] = module_name
     bundle_id = _xcode_bundle_id(settings, subs, product_name)
     attrs["bundle_id"] = bundle_id
     _xcode_add_info_plist_attrs(attrs, settings, subs, product_name, bundle_id)

@@ -28,6 +28,7 @@ framework, and then signs the application.
 | `xcode_developer_dir` | string | no | active Xcode | Xcode developer directory used to resolve build tools |
 | `families` | list&lt;string&gt; | no | `[]` | Supported device families (`iphone`, `ipad`); an empty list uses `iphone` |
 | `product_name` | string | no | target name | Application product name (not configurable) |
+| `module_name` | string | no | product name | Swift module name (not configurable) |
 | `resources` | list&lt;string&gt; | no | `[]` | Resource files and directory roots placed in the application bundle |
 | `structured_resources` | list&lt;string&gt; | no | `[]` | Resource directory roots whose own basename is preserved inside the application bundle |
 | `asset_catalogs` | list&lt;string&gt; | no | `[]` | Asset catalog paths compiled into the application bundle |
@@ -51,6 +52,7 @@ framework, and then signs the application.
 | `clang_defines` | list&lt;string&gt; | no | `[]` | C-family preprocessor definitions |
 | `exported_header_dirs` | list&lt;string&gt; | no | `[]` | Header search directories exported by the application target |
 | `private_header_dirs` | list&lt;string&gt; | no | `[]` | Private header search directories used while compiling the application |
+| `private_headers` | list&lt;string&gt; | no | `[]` | Private header files required while compiling the application |
 | `bridging_header` | string | no |  | Objective-C bridging header imported into Swift sources |
 | `prefix_header` | string | no |  | Prefix header included before every C-family source |
 | `prebuild_actions` | list&lt;string&gt; | no | `[]` | Adapter-owned serialized build preparation actions that run before compilation. Records may opt into caching when they declare complete inputs and outputs; always-run records remain uncached |
