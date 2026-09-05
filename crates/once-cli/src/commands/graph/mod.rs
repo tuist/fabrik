@@ -282,7 +282,6 @@ pub async fn build(
             .await;
     }
     bus_events::target_preparing(&bus, target_id);
-    bus_events::target_executing(&bus, target_id);
     session.with_known_changes(changes);
     let session = session;
     let target = match session.target(target_id) {

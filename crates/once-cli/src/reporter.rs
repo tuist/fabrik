@@ -155,7 +155,6 @@ struct RenderState {
 
 struct ActiveTarget {
     bar: ProgressBar,
-    started_at: Instant,
     phase: Phase,
 }
 
@@ -170,6 +169,8 @@ struct CapturedOutput {
 /// to keep the completion match arm readable and satisfy
 /// clippy's `type_complexity` lint.
 type StyleFn = fn(String) -> console::StyledObject<String>;
+
+const TARGET_COLUMN_WIDTH: usize = 56;
 
 #[derive(Default, Clone, Copy)]
 struct Totals {
@@ -283,11 +284,10 @@ impl RenderState {
         }
         let bar = self.multi.add(ProgressBar::new_spinner());
         bar.set_style(spinner_style_child());
-        bar.set_message(active_line(target_id, Phase::Executing, Duration::ZERO));
+        bar.set_message(active_line(target_id, Phase::Executing));
         bar.enable_steady_tick(Duration::from_millis(80));
         let entry = ActiveTarget {
             bar,
-            started_at: Instant::now(),
             phase: Phase::Executing,
         };
         self.active.insert(target_id.to_string(), entry);
@@ -296,10 +296,7 @@ impl RenderState {
     fn on_target_phase(&mut self, target_id: &str, phase: Phase) {
         if let Some(entry) = self.active.get_mut(target_id) {
             entry.phase = phase;
-            let elapsed = entry.started_at.elapsed();
-            entry
-                .bar
-                .set_message(active_line(target_id, phase, elapsed));
+            entry.bar.set_message(active_line(target_id, phase));
         }
     }
 
@@ -352,8 +349,8 @@ impl RenderState {
         }
 
         let icon = style_fn(icon.to_string());
-        let name = style(target_id.to_string()).bold();
-        let name = pad_right(&name.to_string(), 32);
+        let name = style(fit_column(target_id, TARGET_COLUMN_WIDTH)).bold();
+        let name = pad_right(&name.to_string(), TARGET_COLUMN_WIDTH);
         let tag_col = style_fn(pad_right(tag, 10));
         let dur = style(duration).dim();
         self.emit(format!("  {icon} {name} {tag_col} {dur}"));
@@ -494,18 +491,20 @@ fn spinner_style_bold() -> ProgressStyle {
 }
 
 fn spinner_style_child() -> ProgressStyle {
-    ProgressStyle::with_template("    {spinner:.cyan} {msg}")
+    ProgressStyle::with_template("    {spinner:.cyan} {msg} {elapsed_precise:.dim}")
         .expect("valid spinner template")
         .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏ ")
 }
 
-fn active_line(target_id: &str, phase: Phase, elapsed: Duration) -> String {
-    let name = pad_right(target_id, 32);
+fn active_line(target_id: &str, phase: Phase) -> String {
+    let name = pad_right(
+        &fit_column(target_id, TARGET_COLUMN_WIDTH),
+        TARGET_COLUMN_WIDTH,
+    );
     let phase_label = phase_label(phase);
     let phase_col = pad_right(phase_label, 10);
     let phase_styled = phase_style(phase).apply_to(phase_col).to_string();
-    let dur = style(format_duration(elapsed)).dim();
-    format!("{name} {phase_styled} {dur}")
+    format!("{name} {phase_styled}")
 }
 
 fn phase_label(phase: Phase) -> &'static str {
@@ -558,6 +557,26 @@ fn pad_right(text: &str, width: usize) -> String {
     }
 }
 
+fn fit_column(text: &str, width: usize) -> String {
+    if console::measure_text_width(text) <= width {
+        return text.to_string();
+    }
+    if width <= 1 {
+        return "…".chars().take(width).collect();
+    }
+
+    let mut fitted = String::new();
+    for ch in text.chars() {
+        let candidate = format!("{fitted}{ch}");
+        if console::measure_text_width(&candidate) >= width {
+            break;
+        }
+        fitted.push(ch);
+    }
+    fitted.push('…');
+    fitted
+}
+
 fn split_lines(bytes: &[u8]) -> Vec<&[u8]> {
     let mut out = Vec::new();
     for line in bytes.split(|&b| b == b'\n') {
@@ -592,6 +611,16 @@ mod tests {
     fn pad_right_measures_display_width() {
         let padded = pad_right("hi", 6);
         assert_eq!(console::measure_text_width(&padded), 6);
+    }
+
+    #[test]
+    fn fit_column_truncates_long_target_names() {
+        assert_eq!(fit_column("short", 8), "short");
+        assert_eq!(fit_column("long-target", 8), "long-ta…");
+        assert_eq!(
+            console::measure_text_width(&fit_column("long-target", 8)),
+            8
+        );
     }
 
     #[tokio::test]
