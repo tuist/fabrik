@@ -17415,6 +17415,7 @@ fn prelude_xcode_workspace_resolver_lowers_native_targets() {
                 "name": "Debug",
                 "buildSettings": {
                     "PRODUCT_NAME": "$(TARGET_NAME)",
+                    "PRODUCT_MODULE_NAME": "CustomAppModule",
                     "PRODUCT_BUNDLE_IDENTIFIER": "dev.once.App",
                     "DEVELOPMENT_TEAM": "TEAM123",
                     "TARGETED_DEVICE_FAMILY": "1,2",
@@ -17512,6 +17513,7 @@ result = repr([
     specs["Feature"]["attrs"].get("per_source_clang_flags"),
     specs["App"]["srcs"],
     specs["App"]["attrs"].get("bundle_id"),
+    specs["App"]["attrs"].get("module_name"),
     specs["App"]["attrs"].get("development_team"),
     specs["App"]["attrs"].get("families"),
     specs["App"]["attrs"].get("minimum_os"),
@@ -17523,6 +17525,6 @@ result = repr([
     let out = eval_prelude_source_to_repr(source).unwrap();
     assert_eq!(
         out,
-        r#"[["App"], ["AppTests"], ["apple_framework", "apple_application", "apple_test_bundle"], ["./Feature"], ["./App"], ["Source/Core/Feature.swift"], {"Source/Core/Feature.swift": "[\"-DNDEBUG\",\"-fno-objc-arc\"]"}, ["App.swift"], "dev.once.App", "TEAM123", ["iphone", "ipad"], "16.0", True]"#
+        r#"[["App"], ["AppTests"], ["apple_framework", "apple_application", "apple_test_bundle"], ["./Feature"], ["./App"], ["Source/Core/Feature.swift"], {"Source/Core/Feature.swift": "[\"-DNDEBUG\",\"-fno-objc-arc\"]"}, ["App.swift"], "dev.once.App", "CustomAppModule", "TEAM123", ["iphone", "ipad"], "16.0", True]"#
     );
 }

@@ -27,6 +27,7 @@ used for the build.
 | `exported_headers` | list&lt;string&gt; | no | `[]` | Headers exported to downstream consumers |
 | `exported_header_dirs` | list&lt;string&gt; | no | `[]` | Header search directories exported to downstream consumers |
 | `private_header_dirs` | list&lt;string&gt; | no | `[]` | Header search directories used only while compiling the framework |
+| `private_headers` | list&lt;string&gt; | no | `[]` | Private header files required while compiling the framework |
 | `resources` | list&lt;string&gt; | no | `[]` | Resource glob patterns bundled into the framework |
 | `structured_resources` | list&lt;string&gt; | no | `[]` | Resource directory roots whose own basename is preserved in the framework |
 | `asset_catalogs` | list&lt;string&gt; | no | `[]` | Asset catalog paths compiled into the framework bundle |

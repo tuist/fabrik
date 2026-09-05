@@ -172,7 +172,10 @@ def _resolve_swiftc(platform, sdk_variant, xcode_developer_dir):
     # installations partition the action cache cleanly.
     identity = "once.apple.swiftc.v1\x00" + swiftc_path + "\x00" + version + "\x00" + (xcode_developer_dir or "")
     return {
-        "argv": [swiftc_path, "-sdk", sdk_path],
+        # Once supplies the outer action sandbox. Disabling Swift's nested
+        # subprocess sandbox lets compiler plugins run inside that same policy
+        # instead of failing when Seatbelt rejects a second sandbox profile.
+        "argv": [swiftc_path, "-disable-sandbox", "-sdk", sdk_path],
         "swiftc_path": swiftc_path,
         "sdk_name": sdk,
         "sdk_path": sdk_path,
@@ -1423,7 +1426,7 @@ def _apple_library_impl(ctx):
         resolved_header_dir = _package_relative(ctx, header_dir)
         if resolved_header_dir and resolved_header_dir not in own_private_header_dirs:
             own_private_header_dirs.append(resolved_header_dir)
-    own_private_header_files = _apple_header_inputs(ctx, own_private_header_dirs)
+    own_private_header_files = _unique((ctx["attr"].get("private_headers") or []) + _apple_header_inputs(ctx, own_private_header_dirs))
 
     staged_headers = []
     staged_headers_dir = ""
@@ -3372,7 +3375,7 @@ def _apple_framework_impl(ctx):
         absolute_header_dir = resolved_header_dir if resolved_header_dir.startswith("/") else workspace_root() + "/" + resolved_header_dir
         if resolved_header_dir and host_path_exists(absolute_header_dir) and resolved_header_dir not in private_header_dirs:
             private_header_dirs.append(resolved_header_dir)
-    private_header_files = _apple_header_inputs(ctx, private_header_dirs)
+    private_header_files = _unique((ctx["attr"].get("private_headers") or []) + _apple_header_inputs(ctx, private_header_dirs))
 
     all_srcs = glob(ctx["srcs"])
     swift_srcs = _filter_swift_sources(all_srcs)
@@ -3793,7 +3796,7 @@ def _apple_run_prebuild_actions(ctx, attrs):
             env = action_env,
             cacheable = cacheable,
             inherit_parent_env = not cacheable,
-            sandbox = "off",
+            sandbox = "copied-inputs" if cacheable else "off",
             create_dirs = output_dirs,
             toolchain_identity = identity or "",
             identifier = "prebuild_action:" + ctx["label"]["id"] + ":" + (action.get("name") or "script"),
@@ -3870,7 +3873,7 @@ def _apple_application_impl(ctx):
         absolute_header_dir = resolved_header_dir if resolved_header_dir.startswith("/") else workspace_root() + "/" + resolved_header_dir
         if resolved_header_dir and host_path_exists(absolute_header_dir) and resolved_header_dir not in private_header_dirs:
             private_header_dirs.append(resolved_header_dir)
-    private_header_files = _apple_header_inputs(ctx, private_header_dirs)
+    private_header_files = _unique((ctx["attr"].get("private_headers") or []) + _apple_header_inputs(ctx, private_header_dirs))
     application_extension = attrs.get("application_extension") or False
     enable_testing = attrs.get("enable_testing") or False
     if enable_testing:
@@ -5419,9 +5422,8 @@ exit "$status"
         run_action(
             argv = [host_which("sh"), "-c", script],
             inputs = test_inputs,
-            outputs = [test_dir, results, log, native_results],
+            outputs = [test_dir],
             env = action_env,
-            cacheable = False,
             toolchain_identity = "once.apple." + runner_type + ".runner.v2\x00" + swiftc["identity"],
             identifier = "apple_" + runner_type + ":" + ctx["label"]["id"],
         )
@@ -6060,6 +6062,7 @@ apple_library = target_kind(
         attr("exported_headers", "list<string>", default = "[]", docs = "Headers made available to dependent targets"),
         attr("exported_header_dirs", "list<string>", default = "[]", docs = "Header search directories made available to dependent targets"),
         attr("private_header_dirs", "list<string>", default = "[]", docs = "Header search directories used only while compiling this target"),
+        attr("private_headers", "list<string>", default = "[]", docs = "Private header files required while compiling this target"),
         attr("resources", "list<string>", default = "[]", docs = "Files and directory roots placed in this library's propagated resource bundle"),
         attr("structured_resources", "list<string>", default = "[]", docs = "Resource directory roots whose own basename is preserved inside the propagated bundle"),
         attr("resource_bundle_name", "string", docs = "Name of the propagated resource bundle. The `.bundle` suffix is added when omitted", configurable = False),
@@ -6175,6 +6178,7 @@ apple_framework = target_kind(
         attr("exported_headers", "list<string>", default = "[]", docs = "Headers exported to downstream consumers"),
         attr("exported_header_dirs", "list<string>", default = "[]", docs = "Header search directories made available to dependent targets"),
         attr("private_header_dirs", "list<string>", default = "[]", docs = "Header search directories used only while compiling this target"),
+        attr("private_headers", "list<string>", default = "[]", docs = "Private header files required while compiling this target"),
         attr("resources", "list<string>", default = "[]", docs = "Resource glob patterns bundled into the framework"),
         attr("structured_resources", "list<string>", default = "[]", docs = "Resource directory roots whose own basename is preserved inside the framework"),
         attr("asset_catalogs", "list<string>", default = "[]", docs = "Asset catalog paths compiled into the framework bundle"),
@@ -6235,6 +6239,7 @@ apple_application = target_kind(
         attr("xcode_developer_dir", "string", docs = "Pin a specific Xcode by overriding `DEVELOPER_DIR`. Folded into the action cache key"),
         attr("families", "list<string>", default = "[]", docs = "Supported device families, such as iphone or ipad"),
         attr("product_name", "string", docs = "Application product name. Defaults to the target name", configurable = False),
+        attr("module_name", "string", docs = "Swift module name. Defaults to the product name", configurable = False),
         attr("resources", "list<string>", default = "[]", docs = "Resource and asset catalog glob patterns"),
         attr("structured_resources", "list<string>", default = "[]", docs = "Resource directory roots whose own basename is preserved inside the application bundle"),
         attr("asset_catalogs", "list<string>", default = "[]", docs = "Asset catalog paths compiled into the application bundle"),
@@ -6258,6 +6263,7 @@ apple_application = target_kind(
         attr("clang_defines", "list<string>", default = "[]", docs = "C-family preprocessor definitions"),
         attr("exported_header_dirs", "list<string>", default = "[]", docs = "Header search directories exported by the application target"),
         attr("private_header_dirs", "list<string>", default = "[]", docs = "Private header search directories used while compiling the application"),
+        attr("private_headers", "list<string>", default = "[]", docs = "Private header files required while compiling the application"),
         attr("bridging_header", "string", docs = "ObjC bridging header imported into every Swift source (`-import-objc-header`), letting them see ObjC symbols and any frameworks the header imports"),
         attr("prefix_header", "string", docs = "Prefix header included before every C-family source"),
         attr("entitlements_substitutions", "map<string,string>", default = "{}", docs = "Build-setting values substituted into `$(NAME)` or `${NAME}` placeholders before signing", configurable = False),
@@ -6374,6 +6380,7 @@ apple_test_bundle = target_kind(
         attr("clang_defines", "list<string>", default = "[]", docs = "C-family preprocessor definitions"),
         attr("exported_header_dirs", "list<string>", default = "[]", docs = "Header search directories exported by the test target"),
         attr("private_header_dirs", "list<string>", default = "[]", docs = "Private header search directories used while compiling tests"),
+        attr("private_headers", "list<string>", default = "[]", docs = "Private header files required while compiling tests"),
         attr("bridging_header", "string", docs = "Objective-C bridging header imported into Swift test sources"),
         attr("prefix_header", "string", docs = "Prefix header included before every C-family test source"),
         attr("prebuild_actions", "list<string>", default = "[]", docs = "Ordered serialized build preparation actions that run before compilation.", configurable = False),

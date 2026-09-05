@@ -72,6 +72,7 @@ Once build actions.
 | `clang_defines` | list&lt;string&gt; | no | `[]` | C-family preprocessor definitions |
 | `exported_header_dirs` | list&lt;string&gt; | no | `[]` | Header search directories exported by the test target |
 | `private_header_dirs` | list&lt;string&gt; | no | `[]` | Private header search directories used while compiling tests |
+| `private_headers` | list&lt;string&gt; | no | `[]` | Private header files required while compiling tests |
 | `bridging_header` | string | no |  | Objective-C bridging header imported into Swift test sources |
 | `prefix_header` | string | no |  | Prefix header included before every C-family test source |
 | `prebuild_actions` | list&lt;string&gt; | no | `[]` | Adapter-owned serialized build preparation actions that run before compilation. Records may opt into caching when they declare complete inputs and outputs; always-run records remain uncached |
