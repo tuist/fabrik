@@ -1409,6 +1409,93 @@ fn glob_silently_drops_symlink_that_escapes_workspace() {
     assert_eq!(matches, vec!["apps/ios/AppCore/kept.src".to_string()]);
 }
 
+/// A real file reached by descending through a directory symlink that
+/// points outside the workspace is included by its workspace-relative
+/// path (Swift Package Manager's registry integration stores unpacked
+/// package sources under `~/.cache/swifterpm/…-registry/` and only
+/// symlinks them into `<workspace>/.build/registry/downloads/`, and the
+/// individual `.swift` files inside are then real regulars). Once must
+/// return the workspace-relative path because that is what the build
+/// tools reference; the earlier hard-error was a regression.
+#[cfg(unix)]
+#[test]
+fn glob_includes_real_files_reached_via_symlinked_ancestor_pointing_outside() {
+    let workspace = TempDir::new().unwrap();
+    let external = TempDir::new().unwrap();
+    // Recreate the SPM registry-download shape: an unpacked package sitting
+    // in an external cache, exposed inside the workspace only through a
+    // `Sources` directory symlink.
+    let external_sources = external.path().join("Sources/Algorithms");
+    std::fs::create_dir_all(&external_sources).unwrap();
+    std::fs::write(external_sources.join("Flatten.swift"), "// swift").unwrap();
+    let pkg_dir = workspace
+        .path()
+        .join(".build/registry/downloads/apple/swift-algorithms/1.2.1");
+    std::fs::create_dir_all(&pkg_dir).unwrap();
+    std::os::unix::fs::symlink(external.path().join("Sources"), pkg_dir.join("Sources")).unwrap();
+
+    let matches = expand_globs(
+        workspace.path(),
+        "",
+        &[".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/*.swift"
+            .to_string()],
+    )
+    .unwrap();
+
+    assert_eq!(
+        matches,
+        vec![
+            ".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/Flatten.swift"
+                .to_string()
+        ]
+    );
+}
+
+/// The same shape as above, plus an active analysis store: the
+/// workspace-relative path is included in the result AND the canonical
+/// target (outside the workspace) is recorded in the host cache so a
+/// change under the SPM cache still invalidates the build.
+#[cfg(unix)]
+#[test]
+fn glob_observes_canonical_target_when_symlinked_ancestor_escapes_workspace() {
+    let workspace = TempDir::new().unwrap();
+    let external = TempDir::new().unwrap();
+    let external_sources = external.path().join("Sources/Algorithms");
+    std::fs::create_dir_all(&external_sources).unwrap();
+    let external_file = external_sources.join("Flatten.swift");
+    std::fs::write(&external_file, "// swift").unwrap();
+    let pkg_dir = workspace
+        .path()
+        .join(".build/registry/downloads/apple/swift-algorithms/1.2.1");
+    std::fs::create_dir_all(&pkg_dir).unwrap();
+    std::os::unix::fs::symlink(external.path().join("Sources"), pkg_dir.join("Sources")).unwrap();
+
+    let store = store_for(workspace.path(), "");
+    let (store, ()) = with_active_store(store, || {
+        let matches = expand_globs(
+            workspace.path(),
+            "",
+            &[".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/*.swift"
+                .to_string()],
+        )
+        .unwrap();
+        assert_eq!(
+            matches,
+            vec![
+                ".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/Flatten.swift"
+                    .to_string()
+            ]
+        );
+    });
+
+    let canonical_external = std::fs::canonicalize(&external_file).unwrap();
+    assert!(
+        store.host_cache.observed_paths().contains(&canonical_external),
+        "canonical path outside the workspace should be observed for change tracking; observed = {:?}",
+        store.host_cache.observed_paths()
+    );
+}
+
 #[test]
 fn walk_files_includes_hidden_paths_and_prunes_excluded_trees() {
     let workspace = TempDir::new().unwrap();
