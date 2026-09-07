@@ -3598,7 +3598,11 @@ def _apple_embed_framework_bundles(ctx, deps, bundle_dir, frameworks_dir, codesi
         destination_sources[framework_basename] = framework_path
         source_files = bundle.get("files") or [framework_path]
         framework_prefix = framework_path + "/"
-        embedded_relative_path = bundle_dir + "/" + frameworks_dir + "/" + framework_basename
+        # An empty `bundle_dir` means "put the frameworks directory directly
+        # in the build root" (the layout an `apple_executable` command-line
+        # tool wants; `apple_application` always supplies a `.app` bundle
+        # path instead).
+        embedded_relative_path = (bundle_dir + "/" + frameworks_dir + "/" + framework_basename) if bundle_dir else (frameworks_dir + "/" + framework_basename)
         embed_outputs = []
         for source in source_files:
             if source == framework_path:
@@ -3648,7 +3652,10 @@ def _apple_embed_resource_bundles(ctx, deps, bundle_dir, codesign, identifier_pr
             fail(ctx["label"]["id"] + ": resource bundle collision for `" + bundle_basename + "` between `" + previous_source + "` and `" + bundle_path + "`")
         destination_sources[bundle_basename] = bundle_path
         source_files = bundle.get("files") or [bundle_path]
-        embedded_relative_path = bundle_dir + "/" + bundle_basename
+        # Empty `bundle_dir` puts the bundle directly under the build root so
+        # `Bundle.module` from a command-line tool finds it next to the
+        # executable; `apple_application` passes its `.app` bundle path.
+        embedded_relative_path = (bundle_dir + "/" + bundle_basename) if bundle_dir else bundle_basename
         embedded_path = ctx["build_dir"] + "/" + embedded_relative_path
         embedded_stamp = declare_output(embedded_relative_path + "/_CodeSignature/CodeResources")
         copy_path(
@@ -6251,38 +6258,17 @@ apple_framework = target_kind(
 
 def _apple_executable_impl(ctx):
     # A command-line tool target: one Mach-O executable with no `.app`
-    # bundle around it, no Info.plist, no embedded resources, ad-hoc
-    # codesigned in place. The Swift compile and link is a slimmed-down copy
-    # of the application path — same swiftc invocation, same dependency
-    # walk, same framework and archive wiring — minus every bundle-time
-    # step (asset catalogs, Info.plist, entitlements, embedded frameworks,
-    # resource materialization). The initial draft covers Swift-only tools
-    # (which is what Tuist's generated Xcode `tuist` scheme produces);
-    # mixed-language tools land once the shared compile pipeline is
-    # extracted from apple_application.
-    #
-    # Known limitations of the current draft, deliberate rather than
-    # incidental, called out here so callers do not silently regress:
-    #
-    #   1. Dependency `transitive_resource_bundles` are collected for
-    #      linking but not staged next to the executable. A tool that
-    #      depends on an Apple library that uses `Bundle.module` will
-    #      compile and link but crash at runtime looking for its
-    #      resource bundle. Resource-bundle deployment lands with the
-    #      shared bundling helper.
-    #   2. `@rpath/<name>.framework/<name>` install names on framework
-    #      dependencies are not paired with a default runtime search
-    #      path here; a tool that links a directly declared
-    #      `apple_framework` needs the `linkopts` for `-rpath` supplied
-    #      manually until the framework-deployment helper is factored
-    #      out of `apple_application`.
-    #   3. The target's own `private_header_dirs`, `exported_header_dirs`,
-    #      and `private_headers` are not fed into the Swift bridging
-    #      header compile (dependency headers are wired). A Swift tool
-    #      whose bridging header includes a header found only through
-    #      its own search settings will fail to compile until the
-    #      header-search plumbing shared with `apple_application` is
-    #      extracted.
+    # bundle around it, no Info.plist, ad-hoc codesigned in place. The
+    # Swift compile and link is a slimmed-down copy of the application
+    # path (same swiftc invocation, same dependency walk, same framework
+    # and archive wiring) minus every bundle-time step that only makes
+    # sense inside a `.app` (asset catalogs, Info.plist, entitlements).
+    # Framework dependencies are copied into `Frameworks/` next to the
+    # executable and reached via an `@executable_path/Frameworks` rpath;
+    # dependency resource bundles land directly next to the executable
+    # so `Bundle.module` in a linked library resolves at runtime. Only
+    # Swift-source tools are lowered today; targets with C-family
+    # sources fail at resolution with a pointer at the follow-up.
     attrs = _resolve_attrs(ctx, ctx["attr"], ctx["label"]["id"], ["product_name"])
     platform = attrs["platform"]
     minimum_os = attrs.get("minimum_os") or "13.0"
@@ -6300,6 +6286,19 @@ def _apple_executable_impl(ctx):
     clang_defines = _unique(defines + (attrs.get("clang_defines") or []))
     swift_flags = attrs.get("swift_flags") or []
     bridging_header = attrs.get("bridging_header") or ""
+    # The target's own header search directories and header files are
+    # collected the same way `apple_application` does: an exported or
+    # private header directory becomes a `-Xcc -I` on the Swift compile
+    # (so the bridging header can reach headers found only through those
+    # settings) and every header it contains is declared as an input so
+    # the action cache invalidates when they change.
+    own_header_dirs = []
+    for header_dir in (attrs.get("exported_header_dirs") or []) + (attrs.get("private_header_dirs") or []):
+        resolved_header_dir = _package_relative(ctx, header_dir)
+        absolute_header_dir = resolved_header_dir if resolved_header_dir.startswith("/") else workspace_root() + "/" + resolved_header_dir
+        if resolved_header_dir and host_path_exists(absolute_header_dir) and resolved_header_dir not in own_header_dirs:
+            own_header_dirs.append(resolved_header_dir)
+    own_header_files = _unique((ctx["attr"].get("private_headers") or []) + _apple_header_inputs(ctx, own_header_dirs))
 
     generated_srcs = _apple_run_prebuild_actions(ctx, attrs)
     all_srcs = _unique(glob(ctx["srcs"]) + _apple_declared_source_paths(ctx) + generated_srcs)
@@ -6379,6 +6378,14 @@ def _apple_executable_impl(ctx):
         module_name,
         "-target",
         triple,
+        # Frameworks the executable depends on are copied into a
+        # `Frameworks/` directory next to the binary, so the dyld search
+        # path for their `@rpath/<Name>.framework/<Name>` install names
+        # is `@executable_path/Frameworks`.
+        "-Xlinker",
+        "-rpath",
+        "-Xlinker",
+        "@executable_path/Frameworks",
         "-o",
         executable,
         "-module-cache-path",
@@ -6394,6 +6401,8 @@ def _apple_executable_impl(ctx):
     for d in compile_swiftmodule_dirs:
         swift_argv.extend(["-I", d])
     for hdir in compile_header_dirs:
+        swift_argv.extend(["-Xcc", "-I", "-Xcc", hdir])
+    for hdir in own_header_dirs:
         swift_argv.extend(["-Xcc", "-I", "-Xcc", hdir])
     for mmap in dep_modulemaps:
         swift_argv.extend(["-Xcc", "-fmodule-map-file=" + mmap])
@@ -6445,6 +6454,9 @@ def _apple_executable_impl(ctx):
     for hmap in dep_hmaps:
         if hmap not in swift_inputs:
             swift_inputs.append(hmap)
+    for header in own_header_files:
+        if header not in swift_inputs:
+            swift_inputs.append(header)
     for ar in dep_archives:
         if ar not in swift_inputs:
             swift_inputs.append(ar)
@@ -6484,10 +6496,35 @@ def _apple_executable_impl(ctx):
         identifier = "apple_executable_codesign_" + product_name,
     )
 
+    # Deploy dependency frameworks and resource bundles into the same
+    # directory as the executable. Framework install names use
+    # `@rpath/<Name>.framework/<Name>` and the swiftc link line above
+    # already carries an `@executable_path/Frameworks` rpath, so dyld
+    # finds them at launch. Resource bundles are placed next to the
+    # binary so `Bundle.module` inside a linked library resolves the
+    # same way it does under `swift build`, which stages the bundle at
+    # the same relative location.
+    embedded_frameworks = _apple_embed_framework_bundles(
+        ctx,
+        deps,
+        "",
+        "Frameworks",
+        codesign,
+        "apple_executable_embed",
+    )
+    embedded_resource_bundles = _apple_embed_resource_bundles(
+        ctx,
+        deps,
+        "",
+        codesign,
+        "apple_executable_embed_resource",
+    )
+
     return {
         "label_id": ctx["label"]["id"],
         "target_kind": "apple_executable",
         "executable_path": executable,
+        "executable_files": [executable] + embedded_frameworks["files"] + embedded_resource_bundles["files"],
         "host_link_archives": dep_archives,
         "platform": platform,
         "sdk_variant": sdk_variant,
@@ -6495,7 +6532,7 @@ def _apple_executable_impl(ctx):
         "product_name": product_name,
         "transitive_swiftmodule_dirs": [],
         "transitive_swiftmodule_inputs": [],
-        "transitive_exported_header_dirs": compile_header_dirs,
+        "transitive_exported_header_dirs": _unique(own_header_dirs + compile_header_dirs),
         "transitive_modulemaps": dep_modulemaps,
         "transitive_hmaps": dep_hmaps,
         "transitive_generated_headers": [],
@@ -6505,7 +6542,7 @@ def _apple_executable_impl(ctx):
     }
 
 apple_executable = target_kind(
-    docs = "Builds an Apple command-line tool: a single Mach-O executable with no `.app` bundle wrapping, ad-hoc codesigned in place. Lowered from `com.apple.product-type.tool` targets in an Xcode project. The current draft supports Swift-only tools; mixed-language tools, header search directory consumption in the executable target itself, dependency resource-bundle deployment, and runtime search paths for `@rpath` framework dependencies become follow-up work once the shared compile pipeline is extracted from `apple_application`.",
+    docs = "Builds an Apple command-line tool: a single Mach-O executable with no `.app` bundle wrapping, ad-hoc codesigned in place. Lowered from `com.apple.product-type.tool` targets in an Xcode project. Framework dependencies are copied into a `Frameworks/` directory next to the executable and reached at runtime through an `@executable_path/Frameworks` rpath; dependency resource bundles are staged next to the binary so `Bundle.module` in a linked library resolves at launch. Mixed-language tool targets (Objective-C, C, or C++ sources on the tool itself) are declined at resolution today; move that code into an `apple_library` dependency, or file a follow-up.",
     impl = _apple_executable_impl,
     attrs = [
         attr("platform", "string", required = True, docs = "Apple platform for the executable", configurable = False),
