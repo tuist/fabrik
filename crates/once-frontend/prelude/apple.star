@@ -5459,6 +5459,7 @@ def _swiftpm_normalized_pin(raw):
         fail("Package.resolved contains a pin without an identity or location")
     return {
         "identity": identity.lower(),
+        "raw_identity": identity,
         "kind": raw.get("kind") or "remoteSourceControl",
         "location": location,
         "version": state.get("version") or "",
@@ -5527,6 +5528,27 @@ def _swiftpm_graph_nodes(root):
 def _swiftpm_pin_requires_network(pin):
     kind = (pin.get("kind") or "").lower()
     return kind not in ["local", "localsourcecontrol", "filesystem"]
+
+def _swiftpm_pin_is_registry(pin):
+    kind = (pin.get("kind") or "").lower()
+    return kind == "registry"
+
+def _swiftpm_registry_relative_dir(pin):
+    # Swift Package Manager unpacks a registry download under
+    # `.build/registry/downloads/<scope>/<name>/<version>/`. The scope and name
+    # are split from the pin identity on its first `.`, and the segments keep
+    # the case Package.resolved recorded so lookups stay valid on
+    # case-sensitive filesystems.
+    identity = pin.get("raw_identity") or pin.get("identity") or ""
+    version = pin.get("version") or ""
+    if not identity or not version:
+        return ""
+    separator = identity.find(".")
+    if separator <= 0 or separator == len(identity) - 1:
+        return ""
+    scope = identity[:separator]
+    name = identity[separator + 1:]
+    return ".build/registry/downloads/" + scope + "/" + name + "/" + version
 
 def _swiftpm_pin_token(pin):
     checksum = pin.get("checksum") or ""
@@ -6223,6 +6245,308 @@ apple_framework = target_kind(
             "apple-framework-minimal",
             name = "Minimal Apple framework",
             use_when = "You want a Swift dynamic framework bundle that can be embedded by an application.",
+        ),
+    ],
+)
+
+def _apple_executable_impl(ctx):
+    # A command-line tool target: one Mach-O executable with no `.app`
+    # bundle around it, no Info.plist, no embedded resources, ad-hoc
+    # codesigned in place. The Swift compile and link is a slimmed-down copy
+    # of the application path — same swiftc invocation, same dependency
+    # walk, same framework and archive wiring — minus every bundle-time
+    # step (asset catalogs, Info.plist, entitlements, embedded frameworks,
+    # resource materialization). The initial draft covers Swift-only tools
+    # (which is what Tuist's generated Xcode `tuist` scheme produces);
+    # mixed-language tools land once the shared compile pipeline is
+    # extracted from apple_application.
+    #
+    # Known limitations of the current draft, deliberate rather than
+    # incidental, called out here so callers do not silently regress:
+    #
+    #   1. Dependency `transitive_resource_bundles` are collected for
+    #      linking but not staged next to the executable. A tool that
+    #      depends on an Apple library that uses `Bundle.module` will
+    #      compile and link but crash at runtime looking for its
+    #      resource bundle. Resource-bundle deployment lands with the
+    #      shared bundling helper.
+    #   2. `@rpath/<name>.framework/<name>` install names on framework
+    #      dependencies are not paired with a default runtime search
+    #      path here; a tool that links a directly declared
+    #      `apple_framework` needs the `linkopts` for `-rpath` supplied
+    #      manually until the framework-deployment helper is factored
+    #      out of `apple_application`.
+    #   3. The target's own `private_header_dirs`, `exported_header_dirs`,
+    #      and `private_headers` are not fed into the Swift bridging
+    #      header compile (dependency headers are wired). A Swift tool
+    #      whose bridging header includes a header found only through
+    #      its own search settings will fail to compile until the
+    #      header-search plumbing shared with `apple_application` is
+    #      extracted.
+    attrs = _resolve_attrs(ctx, ctx["attr"], ctx["label"]["id"], ["product_name"])
+    platform = attrs["platform"]
+    minimum_os = attrs.get("minimum_os") or "13.0"
+    target_sdk_version = attrs.get("target_sdk_version") or minimum_os
+    sdk_variant = attrs.get("sdk_variant") or "simulator"
+    xcode_developer_dir = attrs.get("xcode_developer_dir") or ""
+    product_name = attrs.get("product_name") or ctx["label"]["name"]
+    module_name = _apple_swift_module_name(attrs.get("module_name") or product_name)
+    sdk_frameworks_attr = attrs.get("sdk_frameworks") or []
+    weak_sdk_frameworks = attrs.get("weak_sdk_frameworks") or []
+    sdk_dylibs_attr = attrs.get("sdk_dylibs") or []
+    linkopts = attrs.get("linkopts") or []
+    defines = attrs.get("defines") or []
+    swift_defines = _unique(defines + (attrs.get("swift_defines") or []))
+    clang_defines = _unique(defines + (attrs.get("clang_defines") or []))
+    swift_flags = attrs.get("swift_flags") or []
+    bridging_header = attrs.get("bridging_header") or ""
+
+    generated_srcs = _apple_run_prebuild_actions(ctx, attrs)
+    all_srcs = _unique(glob(ctx["srcs"]) + _apple_declared_source_paths(ctx) + generated_srcs)
+    swift_srcs = _filter_swift_sources(all_srcs)
+    if len(swift_srcs) == 0:
+        fail("apple_executable " + ctx["label"]["id"] + " has no Swift sources (.swift). Mixed-language tool targets are not lowered yet; keep the target Swift-only or file a follow-up.")
+    non_swift_srcs = _filter_objc_sources(all_srcs) + _filter_c_sources(all_srcs) + _filter_cxx_sources(all_srcs) + _filter_assembly_sources(all_srcs)
+    if len(non_swift_srcs) > 0:
+        fail("apple_executable " + ctx["label"]["id"] + " has non-Swift sources; the current draft supports Swift-only tool targets. Move Objective-C/C/C++ sources into an apple_library dependency, or file a follow-up to extend apple_executable.")
+
+    arch = host_arch()
+    swiftc = _resolve_swiftc(platform, sdk_variant, xcode_developer_dir)
+    triple = _apple_triple(platform, target_sdk_version, sdk_variant, arch, False)
+    executable = declare_output(product_name)
+    compile_module_cache = ctx["build_dir"] + "/ModuleCache/Compile"
+
+    if ctx["capability"] == "run":
+        run_dir = ctx["build_dir"] + "/run"
+        run_record = run_dir + "/run.json"
+        run_log = run_dir + "/run.log"
+        prepare_path(run_dir, kind = "directory", identifier = "apple_executable_run_dir:" + ctx["label"]["id"])
+        # Command-line tools run directly from their built path; no simulator
+        # boot required. The wrapper captures stdout+stderr into a log and
+        # emits a small JSON record for once run consumers.
+        script = "set -e; exec > " + _shell_quote(run_log) + " 2>&1;\n"
+        script += "\"" + executable + "\"\n"
+        script += "status=$?\n"
+        script += "printf '{\"exit\":%s}\\n' \"$status\" > " + _shell_quote(run_record) + "\n"
+        script += "exit \"$status\"\n"
+        run_action(
+            argv = [host_which("sh"), "-c", script],
+            outputs = [run_dir, run_record, run_log],
+            env = swiftc["env"],
+            cacheable = False,
+            toolchain_identity = "once.apple.executable.run.v1\x00" + swiftc["identity"],
+            identifier = "apple_executable_run_" + product_name,
+        )
+        return {
+            "label_id": ctx["label"]["id"],
+            "target_kind": "apple_executable",
+            "executable_path": executable,
+            "platform": platform,
+            "sdk_variant": sdk_variant,
+            "xcode_developer_dir": xcode_developer_dir,
+            "product_name": product_name,
+        }
+
+    deps = _apple_native_deps(ctx)
+    _validate_apple_native_deps(deps, ctx["label"]["id"])
+    (
+        compile_swiftmodule_dirs,
+        compile_header_dirs,
+        dep_modulemaps,
+        dep_hmaps,
+        dep_archives,
+        framework_search_dirs,
+        framework_module_names,
+        dep_framework_files,
+        dep_sdk_frameworks,
+        dep_sdk_dylibs,
+        dep_linkopts,
+        dep_vfs_overlays,
+        plugin_dylibs,
+        plugin_executables,
+    ) = _collect_dep_compile_inputs(deps, ctx["build_dir"])
+    compile_swiftmodule_inputs = _apple_collect_swiftmodule_inputs(deps)
+    alwayslink_archives = _apple_collect_alwayslink_archives(deps)
+
+    has_main_source = False
+    for src in swift_srcs:
+        if _basename(src) == "main.swift":
+            has_main_source = True
+            break
+
+    swift_argv = list(swiftc["argv"]) + [
+        "-module-name",
+        module_name,
+        "-target",
+        triple,
+        "-o",
+        executable,
+        "-module-cache-path",
+        compile_module_cache,
+    ]
+    if not has_main_source:
+        # A tool without `main.swift` uses `@main` or an entry-point
+        # attribute, which requires library parsing so the compiler does
+        # not expect top-level statements.
+        swift_argv.append("-parse-as-library")
+    if bridging_header:
+        swift_argv.extend(["-import-objc-header", _package_relative(ctx, bridging_header)])
+    for d in compile_swiftmodule_dirs:
+        swift_argv.extend(["-I", d])
+    for hdir in compile_header_dirs:
+        swift_argv.extend(["-Xcc", "-I", "-Xcc", hdir])
+    for mmap in dep_modulemaps:
+        swift_argv.extend(["-Xcc", "-fmodule-map-file=" + mmap])
+    for hmap in dep_hmaps:
+        swift_argv.extend(["-Xcc", "-I", "-Xcc", hmap])
+    for overlay in dep_vfs_overlays:
+        swift_argv.extend(["-Xcc", "-ivfsoverlay", "-Xcc", overlay])
+    for d in framework_search_dirs:
+        swift_argv.extend(["-F", d])
+    _apple_disable_static_framework_autolinking(swift_argv, _apple_collect_link_framework_bundles(deps))
+    for fw in framework_module_names:
+        swift_argv.extend(["-framework", fw])
+    for fw in sdk_frameworks_attr:
+        swift_argv.extend(["-framework", fw])
+    for fw in dep_sdk_frameworks:
+        if fw not in sdk_frameworks_attr:
+            swift_argv.extend(["-framework", fw])
+    for fw in weak_sdk_frameworks:
+        _apple_append_weak_framework(swift_argv, fw)
+    for dy in sdk_dylibs_attr:
+        swift_argv.extend(["-l" + dy])
+    for dy in dep_sdk_dylibs:
+        if dy not in sdk_dylibs_attr:
+            swift_argv.extend(["-l" + dy])
+    for opt in _apple_unique_linkopts(linkopts + dep_linkopts):
+        swift_argv.append(opt)
+    _apple_add_swift_plugin_args(swift_argv, plugin_dylibs, plugin_executables)
+    for define in swift_defines:
+        swift_argv.extend(["-D", define])
+    for define in clang_defines:
+        swift_argv.extend(["-Xcc", "-D" + define])
+    for flag in _apple_swift_link_flags(swift_flags):
+        swift_argv.append(flag)
+    for src in swift_srcs:
+        swift_argv.append(src)
+    _apple_append_archives(swift_argv, dep_archives, alwayslink_archives)
+    profile_runtime = _apple_clang_profile_runtime(platform, sdk_variant, xcode_developer_dir)
+    if profile_runtime:
+        swift_argv.append(profile_runtime)
+
+    swift_inputs = list(swift_srcs)
+    if bridging_header:
+        bridging_header_path = _package_relative(ctx, bridging_header)
+        if bridging_header_path not in swift_inputs:
+            swift_inputs.append(bridging_header_path)
+    for mmap in dep_modulemaps:
+        if mmap not in swift_inputs:
+            swift_inputs.append(mmap)
+    for hmap in dep_hmaps:
+        if hmap not in swift_inputs:
+            swift_inputs.append(hmap)
+    for ar in dep_archives:
+        if ar not in swift_inputs:
+            swift_inputs.append(ar)
+    for swiftmodule_input in _apple_swiftmodule_inputs_for_arch(compile_swiftmodule_inputs, arch):
+        if swiftmodule_input not in swift_inputs:
+            swift_inputs.append(swiftmodule_input)
+    for f in dep_framework_files:
+        if f not in swift_inputs:
+            swift_inputs.append(f)
+    for overlay in dep_vfs_overlays:
+        if overlay not in swift_inputs:
+            swift_inputs.append(overlay)
+    for plugin_input in _apple_swift_plugin_inputs(plugin_dylibs, plugin_executables):
+        if plugin_input not in swift_inputs:
+            swift_inputs.append(plugin_input)
+    for path in _apple_link_option_inputs(linkopts + dep_linkopts):
+        if path not in swift_inputs:
+            swift_inputs.append(path)
+
+    run_action(
+        argv = swift_argv,
+        inputs = swift_inputs,
+        outputs = [executable],
+        env = swiftc["env"],
+        toolchain_identity = swiftc["identity"],
+        identifier = "apple_executable_compile_" + product_name,
+    )
+
+    codesign = _resolve_codesign(xcode_developer_dir)
+    codesign_argv = [codesign["path"], "--force", "--sign", "-", "--timestamp=none", executable]
+    run_action(
+        argv = codesign_argv,
+        inputs = [executable],
+        outputs = [executable],
+        env = codesign["env"],
+        toolchain_identity = codesign["identity"],
+        identifier = "apple_executable_codesign_" + product_name,
+    )
+
+    return {
+        "label_id": ctx["label"]["id"],
+        "target_kind": "apple_executable",
+        "executable_path": executable,
+        "host_link_archives": dep_archives,
+        "platform": platform,
+        "sdk_variant": sdk_variant,
+        "xcode_developer_dir": xcode_developer_dir,
+        "product_name": product_name,
+        "transitive_swiftmodule_dirs": [],
+        "transitive_swiftmodule_inputs": [],
+        "transitive_exported_header_dirs": compile_header_dirs,
+        "transitive_modulemaps": dep_modulemaps,
+        "transitive_hmaps": dep_hmaps,
+        "transitive_generated_headers": [],
+        "transitive_framework_search_dirs": framework_search_dirs,
+        "transitive_framework_files": dep_framework_files,
+        "transitive_vfs_overlays": dep_vfs_overlays,
+    }
+
+apple_executable = target_kind(
+    docs = "Builds an Apple command-line tool: a single Mach-O executable with no `.app` bundle wrapping, ad-hoc codesigned in place. Lowered from `com.apple.product-type.tool` targets in an Xcode project. The current draft supports Swift-only tools; mixed-language tools, header search directory consumption in the executable target itself, dependency resource-bundle deployment, and runtime search paths for `@rpath` framework dependencies become follow-up work once the shared compile pipeline is extracted from `apple_application`.",
+    impl = _apple_executable_impl,
+    attrs = [
+        attr("platform", "string", required = True, docs = "Apple platform for the executable", configurable = False),
+        attr("minimum_os", "string", docs = "Minimum supported OS version"),
+        attr("target_sdk_version", "string", docs = "Build-time SDK version baked into the triple. Defaults to `minimum_os`"),
+        attr("sdk_variant", "string", default = "\"simulator\"", docs = "`simulator` or `device` SDK selection. Ignored on macOS", configurable = False),
+        attr("xcode_developer_dir", "string", docs = "Pin a specific Xcode by overriding `DEVELOPER_DIR`. Folded into the action cache key"),
+        attr("product_name", "string", docs = "Executable product name. Defaults to the target name", configurable = False),
+        attr("module_name", "string", docs = "Swift module name. Defaults to the product name", configurable = False),
+        attr("sdk_frameworks", "list<string>", default = "[]", docs = "Apple SDK frameworks linked by name"),
+        attr("weak_sdk_frameworks", "list<string>", default = "[]", docs = "Apple SDK frameworks linked weakly"),
+        attr("sdk_dylibs", "list<string>", default = "[]", docs = "Apple SDK dynamic libraries linked by name"),
+        attr("linkopts", "list<string>", default = "[]", docs = "Extra linker flags"),
+        attr("swift_flags", "list<string>", default = "[]", docs = "Extra Swift compiler flags"),
+        attr("binary_swift_plugins", "list<string>", default = "[]", docs = "Prebuilt Swift macro executables in `<executable>#<module>` form", configurable = False),
+        attr("clang_flags", "list<string>", default = "[]", docs = "Extra Clang compiler flags (ignored today; kept for schema parity with apple_application)"),
+        attr("per_source_clang_flags", "map<string,string>", default = "{}", docs = "JSON-encoded Clang compiler flag lists keyed by source path (unused in the Swift-only draft)"),
+        attr("defines", "list<string>", default = "[]", docs = "Conditional compilation definitions shared by Swift and Clang for compatibility"),
+        attr("swift_defines", "list<string>", default = "[]", docs = "Swift conditional compilation conditions"),
+        attr("clang_defines", "list<string>", default = "[]", docs = "C-family preprocessor definitions"),
+        attr("bridging_header", "string", docs = "ObjC bridging header imported into every Swift source"),
+        attr("prefix_header", "string", docs = "Prefix header included before every C-family source (unused in the Swift-only draft)"),
+        attr("exported_header_dirs", "list<string>", default = "[]", docs = "Header search directories exported by the executable target"),
+        attr("private_header_dirs", "list<string>", default = "[]", docs = "Private header search directories used while compiling the executable"),
+        attr("private_headers", "list<string>", default = "[]", docs = "Private header files required while compiling the executable"),
+        attr("enable_testing", "bool", default = "false", docs = "Compile Swift with testability enabled"),
+        attr("prebuild_actions", "list<string>", default = "[]", docs = "Ordered serialized build preparation actions that run before compilation.", configurable = False),
+    ],
+    deps = [
+        dep("deps", ["apple_linkable", "apple_framework", "apple_swift_plugin", "native_linkable"], "Libraries, frameworks, native linkables, and Swift compiler plugins linked into the executable"),
+    ],
+    providers = ["apple_executable"],
+    capabilities = [
+        capability("build", ["default"]),
+        capability("run", ["default"], ["default"]),
+    ],
+    examples = [
+        example(
+            "apple-executable-minimal",
+            name = "Minimal macOS command-line tool",
+            use_when = "You want a Swift-only command-line tool target compiled and codesigned by Once, without an application bundle wrapping the binary.",
         ),
     ],
 )
