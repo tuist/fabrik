@@ -63,47 +63,24 @@ fn detect_native_projects_with_limit(
         scan.visit(&entry)?;
     }
     let mut matches = scan.finish();
-    // Ownership only suppresses further matches that lower to the SAME target
-    // kind: a Bazel workspace hides a nested Bazel workspace, and an Xcode
-    // project hides a nested Xcode project, but neither hides a Cargo or
-    // Swift package that happens to live at the same package or below it.
-    // Multiple graphs coexist and the user picks which one to load by
-    // selecting its seed target (`once build cargo` vs `once build bazel`).
-    //
-    // The comparison is on `target_kind`, not the native-project declaration
-    // name: Bazel registers three separate declarations (`bazel`,
-    // `bazel_workspace_file`, `bazel_workspace_bazel_file`) that all lower to
-    // `bazel_workspace`, and finding both a `MODULE.bazel` and a `WORKSPACE`
-    // at the same package must still collapse to one owner.
-    let kind_by_name: BTreeMap<&str, &str> = schemas
-        .iter()
-        .map(|schema| (schema.name.as_str(), schema.target_kind.as_str()))
-        .collect();
-    let kind_for = |name: &str| -> String {
-        kind_by_name
-            .get(name)
-            .map_or_else(|| name.to_string(), |kind| (*kind).to_string())
-    };
-    let owning_matches = matches
+    // An owning native project (an Xcode workspace, a Bazel root, and so on)
+    // hides every nested match beneath it, regardless of ecosystem, but never
+    // suppresses matches that live at the exact same package: a Bazel
+    // MODULE.bazel and a Cargo.toml side by side at the same directory each
+    // surface as their own seed so a user can select the one they mean. This
+    // is what makes the mixed-ecosystem case (a subproject that is both a
+    // Bazel and a Cargo workspace at its root) load both seeds.
+    let owning_packages = matches
         .iter()
         .filter(|matched| {
             schemas
                 .iter()
                 .any(|schema| schema.name == matched.native_project && schema.owns_descendants)
         })
-        .map(|matched| {
-            (
-                kind_for(matched.native_project.as_str()),
-                matched.package.clone(),
-            )
-        })
+        .map(|matched| matched.package.clone())
         .collect::<Vec<_>>();
     matches.retain(|matched| {
-        let matched_kind = kind_for(matched.native_project.as_str());
-        !owning_matches.iter().any(|(owner_kind, owner_pkg)| {
-            if owner_kind != &matched_kind {
-                return false;
-            }
+        !owning_packages.iter().any(|owner_pkg| {
             if owner_pkg == &matched.package {
                 return false;
             }
@@ -471,7 +448,14 @@ exclude = ["apps/excluded/**"]
     }
 
     #[test]
-    fn owning_projects_do_not_suppress_matches_of_other_kinds() {
+    fn owning_projects_still_suppress_cross_kind_descendants_but_not_same_package() {
+        // A Bazel workspace at the repo root owns everything beneath it, so a
+        // nested Package.swift inside `examples/demo` is claimed by the root
+        // (it is not a standalone Swift package the user should surface as its
+        // own seed). A Cargo.toml at the same root as the Bazel workspace is
+        // still surfaced as its own seed, because they live at the same
+        // package and the user should be able to select the ecosystem they
+        // mean when both live at the workspace root.
         let temporary = tempfile::tempdir().unwrap();
         write(&temporary.path().join("WORKSPACE"), "workspace");
         write(&temporary.path().join("Cargo.toml"), "[workspace]");
@@ -496,7 +480,7 @@ exclude = ["apps/excluded/**"]
                 .iter()
                 .map(|matched| (matched.native_project.as_str(), matched.package.as_str()))
                 .collect::<Vec<_>>(),
-            vec![("bazel", ""), ("cargo", ""), ("swift", "examples/demo"),]
+            vec![("bazel", ""), ("cargo", "")]
         );
     }
 
