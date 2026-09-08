@@ -5876,6 +5876,13 @@ def _swift_package_dependencies_impl(ctx):
     argv = [
         swift,
         "build",
+        # Swift Package Manager's manifest compile runs under macOS
+        # Seatbelt by default, but recent GitHub Actions runners refuse
+        # nested sandboxes and reject the outer `sandbox_apply` with
+        # `Operation not permitted`. Once already runs actions under
+        # its own policy, so opt out of SPM's inner sandbox to keep the
+        # manifest compile working on those runners.
+        "--disable-sandbox",
         "--package-path", package_path,
         "--scratch-path", scratch,
         "--configuration", configuration,

@@ -16,7 +16,7 @@ Describe 'bazel native project'
       sort
   }
 
-  It 'lets an owning Bazel root suppress nested ecosystem examples'
+  It 'surfaces Bazel alongside nested ecosystem projects instead of suppressing them'
     setup_bazel_workspace
 
     When call target_ids
@@ -24,25 +24,31 @@ Describe 'bazel native project'
     The stdout should include 'bazel_workspace bazel'
     The stdout should include 'bazel_target bz_support'
     The stdout should include 'bazel_test bz_support_test'
-    The stdout should not include 'cargo_workspace'
-    The stdout should not include 'swift_package_workspace'
+    # A Bazel workspace no longer eats a nested `crates/helper/Cargo.toml`
+    # or `examples/swift/Package.swift`: they each surface as their own
+    # seed so a caller can build the same repository through more than one
+    # ecosystem. Cross-kind coexistence is what makes native discovery
+    # work for repositories that mix Bazel and Cargo (the `kura`
+    # subproject of Tuist is the motivating case).
+    The stdout should include 'cargo_workspace crates/helper/cargo'
+    The stdout should include 'swift_package_workspace examples/swift/swift_package'
     The path "$WORKSPACE/once.toml" should not be exist
   End
 
-  It 'builds and tests the complete workspace without a Once manifest'
+  It 'builds and tests the Bazel workspace when the Bazel seed is selected'
     setup_bazel_workspace
 
-    When call env PATH="$WORKSPACE/tools:$PATH" "$ONCE_BIN" -C "$WORKSPACE" test --quiet
+    When call env PATH="$WORKSPACE/tools:$PATH" "$ONCE_BIN" -C "$WORKSPACE" test --quiet bz_support_test
     The status should be success
     The stdout should include 'test batches'
     The contents of file "$WORKSPACE/.once/out/bz_support_test/test/test_results.json" should include '"status":"passed"'
     The path "$WORKSPACE/once.toml" should not be exist
   End
 
-  It 'builds the complete workspace through the detected root'
+  It 'builds the Bazel workspace through the detected root when selected explicitly'
     setup_bazel_workspace
 
-    When call env PATH="$WORKSPACE/tools:$PATH" "$ONCE_BIN" -C "$WORKSPACE" build --quiet
+    When call env PATH="$WORKSPACE/tools:$PATH" "$ONCE_BIN" -C "$WORKSPACE" build --quiet bazel
     The status should be success
     The stdout should include 'once: build bazel (bazel_workspace)'
     The path "$WORKSPACE/once.toml" should not be exist
