@@ -1255,6 +1255,15 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
         clean_paths = [out_dir],
         create_dirs = [out_dir],
         env = run_env,
+        # Cargo build scripts routinely reach the network (downloading
+        # prebuilt artefacts, calling out to a git host, contacting a
+        # protobuf registry). Once's default action policy denies network
+        # access to keep unrelated cached actions hermetic, but that
+        # policy is wrong for the build-script contract Cargo defines,
+        # so opt this action back into unrestricted network access. A
+        # crate that wants to be genuinely hermetic still stages its
+        # inputs and does not care about the network in the first place.
+        network = "unrestricted",
         toolchain_identity = identity + "\x00build-script-run" + _rust_build_script_tool_identity(tool_paths),
         identifier = _rust_action_identifier(ctx, "build-script"),
     )
