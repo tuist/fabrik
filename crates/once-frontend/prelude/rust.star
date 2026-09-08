@@ -1249,7 +1249,15 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     )
     compile_env = _rust_compile_action_env(ctx, target, host_triple)
     compile_env["OUT_DIR"] = execution_path(out_dir)
-    return (out_dir, [script_path, out_dir, stdout], compile_env, stdout)
+    # The build script's output directory is not itself an input to the
+    # downstream rustc compile: build scripts routinely emit timestamps
+    # and other non-deterministic bytes into `OUT_DIR`, and hashing the
+    # directory into the compile digest turned every subsequent build
+    # into a cache miss even when nothing observable had changed. The
+    # `stdout` file still captures the `cargo:rustc-*` directives that
+    # actually influence the compile, so any real change to the build
+    # script's contract still flows into the digest through it.
+    return (out_dir, [script_path, stdout], compile_env, stdout)
 
 def _rustc_unix_read_dependency_link_searches(stdout):
     return """while IFS= read -r line; do
