@@ -8173,11 +8173,12 @@ result = repr(provider["test_bundle_path"])
         runner,
         "Contents/Resources/Fixtures/Nested/fixture.json"
     ));
-    // The XCTest runner is now cacheable: its inputs cover the built bundle
-    // plus every embedded resource and framework closure, so a rerun with
-    // the same closure can safely reuse the previous execution's outputs.
+    // The XCTest runner is deliberately non-cacheable: a passing test's
+    // outcome depends on simulator state, network, and other runtime
+    // signals that the input digest cannot capture, so caching would
+    // paper over flaky failures or stale passes.
+    assert!(!runner.cacheable);
     for action in [
-        runner,
         compile,
         plugin_embed,
         support_copy,

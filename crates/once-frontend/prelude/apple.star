@@ -5431,6 +5431,11 @@ exit "$status"
             inputs = test_inputs,
             outputs = [test_dir],
             env = action_env,
+            # Test runners are always re-run: their outcome depends on
+            # simulator state, network availability, and other runtime
+            # signals that no input digest can capture, so a cache hit
+            # would surface a stale pass or an unreproducible failure.
+            cacheable = False,
             toolchain_identity = "once.apple." + runner_type + ".runner.v2\x00" + swiftc["identity"],
             identifier = "apple_" + runner_type + ":" + ctx["label"]["id"],
         )
