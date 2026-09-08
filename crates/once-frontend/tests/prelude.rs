@@ -8178,13 +8178,7 @@ result = repr(provider["test_bundle_path"])
     // signals that the input digest cannot capture, so caching would
     // paper over flaky failures or stale passes.
     assert!(!runner.cacheable);
-    for action in [
-        compile,
-        plugin_embed,
-        support_copy,
-        support_embed,
-        codesign,
-    ] {
+    for action in [compile, plugin_embed, support_copy, support_embed, codesign] {
         assert!(action.cacheable);
     }
 }
