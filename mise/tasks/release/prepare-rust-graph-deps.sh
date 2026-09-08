@@ -101,6 +101,7 @@ microsandbox_version="$(
     | .version
   ' <<<"${metadata}" | head -n 1
 )"
+echo "prepare-rust-graph-deps: microsandbox-filesystem version = '${microsandbox_version}', target = '${target}'"
 if [[ -n "${microsandbox_version}" && "${microsandbox_version}" != "null" ]]; then
   case "${target}" in
     aarch64-apple-darwin|arm64-apple-darwin) agentd_arch="aarch64" ;;
@@ -116,9 +117,11 @@ if [[ -n "${microsandbox_version}" && "${microsandbox_version}" != "null" ]]; th
       ;;
     *) agentd_arch="" ;;
   esac
+  echo "prepare-rust-graph-deps: agentd_arch = '${agentd_arch}'"
   if [[ -n "${agentd_arch}" ]]; then
     agentd_url="https://github.com/superradcompany/microsandbox/releases/download/v${microsandbox_version}/agentd-${agentd_arch}"
     mkdir -p third_party/rust/vendor/build
+    echo "prepare-rust-graph-deps: fetching ${agentd_url}"
     fetch_agentd() {
       curl --fail --location --silent --show-error \
         --output third_party/rust/vendor/build/agentd \
@@ -126,5 +129,6 @@ if [[ -n "${microsandbox_version}" && "${microsandbox_version}" != "null" ]]; th
     }
     retry_command "download agentd" fetch_agentd
     chmod +x third_party/rust/vendor/build/agentd
+    ls -la third_party/rust/vendor/build/agentd
   fi
 fi
