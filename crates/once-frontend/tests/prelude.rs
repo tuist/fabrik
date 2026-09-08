@@ -6813,10 +6813,11 @@ result = repr(provider["test_info"])
         .argv
         .iter()
         .any(|arg| arg.ends_with("test/test_results.json")));
-    assert!(run
-        .outputs
-        .iter()
-        .any(|output| output.ends_with("test/rust-libtest.log")));
+    // `rust_test` now declares the enclosing `test/` directory as the sole
+    // output of the runner action; individual artifacts (`rust-libtest.log`,
+    // `test_results.json`, `native_results.txt`) land under it and are
+    // covered by that single output.
+    assert!(run.outputs.iter().any(|output| output.ends_with("/test")));
     assert!(run
         .inputs
         .iter()
@@ -8172,8 +8173,17 @@ result = repr(provider["test_bundle_path"])
         runner,
         "Contents/Resources/Fixtures/Nested/fixture.json"
     ));
-    assert!(!runner.cacheable);
-    for action in [compile, plugin_embed, support_copy, support_embed, codesign] {
+    // The XCTest runner is now cacheable: its inputs cover the built bundle
+    // plus every embedded resource and framework closure, so a rerun with
+    // the same closure can safely reuse the previous execution's outputs.
+    for action in [
+        runner,
+        compile,
+        plugin_embed,
+        support_copy,
+        support_embed,
+        codesign,
+    ] {
         assert!(action.cacheable);
     }
 }
@@ -11400,7 +11410,14 @@ result = repr([wrapped[0], wrapped[1]])
     assert!(values[1].is_empty());
     let script = &argv[2];
     assert_eq!(script.lines().nth(1), Some("while IFS= read -r line; do"));
-    assert!(script.contains("done < '.once/out/pkg/build script.stdout'"));
+    // Build script stdout paths are now emitted as `execution_path` markers
+    // that resolve against the actual execution root (local, sandbox, or
+    // remote) immediately before process launch, so the workspace-relative
+    // form is prefixed with the `{{once.execution_root}}` marker.
+    assert!(
+        script.contains("done < '{{once.execution_root}}/.once/out/pkg/build script.stdout'"),
+        "{script}"
+    );
     assert!(script.contains("exec \"$@\""));
     assert!(!script.contains("O'Reilly"), "{script}");
 }
@@ -11659,13 +11676,13 @@ result = repr("ok")
         .find(|action| action.identifier.as_deref() == Some("crates/app/app:build-script-rustc"))
         .expect("build script rustc action");
     let path = action.env.get("PATH").expect("build script compile PATH");
-    let proc_macro_dir = workspace
-        .path()
-        .join(".once/out/macros/derive")
-        .to_string_lossy()
-        .into_owned();
+    // Proc-macro dylib directories that live inside the workspace's build
+    // output are emitted as `execution_path` markers now, so the PATH entry
+    // is prefixed with the `{{once.execution_root}}` marker that resolves at
+    // process launch instead of a workspace-absolute path.
+    let proc_macro_dir = "{{once.execution_root}}/.once/out/macros/derive";
     for expected in [
-        proc_macro_dir.as_str(),
+        proc_macro_dir,
         "C:/Rust/bin",
         "C:/Rust/lib/rustlib/x86_64-pc-windows-msvc/bin",
         "C:/Windows/System32",
