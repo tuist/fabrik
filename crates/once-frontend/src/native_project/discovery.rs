@@ -496,11 +496,7 @@ exclude = ["apps/excluded/**"]
                 .iter()
                 .map(|matched| (matched.native_project.as_str(), matched.package.as_str()))
                 .collect::<Vec<_>>(),
-            vec![
-                ("bazel", ""),
-                ("cargo", ""),
-                ("swift", "examples/demo"),
-            ]
+            vec![("bazel", ""), ("cargo", ""), ("swift", "examples/demo"),]
         );
     }
 
@@ -509,10 +505,7 @@ exclude = ["apps/excluded/**"]
         let temporary = tempfile::tempdir().unwrap();
         write(&temporary.path().join("WORKSPACE"), "workspace");
         write(&temporary.path().join("nested/WORKSPACE"), "nested");
-        write(
-            &temporary.path().join("nested/deeper/WORKSPACE"),
-            "deeper",
-        );
+        write(&temporary.path().join("nested/deeper/WORKSPACE"), "deeper");
         let mut owner = schema("bazel", "WORKSPACE", &[]);
         owner.owns_descendants = true;
         let schemas = vec![owner];
@@ -537,7 +530,10 @@ exclude = ["apps/excluded/**"]
         let temporary = tempfile::tempdir().unwrap();
         write(&temporary.path().join("MODULE.bazel"), "module");
         write(&temporary.path().join("WORKSPACE"), "workspace");
-        write(&temporary.path().join("nested/MODULE.bazel"), "nested module");
+        write(
+            &temporary.path().join("nested/MODULE.bazel"),
+            "nested module",
+        );
         let mut module_schema = schema("bazel_module", "MODULE.bazel", &[]);
         module_schema.target_kind = "bazel_workspace".to_string();
         module_schema.owns_descendants = true;

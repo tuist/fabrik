@@ -1437,8 +1437,10 @@ fn glob_includes_real_files_reached_via_symlinked_ancestor_pointing_outside() {
     let matches = expand_globs(
         workspace.path(),
         "",
-        &[".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/*.swift"
-            .to_string()],
+        &[
+            ".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/*.swift"
+                .to_string(),
+        ],
     )
     .unwrap();
 
@@ -1475,8 +1477,10 @@ fn glob_observes_canonical_target_when_symlinked_ancestor_escapes_workspace() {
         let matches = expand_globs(
             workspace.path(),
             "",
-            &[".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/*.swift"
-                .to_string()],
+            &[
+                ".build/registry/downloads/apple/swift-algorithms/1.2.1/Sources/Algorithms/*.swift"
+                    .to_string(),
+            ],
         )
         .unwrap();
         assert_eq!(
