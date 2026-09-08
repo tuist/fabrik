@@ -1101,6 +1101,17 @@ def _rust_build_script_env(ctx, rustc, target, host_triple, out_dir, script_path
     env["TARGET"] = target or host_triple
     if "CARGO_ENCODED_RUSTFLAGS" not in env:
         env["CARGO_ENCODED_RUSTFLAGS"] = _rust_encoded_rustflags(ctx)
+    # Forward the standard continuous-integration markers so a build script
+    # that has a documented CI-only fast path (like microsandbox-filesystem
+    # copying a locally-staged agentd binary instead of downloading it) can
+    # detect the environment it is running under. Once clears the child
+    # process's environment, so these need to be threaded through
+    # explicitly.
+    for key in ["CI", "GITHUB_ACTIONS"]:
+        if key not in env:
+            value = host_env(key)
+            if value:
+                env[key] = value
     return env
 
 def _rust_manifest_links(ctx):

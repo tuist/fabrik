@@ -85,3 +85,46 @@ if [[ -n "${schlussel_manifest}" && "${schlussel_manifest}" != "null" ]]; then
     cp -R "${schlussel_root}/src/formulas" third_party/rust/src/formulas
   fi
 fi
+
+# microsandbox-filesystem's build script downloads the arch-specific
+# `agentd` binary from GitHub at compile time. Under Once's hermetic
+# execution the child process cannot reach the network, so pre-stage the
+# binary where the crate's documented CI escape hatch looks for it:
+# `<workspace_root>/build/agentd`, where `workspace_root` is the vendored
+# crate's `CARGO_MANIFEST_DIR/../..`. The crate then copies the file into
+# its `OUT_DIR` instead of downloading. The `CI` env var is forwarded
+# through the Rust build-script action so the escape hatch fires.
+microsandbox_version="$(
+  jq -r '
+    .packages[]
+    | select(.name == "microsandbox-filesystem")
+    | .version
+  ' <<<"${metadata}" | head -n 1
+)"
+if [[ -n "${microsandbox_version}" && "${microsandbox_version}" != "null" ]]; then
+  case "${target}" in
+    aarch64-apple-darwin|arm64-apple-darwin) agentd_arch="aarch64" ;;
+    x86_64-*) agentd_arch="x86_64" ;;
+    aarch64-*) agentd_arch="aarch64" ;;
+    "")
+      host_arch="$(uname -m)"
+      case "${host_arch}" in
+        arm64|aarch64) agentd_arch="aarch64" ;;
+        x86_64|amd64) agentd_arch="x86_64" ;;
+        *) agentd_arch="" ;;
+      esac
+      ;;
+    *) agentd_arch="" ;;
+  esac
+  if [[ -n "${agentd_arch}" ]]; then
+    agentd_url="https://github.com/superradcompany/microsandbox/releases/download/v${microsandbox_version}/agentd-${agentd_arch}"
+    mkdir -p third_party/rust/vendor/build
+    fetch_agentd() {
+      curl --fail --location --silent --show-error \
+        --output third_party/rust/vendor/build/agentd \
+        "${agentd_url}"
+    }
+    retry_command "download agentd" fetch_agentd
+    chmod +x third_party/rust/vendor/build/agentd
+  fi
+fi
