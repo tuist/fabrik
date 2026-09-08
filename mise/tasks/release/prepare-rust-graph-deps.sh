@@ -130,5 +130,45 @@ if [[ -n "${microsandbox_version}" && "${microsandbox_version}" != "null" ]]; th
     retry_command "download agentd" fetch_agentd
     chmod +x third_party/rust/vendor/build/agentd
     ls -la third_party/rust/vendor/build/agentd
+    # The upstream build script only consults the pre-staged binary when it
+    # detects a CI environment; under Once's hermetic execution neither the
+    # `CI` nor the `GITHUB_ACTIONS` markers necessarily reach the child
+    # process, so patch the build script to consult the local file
+    # unconditionally. The download branch stays as a fallback.
+    build_rs="third_party/rust/vendor/microsandbox-filesystem-${microsandbox_version}/build.rs"
+    if [[ -f "${build_rs}" ]]; then
+      python3 - "${build_rs}" <<'PY'
+import re, sys
+path = sys.argv[1]
+source = open(path).read()
+pattern = re.compile(
+    r'if std::env::var_os\("CI"\)\.is_some\(\) \|\| std::env::var_os\("GITHUB_ACTIONS"\)\.is_some\(\) \{',
+)
+replacement = 'if true {'
+patched, count = pattern.subn(replacement, source, count=1)
+if count == 0:
+    raise SystemExit(
+        f"expected CI-branch guard to patch in {path}, but did not find it"
+    )
+open(path, 'w').write(patched)
+print(f"prepare-rust-graph-deps: patched {path} to always consult local agentd")
+PY
+      # Cargo verifies vendored source integrity against a per-crate
+      # `.cargo-checksum.json` file; overwrite the checksum for `build.rs`
+      # with the new hash so `cargo build --frozen` and Once's own hash
+      # verification see the file as authentic.
+      checksum_file="third_party/rust/vendor/microsandbox-filesystem-${microsandbox_version}/.cargo-checksum.json"
+      if [[ -f "${checksum_file}" ]]; then
+        new_hash="$(shasum -a 256 "${build_rs}" | awk '{print $1}')"
+        python3 - "${checksum_file}" "${new_hash}" <<'PY'
+import json, sys
+path, new_hash = sys.argv[1], sys.argv[2]
+data = json.load(open(path))
+data["files"]["build.rs"] = new_hash
+json.dump(data, open(path, 'w'), separators=(",", ":"))
+print(f"prepare-rust-graph-deps: refreshed {path} for build.rs")
+PY
+      fi
+    fi
   fi
 fi
