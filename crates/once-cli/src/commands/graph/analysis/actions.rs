@@ -2056,7 +2056,16 @@ fn effective_network(declared: Option<&str>) -> Result<NetworkPolicy> {
             .parse::<NetworkPolicy>()
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("parsing network policy `{raw}`")),
-        None => Ok(NetworkPolicy::Deny),
+        // Actions that do not declare a network policy default to
+        // unrestricted. The reproducible-build effort meant to switch
+        // this to `Deny`, but doing so broke every action that spawns
+        // a subprocess needing a socketpair for stdout/stderr (the
+        // Linux seccomp filter denies related syscalls) and every
+        // action that in turn wraps itself in a macOS Seatbelt profile
+        // (nested `sandbox_apply` calls are refused on recent runners).
+        // Actions that genuinely need network isolation opt in with
+        // `network = "deny"` explicitly.
+        None => Ok(NetworkPolicy::Unrestricted),
     }
 }
 
