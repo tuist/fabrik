@@ -152,4 +152,101 @@ Describe 'release SDK packaging scripts'
     The status should be failure
     The stderr should include 'SDK prebuilds are missing'
   End
+
+  # Staging a package tree that the publish path will actually walk, so the
+  # registry stubs below are reached instead of the prebuilds guard.
+  setup_publishable_packages() {
+    mkdir -p \
+      "$WORKSPACE/packages/js/prebuilds" \
+      "$WORKSPACE/packages/ruby/prebuilds"
+    printf '{"name":"buildonce","version":"0.0.0"}\n' > "$WORKSPACE/packages/js/package.json"
+    printf 'Gem::Specification.new\n' > "$WORKSPACE/packages/ruby/once.gemspec"
+  }
+
+  It 'skips registries that already carry the version'
+    setup_release_path
+    setup_publishable_packages
+    # `npm view <pkg>@<version>` succeeding is how npm reports that the
+    # version is published; `gem list --remote` prints its own listing.
+    write_stub npm \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = view ]; then exit 0; fi' \
+      'echo "npm $* should not have run" >&2' \
+      'exit 1'
+    write_stub gem \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = list ]; then echo "buildonce (0.9.0, 0.1.0)"; exit 0; fi' \
+      'echo "gem $* should not have run" >&2' \
+      'exit 1'
+    cd "$WORKSPACE"
+
+    When call "$REPO_ROOT/mise/tasks/release/publish-sdks.sh" --version 0.9.0
+    The status should be success
+    The stdout should include 'already on npm; skipping'
+    The stdout should include 'already on RubyGems; skipping'
+  End
+
+  It 'matches published versions exactly rather than as substrings'
+    setup_release_path
+    setup_publishable_packages
+    write_stub npm \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = --version ]; then echo 11.17.0; exit 0; fi' \
+      'if [ "$1" = view ]; then exit 1; fi' \
+      'exit 0'
+    # 0.54.0 must not be read as published just because 0.5.4 is.
+    write_stub gem \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = list ]; then echo "buildonce (0.5.4, 0.1.0)"; exit 0; fi' \
+      'if [ "$1" = push ]; then echo "pushed $2"; exit 0; fi' \
+      'exit 0'
+    cd "$WORKSPACE"
+
+    When call "$REPO_ROOT/mise/tasks/release/publish-sdks.sh" --version 0.54.0
+    The status should be success
+    The stdout should not include 'already on RubyGems'
+    The stdout should include 'pushed buildonce-0.54.0.gem'
+  End
+
+  It 'publishes to RubyGems even when npm publishing fails'
+    setup_release_path
+    setup_publishable_packages
+    write_stub npm \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = --version ]; then echo 11.17.0; exit 0; fi' \
+      'if [ "$1" = view ]; then exit 1; fi' \
+      'if [ "$1" = publish ]; then echo "npm refused the credential" >&2; exit 1; fi' \
+      'exit 0'
+    write_stub gem \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = list ]; then echo "buildonce (0.1.0)"; exit 0; fi' \
+      'if [ "$1" = push ]; then echo "pushed $2"; exit 0; fi' \
+      'exit 0'
+    cd "$WORKSPACE"
+
+    When call "$REPO_ROOT/mise/tasks/release/publish-sdks.sh" --version 0.9.0
+    The status should be failure
+    The stdout should include 'pushed buildonce-0.9.0.gem'
+    The stderr should include 'failed to publish buildonce 0.9.0 to: npm'
+  End
+
+  It 'rejects npm clients too old for trusted publishing'
+    setup_release_path
+    setup_publishable_packages
+    write_stub npm \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = view ]; then exit 1; fi' \
+      'if [ "$1" = --version ]; then echo 10.9.2; exit 0; fi' \
+      'exit 0'
+    write_stub gem \
+      '#!/usr/bin/env bash' \
+      'if [ "$1" = list ]; then echo "buildonce (0.9.0)"; exit 0; fi' \
+      'exit 0'
+    cd "$WORKSPACE"
+
+    When call "$REPO_ROOT/mise/tasks/release/publish-sdks.sh" --version 0.9.0
+    The status should be failure
+    The stdout should include 'already on RubyGems; skipping'
+    The stderr should include 'npm 11.5.1 or newer is required to publish; found 10.9.2'
+  End
 End

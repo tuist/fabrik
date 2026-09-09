@@ -328,12 +328,20 @@ def _bazel_prepare_shadow(ctx, bazel, workspace_abs):
 def _bazel_link_workspace_sources(shadow_abs, workspace_abs):
     # Symlink every workspace entry into the shadow root so relative paths in
     # aquery argv resolve to real sources. `.once` is skipped so the shadow
-    # cannot recurse into itself, and hidden git state is skipped to keep the
-    # shadow small.
+    # cannot recurse into itself. A `bazel-*` entry that is itself a symlink
+    # is one of the convenience links Bazel drops in the real workspace
+    # (`bazel-bin`, `bazel-out`, `bazel-testlogs`, and `bazel-<workspace-name>`
+    # pointing at the exec-root); mirroring the last one closed a
+    # `.once → shadow → execroot → .once` cycle that made `bazel query` fail
+    # with "infinite symlink expansion detected" on the next load. The
+    # symlink test is what makes the skip safe: a real directory that happens
+    # to be named `bazel-rules/` (loaded by `//bazel-rules:defs.bzl`) is not
+    # a convenience link and is mirrored like any other source directory.
     host_command(["/bin/sh", "-c",
         "for entry in \"" + workspace_abs + "\"/*; do " +
         "  name=$(basename \"$entry\");" +
-        "  case \"$name\" in .once|bazel-bin|bazel-out|bazel-testlogs|external) continue ;; esac;" +
+        "  case \"$name\" in .once|external) continue ;; esac;" +
+        "  case \"$name\" in bazel-*) if [ -L \"$entry\" ]; then continue; fi ;; esac;" +
         "  ln -sfn \"$entry\" \"" + shadow_abs + "/$name\";" +
         "done",
     ])
@@ -348,7 +356,21 @@ def _bazel_bazel_flags():
     # target and host configurations need the toggle for it to cover
     # transitive `-sys`-style crates whose module maps are otherwise
     # generated in the exec configuration.
-    return ["--features=-module_maps", "--host_features=-module_maps"]
+    #
+    # `--experimental_convenience_symlinks=ignore` stops Bazel from planting
+    # `bazel-<workspace>`, `bazel-bin`, `bazel-out`, and `bazel-testlogs`
+    # symlinks in the real workspace on each invocation. Once mirrors the
+    # workspace into `.once/bazel-shadow/<target>/`, and any convenience link
+    # that reaches Bazel's exec-root closes a loop back into `.once` that
+    # crashes the next `bazel query` with "infinite symlink expansion
+    # detected". `ignore` leaves existing links alone; the shadow mirror
+    # explicitly skips them (`_bazel_link_workspace_sources`), so a workspace
+    # already carrying stale links still loads cleanly.
+    return [
+        "--features=-module_maps",
+        "--host_features=-module_maps",
+        "--experimental_convenience_symlinks=ignore",
+    ]
 
 def _bazel_aquery(ctx, bazel, workspace_abs):
     label = ctx["attr"]["bazel_label"]

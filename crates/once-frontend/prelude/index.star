@@ -58,6 +58,7 @@ PRELUDE_TARGET_KINDS = {
         "apple_xcframework_import",
         "apple_framework",
         "apple_application",
+        "apple_executable",
         "apple_thinned_package",
         "apple_test_bundle",
         "shellspec_test",
