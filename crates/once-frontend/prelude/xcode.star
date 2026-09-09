@@ -851,7 +851,7 @@ def _xcode_classify_synced_path(path, buckets):
     elif _xcode_is_resource(path):
         buckets["resources"].append(path)
 
-def _xcode_synced_group_files(ctx, objects, target, project_dir, path_maps):
+def _xcode_synced_group_files(ctx, objects, target, project_dir, path_maps, group_walk_cache = None):
     # Xcode 16+ file-system synchronized root groups: every file under the group
     # directory is a member of the owning target, minus the files a membership
     # exception set removes from that target. An exception set that names a
@@ -859,6 +859,10 @@ def _xcode_synced_group_files(ctx, objects, target, project_dir, path_maps):
     # target, which is how a shared source directory is compiled into several
     # targets. Enumerate and classify both. The group directory comes from the
     # tree walk so a group nested under other groups resolves to its full path.
+    # `group_walk_cache`, when supplied, memoises the `glob([base + "/**"])`
+    # result by group root so a project with 100+ synced groups walks each root
+    # once across every target it belongs to rather than N times per target
+    # visit. Cache omitted defaults to the original one-glob-per-visit path.
     group_dirs = path_maps["groups"]
     buckets = {"sources": [], "headers": [], "resources": [], "asset_catalogs": [], "intent_definitions": []}
     target_name = target.get("name") or ""
@@ -870,7 +874,7 @@ def _xcode_synced_group_files(ctx, objects, target, project_dir, path_maps):
         if base == None:
             continue
         excluded = _xcode_synced_exceptions(objects, group, target_name, base)
-        for path in glob([base + "/**"]):
+        for path in _xcode_synced_group_walk(base, group_walk_cache):
             if _xcode_path_excluded(path, excluded):
                 continue
             _xcode_classify_synced_path(path, buckets)
@@ -893,6 +897,16 @@ def _xcode_synced_group_files(ctx, objects, target, project_dir, path_maps):
         "asset_catalogs": _unique(buckets["asset_catalogs"]),
         "intent_definitions": _unique(buckets["intent_definitions"]),
     }
+
+def _xcode_synced_group_walk(base, cache):
+    if cache == None:
+        return glob([base + "/**"])
+    cached = cache.get(base)
+    if cached != None:
+        return cached
+    files = glob([base + "/**"])
+    cache[base] = files
+    return files
 
 def _xcode_build_file_matches_platform(build_file, platform):
     # A PBXBuildFile can be scoped to platforms (for example an AppKit link
@@ -1022,9 +1036,9 @@ def _xcode_classic_phase_files(ctx, objects, target, file_paths, platform = ""):
         "source_flags": source_flags,
     }
 
-def _xcode_target_files(ctx, objects, target, file_paths, project_dir, path_maps, platform = ""):
+def _xcode_target_files(ctx, objects, target, file_paths, project_dir, path_maps, platform = "", group_walk_cache = None):
     classic = _xcode_classic_phase_files(ctx, objects, target, file_paths, platform)
-    synced = _xcode_synced_group_files(ctx, objects, target, project_dir, path_maps)
+    synced = _xcode_synced_group_files(ctx, objects, target, project_dir, path_maps, group_walk_cache = group_walk_cache)
     project_header_dirs = []
     for path in file_paths.values():
         if _xcode_is_header(path) and _parent_dir(path):
@@ -1453,22 +1467,44 @@ def _xcode_local_package_products(ctx, wanted):
                 remaining.pop(product_name)
     return resolved
 
-def _xcode_swift_package_info(ctx, package_dir, identity = ""):
+def _xcode_swift_package_info(ctx, package_dir, identity = "", cache = None):
+    # `swift package dump-package` starts Swift and reparses the whole
+    # manifest for every call, and a typical Xcode workspace passes the same
+    # package directory in more than once — the same registry entry appears
+    # in Package.resolved and in a nested package's own dependency list, or
+    # a workspace resolver expands the transitive graph in more than one
+    # pass. `cache`, when supplied, is a mutable dict keyed by absolute
+    # package directory so the second visit skips the subprocess and reuses
+    # the parsed manifest. Callers that iterate many packages create a fresh
+    # dict at their top level and thread it through; leaving `cache` as
+    # `None` opts out and preserves the original one-shot semantics.
+    absolute = _xcode_abs(package_dir) if package_dir else _xcode_workspace_root()
+    if cache != None:
+        cached = cache.get(absolute)
+        if cached != None:
+            resolved_identity = identity or _basename(package_dir) or (cached["info"].get("name") or "Package")
+            return {
+                "identity": resolved_identity,
+                "path": package_dir,
+                "info": cached["info"],
+            }
     xcrun = host_which("xcrun")
     swift = host_command([xcrun, "--find", "swift"]).strip()
-    absolute = _xcode_abs(package_dir) if package_dir else _xcode_workspace_root()
     info = json_decode(host_command([swift, "package", "dump-package", "--package-path", absolute]))
+    if cache != None:
+        cache[absolute] = {"info": info}
     return {
         "identity": identity or _basename(package_dir) or (info.get("name") or "Package"),
         "path": package_dir,
         "info": info,
     }
 
-def _xcode_local_swift_package_infos(ctx, project_dir, package_refs):
+def _xcode_local_swift_package_infos(ctx, project_dir, package_refs, cache = None):
     # Package metadata is analysis input only. Compilation remains entirely in
     # Once's Apple target kinds. Follow only local package references declared
     # by the project, rather than every Package.swift in the repository: a
     # nested developer tool is a separate workspace unless Xcode references it.
+    # `cache` is a manifest-dedupe map threaded down from the resolver.
     infos = []
     seen = {}
     for ref in package_refs.values():
@@ -1481,7 +1517,7 @@ def _xcode_local_swift_package_infos(ctx, project_dir, package_refs):
         manifest = _xcode_join(package_dir, "Package.swift")
         if not host_file_exists(_xcode_abs(manifest)):
             continue
-        info = _xcode_swift_package_info(ctx, package_dir)
+        info = _xcode_swift_package_info(ctx, package_dir, cache = cache)
         infos.append(info)
     return infos
 
@@ -1550,7 +1586,7 @@ def _xcode_package_resolved_pins(ctx, entry_path, project_path, package_refs):
             fallback = pins
     return fallback
 
-def _xcode_remote_swift_package_infos(ctx, entry_path, project_path, package_refs):
+def _xcode_remote_swift_package_infos(ctx, entry_path, project_path, package_refs, cache = None):
     # The lockfile is authoritative for source-control revisions. Git provides
     # source acquisition only; package manifests are then lowered to Once Apple
     # targets and compiled by Once rather than by Swift Package Manager.
@@ -1563,8 +1599,12 @@ def _xcode_remote_swift_package_infos(ctx, entry_path, project_path, package_ref
     for ref in package_refs.values():
         if ref.get("kind") == "remote" and ref.get("identity"):
             refs_by_identity[ref["identity"].lower()] = ref
+    # Shared across every registry pin in this batch: `swift package resolve`
+    # runs at most once even if many entries need to be materialized.
+    resolve_state = {"attempted": False}
     for key, pin in pins.items():
-        if pin.get("kind") != "remoteSourceControl":
+        kind = pin.get("kind")
+        if kind not in ["remoteSourceControl", "registry"]:
             continue
         ref = refs_by_identity.get(key) or {}
         identity = ref.get("identity") or pin.get("identity") or ""
@@ -1572,12 +1612,59 @@ def _xcode_remote_swift_package_infos(ctx, entry_path, project_path, package_ref
         if not identity or key in seen:
             continue
         seen[key] = True
-        info = _xcode_remote_swift_package_info(ctx, identity, pin, ref.get("url") or "")
+        if kind == "registry":
+            info = _xcode_registry_swift_package_info(ctx, pin.get("identity") or identity, pin, resolve_state, cache = cache)
+        else:
+            info = _xcode_remote_swift_package_info(ctx, identity, pin, ref.get("url") or "", cache = cache)
         if info:
             infos.append(info)
     return infos
 
-def _xcode_remote_swift_package_info(ctx, identity, pin, url = "", checkout_root = ".once/xcode-packages"):
+def _xcode_registry_swift_package_info(ctx, identity, pin, resolve_state = None, cache = None):
+    # Registry archives are unpacked by Swift Package Manager under
+    # `.build/registry/downloads/<scope>/<name>/<version>/`. Once reads the
+    # manifest from that unpacked tree; if the tree is not present yet, one
+    # `swift package resolve` at the workspace root is attempted before the
+    # entry is declared missing. `resolve_state` (when supplied) shares the
+    # "already resolved" flag across every registry pin the caller is
+    # walking, so batches invoke resolve at most once per load.
+    version = (pin.get("state") or {}).get("version") or ""
+    package_dir = _swiftpm_registry_relative_dir({
+        "raw_identity": identity,
+        "version": version,
+    })
+    if not package_dir:
+        return None
+    manifest = _xcode_abs(package_dir) + "/Package.swift"
+    if host_file_exists(manifest):
+        return _xcode_swift_package_info(ctx, package_dir, identity, cache = cache)
+    _xcode_resolve_registry_downloads_once(resolve_state)
+    if not host_file_exists(manifest):
+        fail(ctx["label"]["id"] + ": registry Swift package `" + identity + "@" + version + "` is not present at `" + package_dir + "`. Run the tool that populates that tree (`tuist install` or `swift package resolve`) at the workspace root, then reload the graph.")
+    return _xcode_swift_package_info(ctx, package_dir, identity, cache = cache)
+
+def _xcode_resolve_registry_downloads_once(resolve_state):
+    # Try one `swift package resolve` at the workspace root to populate every
+    # `.build/registry/downloads/<scope>/<name>/<version>/` entry the pins
+    # reference. Silently swallowing an error is on purpose: the caller reads
+    # the download tree back afterwards, and any real failure is reported by
+    # the missing-package `fail(...)` from the caller with a clear pointer at
+    # the user's fix. When there is no workspace-root `Package.swift`, resolve
+    # cannot help, so the call is skipped.
+    if resolve_state == None or resolve_state.get("attempted"):
+        return
+    resolve_state["attempted"] = True
+    workspace_root = _xcode_workspace_root()
+    if not workspace_root:
+        return
+    absolute_root = workspace_root[:len(workspace_root) - 1] if workspace_root.endswith("/") else workspace_root
+    if not host_file_exists(absolute_root + "/Package.swift"):
+        return
+    xcrun = host_which("xcrun")
+    swift = host_command([xcrun, "--find", "swift"]).strip()
+    host_command([swift, "package", "resolve", "--package-path", absolute_root])
+
+def _xcode_remote_swift_package_info(ctx, identity, pin, url = "", checkout_root = ".once/xcode-packages", cache = None):
     state = pin.get("state") or {}
     revision = state.get("revision") or ""
     if not revision:
@@ -1597,7 +1684,7 @@ def _xcode_remote_swift_package_info(ctx, identity, pin, url = "", checkout_root
         if current != revision:
             host_command([git, "-C", absolute, "fetch", "--depth", "1", "origin", revision])
             host_command([git, "-C", absolute, "checkout", "--detach", revision])
-    info = _xcode_swift_package_info(ctx, package_dir, identity)
+    info = _xcode_swift_package_info(ctx, package_dir, identity, cache = cache)
     return info
 
 def _xcode_package_resolved_pins_at(package_path):
@@ -1605,12 +1692,13 @@ def _xcode_package_resolved_pins_at(package_path):
         return {}
     return _xcode_resolved_pins_from_path(package_path + "/Package.resolved")
 
-def _xcode_expand_swift_package_infos(ctx, initial_infos):
+def _xcode_expand_swift_package_infos(ctx, initial_infos, cache = None):
     infos = list(initial_infos)
     known = {}
     for info in infos:
         known[(info.get("identity") or "").lower()] = True
     pending = list(infos)
+    resolve_state = {"attempted": False}
     # Swift package dependency graphs are shallow in practice, but the bound
     # prevents a malformed lockfile from making analysis unbounded.
     for _ in range(32):
@@ -1623,15 +1711,19 @@ def _xcode_expand_swift_package_infos(ctx, initial_infos):
                     key = identity.lower()
                     if not path or key in known or not host_file_exists(_xcode_abs(path + "/Package.swift")):
                         continue
-                    info = _xcode_swift_package_info(ctx, path, identity)
+                    info = _xcode_swift_package_info(ctx, path, identity, cache = cache)
                     discovered.append(info)
                     infos.append(info)
                     known[key] = True
             pins = _xcode_package_resolved_pins_at(package.get("path") or "")
             for identity, pin in pins.items():
-                if pin.get("kind") != "remoteSourceControl" or identity in known:
+                kind = pin.get("kind")
+                if kind not in ["remoteSourceControl", "registry"] or identity in known:
                     continue
-                info = _xcode_remote_swift_package_info(ctx, pin.get("identity") or identity, pin)
+                if kind == "registry":
+                    info = _xcode_registry_swift_package_info(ctx, pin.get("identity") or identity, pin, resolve_state, cache = cache)
+                else:
+                    info = _xcode_remote_swift_package_info(ctx, pin.get("identity") or identity, pin, cache = cache)
                 if info:
                     discovered.append(info)
                     infos.append(info)
@@ -2210,6 +2302,14 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
                     spec_kind = "apple_test_bundle"
                     attrs["product_name"] = name
                 elif target_type == "executable":
+                    # Swift package `executableTarget` products are lowered as
+                    # applications so their `resources`, `structured_resources`,
+                    # `swift_testing`, and other library-shape attributes stay
+                    # accepted, and so a package test target that depends on the
+                    # executable still sees an `apple_application` provider.
+                    # The synthesized bundle identifier is dropped once
+                    # `apple_executable` accepts the same attribute surface and
+                    # is compatible with `apple_test_bundle` deps.
                     spec_kind = "apple_application"
                     attrs["product_name"] = name
                     attrs["bundle_id"] = "dev.once.swift-package." + identity.lower() + "." + name.lower()
@@ -3264,6 +3364,25 @@ def _xcode_application_attrs(ctx, target, settings, subs, platform, files):
         attrs["structured_resources"] = files["structured_resources"]
     return attrs, product_name
 
+def _xcode_executable_attrs(ctx, target, settings, subs, platform, files):
+    # Command-line tool targets (`com.apple.product-type.tool`) produce a bare
+    # Mach-O rather than an `.app` bundle. They share every compile-side setting
+    # with an application (Swift/Clang flags, header search paths, SDK
+    # frameworks, linkopts) but never carry Info.plist, entitlements, asset
+    # catalogs, resources, or bundle identifier fields — the bare binary has no
+    # bundle around it. Extension flags and app-icon selection are also
+    # meaningless for a tool.
+    attrs = _xcode_common_attrs(ctx, target, settings, subs, platform, files)
+    product_name = _xcode_product_name(settings, target, subs)
+    if product_name:
+        attrs["product_name"] = product_name
+    module_name = _xcode_resolve_vars(_xcode_scalar(settings.get("PRODUCT_MODULE_NAME")), subs)
+    if module_name and not module_name.startswith("$(") and not module_name.startswith("${"):
+        attrs["module_name"] = module_name
+    if _xcode_scalar(settings.get("ENABLE_TESTABILITY")).upper() == "YES":
+        attrs["enable_testing"] = True
+    return attrs, product_name
+
 def _xcode_test_attrs(ctx, target, settings, subs, platform, files):
     attrs = _xcode_common_attrs(ctx, target, settings, subs, platform, files)
     product_name = _xcode_product_name(settings, target, subs)
@@ -3471,6 +3590,11 @@ def _xcode_workspace_resolver(ctx):
     native_spec_names = {}
     all_xcframework_modules = {}
     test_plan_settings = _xcode_test_plan_settings(ctx)
+    # Workspace-wide manifest-dedupe map for `swift package dump-package`.
+    # Threading this above the project loop so a Swift package referenced by
+    # more than one project in the workspace only gets parsed once. Each
+    # per-project resolver stays free to opt out by passing `cache = None`.
+    swift_info_cache = {}
     for project in projects:
         objects = project["objects"]
         native_targets = project["native_targets"]
@@ -3506,7 +3630,10 @@ def _xcode_workspace_resolver(ctx):
                 local = local_products.get(product["name"])
                 if local and not product.get("package_identity"):
                     product["package_identity"] = local["identity"]
-        local_package_infos = _xcode_local_swift_package_infos(ctx, project_dir, package_refs)
+        # `swift_info_cache` is hoisted to the workspace level (above this
+        # loop) so a package shared by more than one project only gets parsed
+        # once.
+        local_package_infos = _xcode_local_swift_package_infos(ctx, project_dir, package_refs, cache = swift_info_cache)
         known_local_package_paths = {info["path"]: True for info in local_package_infos}
         for name in sorted(local_products.keys()):
             local = local_products[name]
@@ -3515,7 +3642,8 @@ def _xcode_workspace_resolver(ctx):
                 known_local_package_paths[local["path"]] = True
         package_infos = _xcode_expand_swift_package_infos(
             ctx,
-            local_package_infos + _xcode_remote_swift_package_infos(ctx, entry_path, project_path, package_refs),
+            local_package_infos + _xcode_remote_swift_package_infos(ctx, entry_path, project_path, package_refs, cache = swift_info_cache),
+            cache = swift_info_cache,
         )
         package_platform = _xcode_spm_platform(ctx, objects, native_targets, project_settings, configuration, path_maps)
         package_minimum_os = _xcode_spm_min_os(ctx, objects, native_targets, package_platform, configuration, project_settings, path_maps)
@@ -3536,8 +3664,15 @@ def _xcode_workspace_resolver(ctx):
             if module not in all_xcframework_modules:
                 all_xcframework_modules[module] = dependency
 
+        # Shared enumeration cache for Xcode 16+ file-system synchronized
+        # groups: `glob([base + "/**"])` per group is the hot path in a large
+        # project (Tuist ships ~127 synced groups), and the same group root
+        # appears across every target that shares the source directory or
+        # picks up files from an additive membership set. Keeping the raw
+        # walk result per base collapses N walks per group down to one.
+        group_walk_cache = {}
         for target in native_targets:
-            spec = _xcode_lower_target(ctx, objects, target, project_settings, name_to_id, dep_closure, configuration, file_paths, project_dir, path_maps, test_plan_settings)
+            spec = _xcode_lower_target(ctx, objects, target, project_settings, name_to_id, dep_closure, configuration, file_paths, project_dir, path_maps, test_plan_settings, group_walk_cache = group_walk_cache)
             if spec == None:
                 continue
             for dependency in _xcode_xcframework_dependencies(objects, target, file_paths, xcframework_names):
@@ -3719,15 +3854,24 @@ def _xcode_transitive_deps(objects, target, name_to_id, native_by_name, seen = N
     return out
 
 def _xcode_roots(specs):
+    # Applications are the natural root for an Xcode project. When there is no
+    # application (a tool-only project such as a Swift Package Manager CLI, or
+    # the generated Tuist project whose `tuist` target is a command-line tool),
+    # any executable is the next best root: a build request without an explicit
+    # target still resolves to something a user would run, rather than an
+    # arbitrary framework product.
     applications = [spec["name"] for spec in specs if spec["kind"] == "apple_application"]
     if applications:
         return applications
+    executables = [spec["name"] for spec in specs if spec["kind"] == "apple_executable"]
+    if executables:
+        return executables
     products = [spec["name"] for spec in specs if spec["kind"] != "apple_test_bundle"]
     if products:
         return products
     return [spec["name"] for spec in specs]
 
-def _xcode_lower_target(ctx, objects, target, project_settings, name_to_id, dep_closure, configuration, file_paths, project_dir, path_maps, test_plan_settings = {}):
+def _xcode_lower_target(ctx, objects, target, project_settings, name_to_id, dep_closure, configuration, file_paths, project_dir, path_maps, test_plan_settings = {}, group_walk_cache = None):
     product_type = target.get("productType") or ""
     kind = _xcode_product_kind(product_type)
     if not kind:
@@ -3771,7 +3915,7 @@ def _xcode_lower_target(ctx, objects, target, project_settings, name_to_id, dep_
         subs["UNLOCALIZED_RESOURCES_FOLDER_PATH"] = wrapper_name
         subs["EXECUTABLE_NAME"] = product_name_seed
 
-    files = _xcode_target_files(ctx, objects, target, file_paths, project_dir, path_maps, platform)
+    files = _xcode_target_files(ctx, objects, target, file_paths, project_dir, path_maps, platform, group_walk_cache = group_walk_cache)
     shell_scripts = _xcode_shell_script_phases(ctx, objects, target, subs, project_dir, target_name)
     files["resources"] = _unique(files["resources"] + shell_scripts["resource_inputs"])
     files["structured_resources"] = _unique(files["structured_resources"] + shell_scripts["structured_resource_inputs"])
@@ -3843,6 +3987,9 @@ def _xcode_lower_target(ctx, objects, target, project_settings, name_to_id, dep_
         if developer_dir:
             attrs["xcode_developer_dir"] = developer_dir
         spec_kind = "apple_resource_bundle"
+    elif kind == "tool":
+        attrs, product_name = _xcode_executable_attrs(ctx, target, settings, subs, platform, files)
+        spec_kind = "apple_executable"
     else:
         return None
 
@@ -3902,7 +4049,7 @@ xcode_workspace = target_kind(
         attr("_default_test_roots", "list<string>", default = "[]", docs = "Resolver-owned first-party test target names used by targetless test selection.", configurable = False),
     ],
     resolver = _xcode_workspace_resolver,
-    deps = [dep("deps", ["apple_linkable", "apple_application", "apple_test_bundle", "native_linkable"], "Native Xcode targets lowered into Apple application, library, framework, and test targets.")],
+    deps = [dep("deps", ["apple_linkable", "apple_application", "apple_executable", "apple_test_bundle", "native_linkable"], "Native Xcode targets lowered into Apple application, library, framework, executable (command-line tool), and test targets.")],
     providers = ["xcode_workspace"],
     capabilities = [capability("build", [])],
     tools = [_XCODE_TOOL],
