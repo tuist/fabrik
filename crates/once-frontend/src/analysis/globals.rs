@@ -2227,11 +2227,18 @@ fn collect_glob_matches(
                 observe_absent_link_target(path);
                 continue;
             }
-            return Err(anyhow!(
-                "glob result `{}` is outside the workspace `{}`",
-                canonical.display(),
-                canonical_workspace.display()
-            ));
+            // A real file whose canonical location is outside the workspace
+            // was reached by descending through a symlinked ancestor. Swift
+            // Package Manager's registry integration produces exactly this
+            // shape: `.build/registry/downloads/<scope>/<name>/<version>/`
+            // holds a `Sources` symlink into `~/.cache/swifterpm/…-registry/`,
+            // and the source files inside are then real regulars. The
+            // workspace-relative path is what the build tools reference, so
+            // keep it in the results, and observe the canonical target so a
+            // change to the cache still invalidates the build. The observe
+            // is best-effort: outside an active analysis it returns Err, and
+            // that is fine because there is no store to record into.
+            let _ = observe_host_path(&canonical);
         }
         if !ws_rel.is_empty() {
             out.push(ws_rel);

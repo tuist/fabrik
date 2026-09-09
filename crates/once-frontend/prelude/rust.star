@@ -1249,7 +1249,15 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     )
     compile_env = _rust_compile_action_env(ctx, target, host_triple)
     compile_env["OUT_DIR"] = execution_path(out_dir)
-    return (out_dir, [script_path, out_dir, stdout], compile_env, stdout)
+    # The build script's output directory is not itself an input to the
+    # downstream rustc compile: build scripts routinely emit timestamps
+    # and other non-deterministic bytes into `OUT_DIR`, and hashing the
+    # directory into the compile digest turned every subsequent build
+    # into a cache miss even when nothing observable had changed. The
+    # `stdout` file still captures the `cargo:rustc-*` directives that
+    # actually influence the compile, so any real change to the build
+    # script's contract still flows into the digest through it.
+    return (out_dir, [script_path, stdout], compile_env, stdout)
 
 def _rustc_unix_read_dependency_link_searches(stdout):
     return """while IFS= read -r line; do
@@ -3507,6 +3515,7 @@ _RUST_COMMON_ATTRS = [
     attr("_binary_output_name", "string", docs = "Resolver-owned executable name before the platform extension.", configurable = False),
     attr("_cargo_source_root", "string", docs = "Resolver-owned absolute Cargo source directory materialized through a declared host-tree action.", configurable = False),
     attr("_cargo_materialized_source_root", "string", docs = "Resolver-owned Once output directory for one materialized Cargo package.", configurable = False),
+    attr("_build_script_inputs", "list<string>", default = "[]", docs = "Resolver-owned source inputs made available to a generated Cargo build script.", configurable = False),
     attr("default_deps", "string", docs = "Reserved Buck-compatible default dependency mode.", configurable = False),
     attr("doc_deps", "list<string>", default = "[]", docs = "Reserved for Rust documentation-only dependencies.", configurable = False, implemented = False),
     attr("doc_env", "map<string, string>", default = "{}", docs = "Reserved for Rust documentation action environments.", configurable = False, implemented = False),
@@ -3753,7 +3762,6 @@ rust_crate = target_kind(
         attr("version", "string", required = True, docs = "Resolved Cargo package version."),
         attr("source", "string", docs = "Cargo source identifier, such as registry+https://github.com/rust-lang/crates.io-index.", configurable = False),
         attr("checksum", "string", docs = "Cargo.lock checksum for registry packages.", configurable = False),
-        attr("_build_script_inputs", "list<string>", default = "[]", docs = "Resolver-owned source inputs made available to a generated Cargo build script.", configurable = False),
     ],
     deps = [dep("deps", _RUST_DEP_PROVIDERS, "Resolved Cargo package dependencies and C providers linked into final artifacts.")] + _RUST_CARGO_DEP_ROLES,
     providers = ["rust_crate"],
@@ -3776,7 +3784,6 @@ rust_proc_macro = target_kind(
         attr("version", "string", docs = "Resolved Cargo package version when the target was lowered from Cargo metadata."),
         attr("source", "string", docs = "Cargo source identifier, such as registry+https://github.com/rust-lang/crates.io-index.", configurable = False),
         attr("checksum", "string", docs = "Cargo.lock checksum for registry packages.", configurable = False),
-        attr("_build_script_inputs", "list<string>", default = "[]", docs = "Resolver-owned source inputs made available to a generated Cargo build script.", configurable = False),
     ],
     deps = [dep("deps", _RUST_DEP_PROVIDERS, "Rust crate dependencies consumed by the procedural macro and C providers linked into the host plugin.")] + _RUST_CARGO_DEP_ROLES,
     providers = ["rust_proc_macro"],
