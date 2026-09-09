@@ -1,0 +1,8 @@
+[[target]]
+name = "hello"
+kind = "apple_executable"
+srcs = ["Sources/**/*.swift"]
+
+[target.attrs]
+platform = "macos"
+minimum_os = "13.0"
