@@ -36,18 +36,6 @@ for tool in gem npm; do
   fi
 done
 
-# npm publishes through OIDC trusted publishing in CI. Clients older than
-# 11.5.1 do not know how to make that exchange, quietly fall back to an
-# anonymous request, and the registry rejects it with a 404 claiming the
-# package does not exist. Checking the version up front turns that into an
-# error that names the real problem.
-npm_min_version="11.5.1"
-npm_version="$(npm --version)"
-if [[ "$(printf '%s\n%s\n' "${npm_min_version}" "${npm_version}" | sort -V | head -n1)" != "${npm_min_version}" ]]; then
-  echo "npm ${npm_min_version} or newer is required to publish; found ${npm_version}" >&2
-  exit 1
-fi
-
 if [[ ! -d packages/js/prebuilds || ! -d packages/ruby/prebuilds ]]; then
   echo "SDK prebuilds are missing; run release:package-sdk-libs first" >&2
   exit 1
@@ -81,6 +69,19 @@ publish_npm() {
   if npm_has_version; then
     echo "buildonce@${version} is already on npm; skipping"
     return 0
+  fi
+
+  # npm authenticates through OIDC trusted publishing. Clients older than
+  # 11.5.1 do not know how to make that exchange, quietly fall back to an
+  # anonymous request, and the registry answers it with a 404 claiming the
+  # package does not exist. Checking here turns that into an error that
+  # names the real problem.
+  local npm_min_version="11.5.1"
+  local npm_version
+  npm_version="$(npm --version)"
+  if [[ "$(printf '%s\n%s\n' "${npm_min_version}" "${npm_version}" | sort -V | head -n1)" != "${npm_min_version}" ]]; then
+    echo "npm ${npm_min_version} or newer is required to publish; found ${npm_version}" >&2
+    return 1
   fi
 
   (
