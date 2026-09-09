@@ -9,7 +9,6 @@ use once_core::{LintSeverity, NetworkPolicy, SandboxMode, WorkspacePath};
 mod auth;
 mod cache;
 mod edit;
-mod native;
 mod query;
 mod runtime;
 mod toolchain;
@@ -19,7 +18,6 @@ pub(crate) use cache::OutputDigest;
 pub use cache::{CacheActionCmd, CacheBlobCmd, CacheCmd};
 pub(crate) use cache::{CacheSize, DEFAULT_CACHE_SIZE_CAP_BYTES};
 pub use edit::EditCmd;
-pub use native::NativeCmd;
 pub use query::QueryCmd;
 pub use runtime::RuntimeCmd;
 pub use toolchain::ToolchainCmd;
@@ -41,10 +39,22 @@ pub enum Format {
     Toon,
 }
 
+/// When to emit ANSI color escapes in human-mode output. `auto`
+/// respects TTY detection and the standard `NO_COLOR`,
+/// `CLICOLOR_FORCE`, and `TERM=dumb` environment variables; `always`
+/// forces color even when piped; `never` suppresses it entirely.
+#[derive(Copy, Clone, Debug, usage::ValueEnum, Default, PartialEq, Eq)]
+pub enum ColorChoice {
+    #[default]
+    Auto,
+    Always,
+    Never,
+}
+
 /// Output policy passed to command handlers. Bundles the chosen
-/// [`Format`] with the global `--quiet` flag so commands have one
-/// argument to consult instead of two. Cheap to copy; future flags
-/// that affect rendering (e.g. `--no-color`) drop in here.
+/// [`Format`] with the global `--quiet`, `--color`, and `--verbose`
+/// flags so commands have one argument to consult instead of four.
+/// Cheap to copy.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct Output {
     pub format: Format,
@@ -52,12 +62,37 @@ pub struct Output {
     /// Errors and the structured
     /// envelope of `--format json`/`toon` are never suppressed.
     pub quiet: bool,
+    /// When and how to emit ANSI color escapes.
+    pub color: ColorChoice,
+    /// Repeat count of the `-v/--verbose` flag. In human mode the
+    /// terminal reporter treats `>=1` as "surface a short tail of
+    /// captured output on every target" and `>=2` as "stream all
+    /// captured output live". Values `>=1` also raise the tracing
+    /// stderr filter (see `logging::init`), which is unchanged.
+    pub verbose: u8,
 }
 
 impl Output {
     #[must_use]
     pub fn new(format: Format, quiet: bool) -> Self {
-        Self { format, quiet }
+        Self {
+            format,
+            quiet,
+            color: ColorChoice::default(),
+            verbose: 0,
+        }
+    }
+
+    #[must_use]
+    pub fn with_color(mut self, color: ColorChoice) -> Self {
+        self.color = color;
+        self
+    }
+
+    #[must_use]
+    pub fn with_verbose(mut self, verbose: u8) -> Self {
+        self.verbose = verbose;
+        self
     }
 
     /// Whether human-mode progress and success trailers should print.
@@ -162,6 +197,19 @@ pub struct Cli {
     #[usage(short = 'q', long, global = true)]
     pub quiet: bool,
 
+    /// When to emit ANSI color in human-mode output. Defaults to
+    /// `auto`, which honors TTY detection, `NO_COLOR`, `CLICOLOR_FORCE`,
+    /// and `TERM=dumb`.
+    #[usage(long, global = true, value_enum, default = "auto")]
+    pub color: ColorChoice,
+
+    /// Play soft procedural pad tones at meaningful moments in a command's
+    /// lifecycle: a note when work starts, a note per action as it completes,
+    /// and a resolving chord when the command finishes. Off by default; when
+    /// the default audio device is unavailable the flag has no effect.
+    #[usage(long, global = true)]
+    pub sound: bool,
+
     /// Print the command surface at the current command depth.
     #[usage(long, global = true)]
     pub list: bool,
@@ -185,7 +233,9 @@ pub enum Cmd {
     /// match a cached action key reuse the prior outputs; everything
     /// else runs and lands its declared outputs in
     /// `<workspace>/.once/out/<target>/`. Use `once query targets` to
-    /// list available ids.
+    /// list available ids. When no target is supplied, Once builds the
+    /// single discovered workspace root. An ambiguous or explicitly authored
+    /// graph still requires a target.
     Build {
         /// Local filesystem sandbox policy for command actions.
         #[usage(long, default = "off")]
@@ -207,7 +257,8 @@ pub enum Cmd {
         #[usage(long)]
         ui: bool,
 
-        /// Target id, such as `services/api/Api` or `./Api`.
+        /// Target id, such as `services/api/Api` or `./Api`. Omit it to build
+        /// the single automatically discovered workspace root.
         target: Option<String>,
     },
 
@@ -282,7 +333,9 @@ pub enum Cmd {
     /// groups are owned by the target kind that exposes the capability.
     /// With `--changed-path` or `--all`, stable target batches are pulled
     /// from a duration-informed dynamic queue. `--jobs` caps local workers
-    /// without changing the plan or batch identities.
+    /// without changing the plan or batch identities. With no target or
+    /// selection flags, Once runs the first-party tests reported by each
+    /// discovered workspace root.
     Test {
         /// Local filesystem sandbox policy for command actions.
         #[usage(long, default = "off")]
@@ -332,7 +385,8 @@ pub enum Cmd {
         #[usage(long, hide = true, requires = "batch_test_units")]
         test_batch_id: Option<String>,
 
-        /// Target id, such as `tests/unit` or `./unit`.
+        /// Target id, such as `tests/unit` or `./unit`. Omit it to test the
+        /// discovered workspace's first-party tests.
         target: Option<String>,
     },
 
@@ -527,12 +581,6 @@ pub enum Cmd {
         cmd: Option<EditCmd>,
     },
 
-    /// Discover, inspect, and initialize native workspace roots.
-    Native {
-        #[usage(subcommand)]
-        cmd: Option<NativeCmd>,
-    },
-
     /// Accept an Xcode build invocation and use the Once graph when its
     /// semantics are supported. Other invocations pass through to the system
     /// Xcode build tool unchanged. Configure this as a mise command wrapper
@@ -552,6 +600,18 @@ pub enum Cmd {
     #[usage(name = "swift")]
     PackageCompatibility {
         /// Arguments supplied by the Swift Package Manager invocation.
+        #[usage(trailing_var_arg = true, value_name = "ARG")]
+        argv: Vec<String>,
+    },
+
+    /// Accept a Bazel build or test invocation and use the Once graph when
+    /// its semantics are supported. Other invocations pass through to the
+    /// system Bazel executable unchanged. Configure this as a mise command
+    /// wrapper to make ordinary `bazel` commands use this compatibility
+    /// surface.
+    #[usage(name = "bazel")]
+    BazelCompatibility {
+        /// Arguments supplied by the Bazel invocation.
         #[usage(trailing_var_arg = true, value_name = "ARG")]
         argv: Vec<String>,
     },
@@ -608,6 +668,7 @@ pub enum Cmd {
 pub(crate) enum CompatibilityInvocation {
     Xcodebuild(Vec<String>),
     Swift(Vec<String>),
+    Bazel(Vec<String>),
     Cargo(Vec<String>),
 }
 
@@ -624,15 +685,8 @@ impl Cli {
         }
 
         match self.command.as_ref()? {
-            Cmd::Build { target: None, .. } => Some(&["build"]),
             Cmd::Lint { target: None, .. } => Some(&["lint"]),
             Cmd::Run { target: None, .. } => Some(&["run"]),
-            Cmd::Test {
-                target: None,
-                changed_paths,
-                all: false,
-                ..
-            } if changed_paths.is_empty() => Some(&["test"]),
             Cmd::Exec { argv, .. } if argv.is_empty() => Some(&["exec"]),
             Cmd::Cache { cmd: None } => Some(&["cache"]),
             Cmd::Cache {
@@ -652,7 +706,6 @@ impl Cli {
                 cmd: Some(RuntimeCmd::Start { target: None }),
             } => Some(&["runtime", "start"]),
             Cmd::Edit { cmd: None } => Some(&["edit"]),
-            Cmd::Native { cmd: None } => Some(&["native"]),
             _ => None,
         }
     }
@@ -665,6 +718,7 @@ impl Cmd {
             Self::PackageCompatibility { argv } => {
                 Some(CompatibilityInvocation::Swift(argv.clone()))
             }
+            Self::BazelCompatibility { argv } => Some(CompatibilityInvocation::Bazel(argv.clone())),
             Self::CrateCompatibility { argv } => Some(CompatibilityInvocation::Cargo(argv.clone())),
             _ => None,
         }
@@ -712,15 +766,9 @@ impl Cmd {
                 }
                 path
             }
-            Self::Native { cmd } => {
-                let mut path = vec!["native"];
-                if let Some(cmd) = cmd {
-                    path.extend(cmd.surface_path());
-                }
-                path
-            }
             Self::Compatibility { .. } => vec!["xcodebuild"],
             Self::PackageCompatibility { .. } => vec!["swift"],
+            Self::BazelCompatibility { .. } => vec!["bazel"],
             Self::CrateCompatibility { .. } => vec!["cargo"],
             Self::Runtime { cmd } => {
                 let mut path = vec!["runtime"];
@@ -868,7 +916,7 @@ mod tests {
     fn identifies_commands_that_need_their_help_rendered() {
         assert_eq!(
             parse(&["once", "build"]).incomplete_command_help_path(),
-            Some(&["build"][..])
+            None
         );
         assert_eq!(
             parse(&["once", "cache", "blob"]).incomplete_command_help_path(),
@@ -876,6 +924,10 @@ mod tests {
         );
         assert_eq!(
             parse(&["once", "test", "--all"]).incomplete_command_help_path(),
+            None
+        );
+        assert_eq!(
+            parse(&["once", "test"]).incomplete_command_help_path(),
             None
         );
         assert_eq!(

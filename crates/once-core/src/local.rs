@@ -259,8 +259,28 @@ async fn spawn_and_capture(
     let (program, rest) = argv.split_first().ok_or(Error::EmptyArgv)?;
     tracing::Span::current().record("program", tracing::field::display(program));
 
-    let mut command = Command::new(program);
-    command.args(rest);
+    #[cfg(target_os = "macos")]
+    let mut command = if network.is_denied() {
+        let mut command = Command::new("/usr/bin/sandbox-exec");
+        command.args([
+            "-p",
+            "(version 1) (allow default) (deny network*) (allow network-inbound (local ip \"localhost:*\")) (allow network-outbound (remote ip \"localhost:*\")) (allow network-outbound (path-regex #\"^/private/var/tmp/com\\.apple\\.launchd\\..*\"))",
+            "--",
+            program,
+        ]);
+        command.args(rest);
+        command
+    } else {
+        let mut command = Command::new(program);
+        command.args(rest);
+        command
+    };
+    #[cfg(not(target_os = "macos"))]
+    let mut command = {
+        let mut command = Command::new(program);
+        command.args(rest);
+        command
+    };
     command.env_clear();
     for (k, v) in &env {
         command.env(k, v);
@@ -275,13 +295,12 @@ async fn spawn_and_capture(
     command.kill_on_drop(true);
     // Isolate the child from the network when the action declared `deny`.
     // On Linux a seccomp filter installed between fork and exec turns every
-    // network syscall into `EACCES`. Other platforms accept the declaration
-    // but cannot enforce it; warn so the gap is visible rather than silent.
+    // network syscall into `EACCES`. macOS uses sandbox-exec above.
     #[cfg(target_os = "linux")]
     if network.is_denied() {
         crate::network::arm(&mut command);
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     if network.is_denied() {
         tracing::warn!(
             program = %program,

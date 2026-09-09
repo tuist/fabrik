@@ -376,6 +376,14 @@ def _rust_response_file_args(ctx, args, name):
         ),
     ]
 
+def _rust_materialized_cwd_arg(arg):
+    if arg.startswith(".once/"):
+        return execution_path(arg)
+    parts = _split_once(arg, "=")
+    if len(parts) == 2 and parts[1].startswith(".once/"):
+        return parts[0] + "=" + execution_path(parts[1])
+    return arg
+
 def _rust_user_flags(ctx):
     return _rust_attr(ctx, "rustc_flags", [])
 
@@ -535,6 +543,8 @@ def _workspace_absolute(path):
     root = workspace_root()
     if not root:
         return path
+    if path == ".":
+        return root
     return root + "/" + path
 
 def _rust_bin_exe_deps(ctx):
@@ -1018,11 +1028,11 @@ def _rust_proc_macro_dirs(deps):
         if proc_macro:
             directory = _parent_dir(proc_macro)
             if directory:
-                dirs.append(_workspace_absolute(directory))
+                dirs.append(execution_path(directory))
         for transitive in dep.get("transitive_proc_macros") or []:
             directory = _parent_dir(transitive)
             if directory:
-                dirs.append(_workspace_absolute(directory))
+                dirs.append(execution_path(directory))
     return _unique(dirs)
 
 def _rust_add_windows_proc_macro_path(env, deps):
@@ -1083,7 +1093,7 @@ def _rust_build_script_env(ctx, rustc, target, host_triple, out_dir, script_path
         env["NUM_JOBS"] = "1"
     if "OPT_LEVEL" not in env:
         env["OPT_LEVEL"] = "0"
-    env["OUT_DIR"] = _workspace_absolute(out_dir)
+    env["OUT_DIR"] = execution_path(out_dir)
     if "PROFILE" not in env:
         env["PROFILE"] = "debug"
     env["RUSTC"] = rustc
@@ -1138,15 +1148,15 @@ def _rust_dep_metadata_exports(deps):
       ;;
   esac
 done < {stdout}
-""".format(metadata = _rust_dep_metadata_key_shell(prefix), stdout = _shell_quote(_workspace_absolute(stdout))))
+""".format(metadata = _rust_dep_metadata_key_shell(prefix), stdout = _shell_quote(execution_path(stdout))))
     return ("\n".join(snippets), _unique(inputs))
 
 def _rust_build_script_output_pipeline(runner, status, stdout):
-    runner_exec = _shell_quote(_workspace_absolute(runner))
+    runner_exec = _shell_quote(execution_path(runner))
     printf = _shell_quote(host_which("printf"))
     tee = _shell_quote(host_which("tee"))
     status_abs = _shell_quote(status)
-    stdout_abs = _shell_quote(_workspace_absolute(stdout))
+    stdout_abs = _shell_quote(execution_path(stdout))
     status_capture = "{ " + runner_exec + " 2>&1; " + printf + " '%s' \"$?\" > " + status_abs + "; }"
     return status_capture + " | " + tee + " " + stdout_abs
 
@@ -1200,7 +1210,7 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     _rust_add_windows_proc_macro_path(build_script_compile_env, deps)
     run_action(
         argv = compile_argv,
-        inputs = _unique([script_path] + dep_inputs + dependency_build_outputs + dependency_build_inputs + wrapped[1] + _rust_extra_inputs(ctx)),
+        inputs = _unique([script_path] + source_inputs + build_script_inputs + dep_inputs + dependency_build_outputs + dependency_build_inputs + wrapped[1] + _rust_extra_inputs(ctx)),
         outputs = [runner],
         env = build_script_compile_env,
         toolchain_identity = identity + linker_identity + "\x00build-script",
@@ -1208,6 +1218,7 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     )
     tool_paths = _rust_build_script_tool_paths(ctx)
     run_env = _rust_build_script_env(ctx, rustc, target, host_triple, out_dir, script_path, tool_paths)
+    status = out_dir + "/.once-build-script-status"
     metadata_exports, metadata_inputs = _rust_dep_metadata_exports(metadata_deps)
     run_script = _rust_build_script_run_shell(runner, stdout, run_env, metadata_exports)
     # Cargo's default: a build script that prints no `rerun-if` directive
@@ -1222,7 +1233,7 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
     run_action(
         argv = [host_which("sh"), "-c", run_script],
         inputs = _unique([runner] + metadata_inputs + source_inputs + build_script_inputs + _rust_extra_inputs(ctx)),
-        outputs = [out_dir, stdout],
+        outputs = [out_dir, stdout, status],
         # Emptying the output directory belongs to the script's own setup, not
         # to a step before it. Declared as separate actions, the wipe ran even
         # when the script's result was already cached, and the cache hit then
@@ -1237,7 +1248,15 @@ def _rust_build_script(ctx, rustc, identity, target, host_triple, edition, dep_a
         identifier = _rust_action_identifier(ctx, "build-script"),
     )
     compile_env = _rust_compile_action_env(ctx, target, host_triple)
-    compile_env["OUT_DIR"] = _workspace_absolute(out_dir)
+    compile_env["OUT_DIR"] = execution_path(out_dir)
+    # The build script's output directory is not itself an input to the
+    # downstream rustc compile: build scripts routinely emit timestamps
+    # and other non-deterministic bytes into `OUT_DIR`, and hashing the
+    # directory into the compile digest turned every subsequent build
+    # into a cache miss even when nothing observable had changed. The
+    # `stdout` file still captures the `cargo:rustc-*` directives that
+    # actually influence the compile, so any real change to the build
+    # script's contract still flows into the digest through it.
     return (out_dir, [script_path, stdout], compile_env, stdout)
 
 def _rustc_unix_read_dependency_link_searches(stdout):
@@ -1246,11 +1265,14 @@ def _rustc_unix_read_dependency_link_searches(stdout):
     cargo:rustc-link-search=*|cargo::rustc-link-search=*)
       value=${{line#cargo:rustc-link-search=}}
       value=${{value#cargo::rustc-link-search=}}
+      case "$value" in
+        */.once/out/*) value={out_root}"/${{value#*/.once/out/}}" ;;
+      esac
       set -- "$@" -L "$value"
       ;;
   esac
 done < {stdout}
-""".format(stdout = _shell_quote(stdout))
+""".format(stdout = _shell_quote(execution_path(stdout)), out_root = _shell_quote(execution_path(".once/out")))
 
 def _rustc_unix_read_own_build_script_args(stdout):
     return """while IFS= read -r line; do
@@ -1283,11 +1305,14 @@ def _rustc_unix_read_own_build_script_args(stdout):
     cargo:rustc-link-search=*|cargo::rustc-link-search=*)
       value=${{line#cargo:rustc-link-search=}}
       value=${{value#cargo::rustc-link-search=}}
+      case "$value" in
+        */.once/out/*) value={out_root}"/${{value#*/.once/out/}}" ;;
+      esac
       set -- "$@" -L "$value"
       ;;
   esac
 done < {stdout}
-""".format(stdout = _shell_quote(stdout))
+""".format(stdout = _shell_quote(execution_path(stdout)), out_root = _shell_quote(execution_path(".once/out")))
 
 def _rustc_unix_build_script_args(argv, own_stdout, dependency_stdouts):
     snippets = []
@@ -1625,11 +1650,17 @@ def _rust_compile(ctx, crate_type, default_root, output_name, test = False, prov
     wrapped = _rustc_with_build_script_args(ctx, argv, build_stdout, dependency_build_outputs)
     argv = wrapped[0]
     build_inputs.extend(wrapped[1])
+    compile_cwd = None
+    if materialized_sources and host_os() != "windows":
+        argv = [_rust_materialized_cwd_arg(arg) for arg in argv]
+        crate_manifest_dir = _rust_env(ctx).get("CARGO_MANIFEST_DIR") or _parent_dir(crate_root)
+        compile_cwd = _rust_manifest_dir(ctx, crate_manifest_dir)
     run_action(
         argv = argv,
         inputs = _unique(srcs + dep_inputs + dep_search_inputs + build_inputs + dependency_build_outputs + dependency_build_inputs + linker_script_inputs + (_rust_native_dep_link_inputs(deps) if crate_type != "rlib" else []) + _rust_extra_inputs(ctx)),
         outputs = [output],
         env = compile_env,
+        cwd = compile_cwd,
         toolchain_identity = identity + linker_identity,
         identifier = _rust_action_identifier(ctx, "rustc"),
     )
@@ -1901,7 +1932,7 @@ def _rust_cargo_runtime_env(ctx):
     }
 
 def _rust_test_env(ctx, test_dir):
-    env = {"HOME": execution_path(test_dir + "/home")}
+    env = {"HOME": execution_path(_rust_scratch_dir(ctx) + "/test-home")}
     process_path = _rust_process_path()
     if process_path:
         env["PATH"] = process_path
@@ -1931,7 +1962,7 @@ def _rust_test_info(ctx, test_binary, results, log, native_results, test_dir):
         "command": {
             "argv": [test_binary] + args,
             "env": _rust_test_env(ctx, test_dir),
-            "cwd": ".",
+            "cwd": _rust_test_cwd(ctx) or ".",
         },
         "outputs": {
             "results": results,
@@ -1979,8 +2010,8 @@ use std::process::{self, Command, Output};
 
 fn main() {
     let args = env::args().collect::<Vec<_>>();
-    if args.len() < 6 {
-        eprintln!("usage: once-rust-test-runner <binary> <results> <log> <native-results> <target> [args...]");
+    if args.len() < 7 {
+        eprintln!("usage: once-rust-test-runner <binary> <results> <log> <native-results> <target> <cwd> [args...]");
         process::exit(2);
     }
     let binary = &args[1];
@@ -1988,20 +2019,21 @@ fn main() {
     let log = &args[3];
     let native_results = &args[4];
     let target = &args[5];
-    let runner_args = &args[6..];
+    let cwd = &args[6];
+    let runner_args = &args[7..];
 
     create_parent(results);
     create_parent(log);
     create_parent(native_results);
 
-    let list_output = Command::new(binary).args(runner_args).arg("--list").output();
+    let list_output = test_command(binary, cwd, runner_args).arg("--list").output();
     let list_text = match &list_output {
         Ok(output) => output_text(output),
         Err(error) => format!("failed to list tests: {error}\\n"),
     };
     let cases = parse_list(&list_text);
 
-    let run_output = Command::new(binary).args(runner_args).output();
+    let run_output = test_command(binary, cwd, runner_args).output();
     let (run_text, exit_code, passed) = match run_output {
         Ok(output) => {
             let code = output.status.code().unwrap_or(1);
@@ -2015,7 +2047,17 @@ fn main() {
     fs::write(log, &run_text).expect("write log");
     fs::write(native_results, format!("$ {binary} --list\\n{list_text}\\n$ {binary}\\n{run_text}")).expect("write native results");
     fs::write(results, report).expect("write results");
+    if !passed {
+        eprint!("{run_text}");
+    }
     process::exit(exit_code);
+}
+
+fn test_command(binary: &str, cwd: &str, runner_args: &[String]) -> Command {
+    let mut command = Command::new(binary);
+    command.args(runner_args);
+    command.current_dir(cwd);
+    command
 }
 
 fn create_parent(path: &str) {
@@ -2142,13 +2184,13 @@ def _rust_test_impl(ctx):
     results = test_dir + "/test_results.json"
     log = test_dir + "/rust-libtest.log"
     native_results = test_dir + "/native_results.txt"
+    _, _, host_triple = _rustc_toolchain(_rust_target(ctx))
     provider["test_info"] = _rust_test_info(ctx, provider["test_binary"], results, log, native_results, test_dir)
 
     if ctx["capability"] != "test":
         return provider
 
     target = _rust_target(ctx)
-    _, _, host_triple = _rustc_toolchain(target)
     if target and target != host_triple:
         fail(ctx["label"]["id"] + ": rust_test execution supports the host target only; remove `target` or run the cross-compiled test binary with a platform runner")
 
@@ -2203,6 +2245,7 @@ def _rust_test_impl(ctx):
             execution_path(log),
             execution_path(native_results),
             ctx["label"]["id"],
+            ".",
         ] + _rust_attr(ctx, "args", []) + _rust_test_filter_args(ctx),
         inputs = _unique(
             [runner, staged_test_binary] +
@@ -2211,7 +2254,9 @@ def _rust_test_impl(ctx):
             _rust_test_package_inputs(ctx) +
             (provider.get("transitive_data") or [])
         ),
-        outputs = [test_dir, results, log, native_results],
+        outputs = [test_dir],
+        clean_paths = [_rust_scratch_dir(ctx) + "/test-home"],
+        create_dirs = [_rust_scratch_dir(ctx) + "/test-home"],
         cwd = _rust_test_cwd(ctx),
         env = _rust_test_env(ctx, test_dir),
         toolchain_identity = runner_identity + "\x00once.rust_test.run.v1",
@@ -2292,9 +2337,10 @@ def _cargo_resolved_metadata(ctx, default_vendor_dir = "third_party/rust/vendor"
         host_metadata = None
         if target and target != host_triple:
             host_metadata = _cargo_metadata_for_platform(ctx, cargo, manifest, host_triple)
-    _cargo_attach_locked_checksums(metadata, _cargo_lock_document(ctx))
+    lock = _cargo_lock_document(ctx, metadata)
+    _cargo_attach_locked_checksums(metadata, lock)
     if host_metadata != None:
-        _cargo_attach_locked_checksums(host_metadata, _cargo_lock_document(ctx))
+        _cargo_attach_locked_checksums(host_metadata, lock)
     split_host = _cargo_requires_host_variants(ctx, target, host_triple)
     resolver_attrs = {"vendor_dir": vendor_dir, "split_host_variants": split_host}
     if target:
@@ -2480,13 +2526,18 @@ def _cargo_validate_metadata_snapshot(ctx, metadata, path, host, host_triple):
         if actual != value:
             fail(ctx["label"]["id"] + ": Cargo metadata snapshot `" + path + "` selection `" + key + "` does not match the target")
 
-def _cargo_lock_document(ctx):
+def _cargo_lock_document(ctx, metadata = None):
     path = _rust_attr(ctx, "lockfile", "Cargo.lock")
     files = ctx.get("files") or {}
     key = path[2:] if path.startswith("./") else path
     content = files.get(key)
+    if content == None and metadata != None:
+        workspace_root = metadata.get("workspace_root") or ""
+        resolved_path = workspace_root + "/Cargo.lock" if workspace_root else ""
+        if resolved_path and host_file_exists(resolved_path):
+            content = host_file_read(resolved_path)
     if content == None:
-        fail(ctx["label"]["id"] + ": Cargo lockfile `" + path + "` must be included in resolver_inputs, or srcs when resolver_inputs is omitted")
+        fail(ctx["label"]["id"] + ": Cargo did not produce lockfile `" + path + "` while resolving package dependencies")
     return toml_decode(content)
 
 def _cargo_attach_locked_checksums(metadata, lock):
@@ -2510,7 +2561,6 @@ def _cargo_attach_locked_checksums(metadata, lock):
 
 def _cargo_dependencies_resolver(ctx):
     _cargo_require_resolver_file(ctx, "manifest", "Cargo.toml")
-    _cargo_require_resolver_file(ctx, "lockfile", "Cargo.lock")
     metadata_file = _rust_attr(ctx, "metadata_file", "")
     host_metadata_file = _rust_attr(ctx, "host_metadata_file", "")
     if metadata_file:
@@ -2536,11 +2586,13 @@ def _cargo_metadata_for_platform(ctx, cargo, manifest, platform):
         argv.extend(["--config", _workspace_absolute(config)])
     argv.extend([
         "metadata",
-        "--locked",
-        "--offline",
         "--format-version", "1",
         "--manifest-path", _workspace_absolute(manifest),
     ])
+    lockfile = _rust_attr(ctx, "lockfile", "Cargo.lock")
+    lockfile_key = lockfile[2:] if lockfile.startswith("./") else lockfile
+    if (ctx.get("files") or {}).get(lockfile_key) != None:
+        argv.append("--locked")
     if platform:
         argv.extend(["--filter-platform", platform])
     argv.extend(_cargo_feature_args(ctx))
@@ -3038,6 +3090,14 @@ def _cargo_metadata_resolution(ctx, metadata, host_metadata = None, materialize_
     vendor_dir = _trim_trailing_slash(ctx["attrs"].get("vendor_dir") or "vendor")
     rust_target = ctx["attrs"].get("target") or ""
     id_to_target_name, id_to_host_name = _cargo_dependency_name_maps(packages, duplicate_counts, host_dependency_ids, rust_target, workspace_member_ids, split_host)
+    workspace_names = _cargo_workspace_library_names([
+        package
+        for package in packages
+        if workspace_member_ids.get(package.get("id"))
+    ])
+    for package_id, name in workspace_names.items():
+        id_to_target_name[package_id] = name
+        id_to_host_name[package_id] = name
     targets = []
     for package in packages:
         if workspace_member_ids.get(package.get("id")):
@@ -3207,6 +3267,7 @@ def _cargo_workspace_target_enabled(target, node):
     return True
 
 def _cargo_workspace_attrs(package, target, node, source_root, aliases):
+    package_inputs = _cargo_package_source_globs(source_root)
     attrs = {
         "crate_name": _cargo_crate_name(package, target),
         "crate_root": source_root + "/" + _cargo_source_rel(package, target),
@@ -3214,6 +3275,8 @@ def _cargo_workspace_attrs(package, target, node, source_root, aliases):
         "features": node.get("features") or [],
         "rustc_env": _cargo_rustc_env(package, target, source_root),
         "cargo_package": package["name"],
+        "compile_data": package_inputs,
+        "_build_script_inputs": package_inputs,
     }
     if aliases:
         attrs["crate_aliases"] = aliases
@@ -3319,7 +3382,6 @@ def _cargo_attach_bin_deps(spec, binary_refs):
 
 def _cargo_workspace_resolver(ctx):
     _cargo_require_resolver_file(ctx, "manifest", "Cargo.toml")
-    _cargo_require_resolver_file(ctx, "lockfile", "Cargo.lock")
     vendor_dir = _rust_attr(ctx, "vendor_dir", "")
     resolved = _cargo_resolved_metadata(ctx, vendor_dir, not vendor_dir)
     metadata = resolved["metadata"]
@@ -3354,6 +3416,7 @@ def _cargo_workspace_resolver(ctx):
     targets = _cargo_resolver_target_specs(ctx, resolved["specs"])
     shared_attrs = _cargo_shared_attrs(ctx)
     roots = []
+    test_roots = []
 
     for package in workspace_packages:
         source_root = _cargo_workspace_source_root(ctx, package)
@@ -3383,6 +3446,8 @@ def _cargo_workspace_resolver(ctx):
                 if kind == "test":
                     _cargo_attach_bin_deps(spec, package_binaries)
             targets.extend(specs)
+            if kind == "test":
+                test_roots.extend([spec["name"] for spec in specs])
             if kind != "test" and default_member_ids.get(package.get("id")):
                 roots.extend([spec["name"] for spec in specs])
 
@@ -3401,10 +3466,12 @@ def _cargo_workspace_resolver(ctx):
                 test_spec["name"] = specs[0]["name"] + "_unit_tests"
                 _cargo_apply_shared_attrs(test_spec["attrs"], shared_attrs)
                 targets.append(test_spec)
+                test_roots.append(test_spec["name"])
 
     return {
         "targets": targets,
         "roots": _unique(roots),
+        "attrs": {"_default_test_roots": _unique(test_roots)},
     }
 
 def _cargo_workspace_impl(ctx):
@@ -3448,6 +3515,7 @@ _RUST_COMMON_ATTRS = [
     attr("_binary_output_name", "string", docs = "Resolver-owned executable name before the platform extension.", configurable = False),
     attr("_cargo_source_root", "string", docs = "Resolver-owned absolute Cargo source directory materialized through a declared host-tree action.", configurable = False),
     attr("_cargo_materialized_source_root", "string", docs = "Resolver-owned Once output directory for one materialized Cargo package.", configurable = False),
+    attr("_build_script_inputs", "list<string>", default = "[]", docs = "Resolver-owned source inputs made available to a generated Cargo build script.", configurable = False),
     attr("default_deps", "string", docs = "Reserved Buck-compatible default dependency mode.", configurable = False),
     attr("doc_deps", "list<string>", default = "[]", docs = "Reserved for Rust documentation-only dependencies.", configurable = False, implemented = False),
     attr("doc_env", "map<string, string>", default = "{}", docs = "Reserved for Rust documentation action environments.", configurable = False, implemented = False),
@@ -3517,6 +3585,7 @@ cargo_workspace = target_kind(
         attr("target", "string", docs = "Rust target triple passed to Cargo as `--filter-platform`.", configurable = False),
         attr("dep_rustc_flags", "list<string>", default = "[]", docs = "Additional compiler flags applied to resolved external packages.", configurable = False),
         attr("build_script_tools", "list<string>", default = str(_CARGO_BUILD_SCRIPT_TOOLS), docs = "Host tool names that package build scripts may invoke. Each name is resolved on PATH during graph loading and its directory joins the build script's search path; names that resolve to nothing are ignored. Set an empty list to give build scripts nothing beyond the Rust and C toolchains.", configurable = False),
+        attr("_default_test_roots", "list<string>", default = "[]", docs = "Resolver-owned first-party test target names used by targetless test selection.", configurable = False),
     ],
     resolver = _cargo_workspace_resolver,
     deps = [dep("deps", ["rust_crate", "rust_proc_macro", "rust_binary"], "Default first-party Cargo products emitted by native integration discovery.")],
@@ -3693,7 +3762,6 @@ rust_crate = target_kind(
         attr("version", "string", required = True, docs = "Resolved Cargo package version."),
         attr("source", "string", docs = "Cargo source identifier, such as registry+https://github.com/rust-lang/crates.io-index.", configurable = False),
         attr("checksum", "string", docs = "Cargo.lock checksum for registry packages.", configurable = False),
-        attr("_build_script_inputs", "list<string>", default = "[]", docs = "Resolver-owned source inputs made available to a generated Cargo build script.", configurable = False),
     ],
     deps = [dep("deps", _RUST_DEP_PROVIDERS, "Resolved Cargo package dependencies and C providers linked into final artifacts.")] + _RUST_CARGO_DEP_ROLES,
     providers = ["rust_crate"],
@@ -3716,7 +3784,6 @@ rust_proc_macro = target_kind(
         attr("version", "string", docs = "Resolved Cargo package version when the target was lowered from Cargo metadata."),
         attr("source", "string", docs = "Cargo source identifier, such as registry+https://github.com/rust-lang/crates.io-index.", configurable = False),
         attr("checksum", "string", docs = "Cargo.lock checksum for registry packages.", configurable = False),
-        attr("_build_script_inputs", "list<string>", default = "[]", docs = "Resolver-owned source inputs made available to a generated Cargo build script.", configurable = False),
     ],
     deps = [dep("deps", _RUST_DEP_PROVIDERS, "Rust crate dependencies consumed by the procedural macro and C providers linked into the host plugin.")] + _RUST_CARGO_DEP_ROLES,
     providers = ["rust_proc_macro"],

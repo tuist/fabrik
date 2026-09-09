@@ -2,6 +2,7 @@
 //! to the verb modules under [`commands`], and propagates the
 //! resulting exit code.
 
+mod bus_events;
 mod cache_provider;
 mod cli;
 mod commands;
@@ -9,6 +10,8 @@ mod dispatch;
 mod logging;
 mod reference;
 mod render;
+mod reporter;
+mod sound;
 
 use std::ffi::OsStr;
 use std::fmt::Write as _;
@@ -37,6 +40,7 @@ async fn main() -> ExitCode {
     let command = cli.surface_path().join(" ");
     let format = cli.format;
     let verbose = cli.verbose;
+    sound::init(cli.sound);
     let logging = logging::init(cli.verbose);
     let session_id = logging.session_id();
     let log_path = log_path(&logging);
@@ -56,17 +60,22 @@ async fn main() -> ExitCode {
     // The cache hangs off a process-wide map that nothing drops, so the run
     // has to hand back what it learned before it ends.
     once_frontend::flush_host_tree_digest_caches();
-    match outcome {
+    let code = match outcome {
         Ok(code) => {
             tracing::info!(session_id = %session_id, exit_code = ?code, "session finished");
             code
         }
         Err(e) => {
             tracing::error!(session_id = %session_id, error = %e, "session failed");
+            sound::emit(sound::Event::Failed);
             write_dispatch_error(format, verbose, &e);
             ExitCode::from(2)
         }
-    }
+    };
+    // Give the last queued note time to reach the speakers before the process
+    // ends. No-op when --sound is off.
+    sound::wait_for_tail();
+    code
 }
 
 fn write_dispatch_error(format: cli::Format, verbose: u8, error: &anyhow::Error) {

@@ -63,6 +63,34 @@ fn detect_native_projects_with_limit(
         scan.visit(&entry)?;
     }
     let mut matches = scan.finish();
+    // An owning native project (an Xcode workspace, a Bazel root, and so on)
+    // hides every nested match beneath it, regardless of ecosystem, but never
+    // suppresses matches that live at the exact same package: a Bazel
+    // MODULE.bazel and a Cargo.toml side by side at the same directory each
+    // surface as their own seed so a user can select the one they mean. This
+    // is what makes the mixed-ecosystem case (a subproject that is both a
+    // Bazel and a Cargo workspace at its root) load both seeds.
+    let owning_packages = matches
+        .iter()
+        .filter(|matched| {
+            schemas
+                .iter()
+                .any(|schema| schema.name == matched.native_project && schema.owns_descendants)
+        })
+        .map(|matched| matched.package.clone())
+        .collect::<Vec<_>>();
+    matches.retain(|matched| {
+        !owning_packages.iter().any(|owner_pkg| {
+            if owner_pkg == &matched.package {
+                return false;
+            }
+            owner_pkg.is_empty()
+                || matched
+                    .package
+                    .strip_prefix(owner_pkg.as_str())
+                    .is_some_and(|suffix| suffix.starts_with('/'))
+        })
+    });
     matches.sort_unstable_by(|left, right| {
         left.package
             .cmp(&right.package)
@@ -335,6 +363,7 @@ mod tests {
             on_match: "descend".to_string(),
             max_depth: 16,
             requires_tools: Vec::new(),
+            owns_descendants: false,
         }
     }
 
@@ -416,6 +445,150 @@ exclude = ["apps/excluded/**"]
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].native_project, "secondary");
         assert_eq!(matches[0].package, "vendor");
+    }
+
+    #[test]
+    fn owning_projects_still_suppress_cross_kind_descendants_but_not_same_package() {
+        // A Bazel workspace at the repo root owns everything beneath it, so a
+        // nested Package.swift inside `examples/demo` is claimed by the root
+        // (it is not a standalone Swift package the user should surface as its
+        // own seed). A Cargo.toml at the same root as the Bazel workspace is
+        // still surfaced as its own seed, because they live at the same
+        // package and the user should be able to select the ecosystem they
+        // mean when both live at the workspace root.
+        let temporary = tempfile::tempdir().unwrap();
+        write(&temporary.path().join("WORKSPACE"), "workspace");
+        write(&temporary.path().join("Cargo.toml"), "[workspace]");
+        write(
+            &temporary.path().join("examples/demo/Package.swift"),
+            "// swift-tools-version: 6.0",
+        );
+        let mut owner = schema("bazel", "WORKSPACE", &[]);
+        owner.owns_descendants = true;
+        let schemas = vec![
+            owner,
+            schema("cargo", "Cargo.toml", &[]),
+            schema("swift", "Package.swift", &[]),
+        ];
+        let boundary = crate::workspace::load_workspace_scan(temporary.path()).unwrap();
+
+        let (matches, _) =
+            detect_native_projects_with_schemas(temporary.path(), &schemas, &boundary).unwrap();
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|matched| (matched.native_project.as_str(), matched.package.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("bazel", ""), ("cargo", "")]
+        );
+    }
+
+    #[test]
+    fn owning_projects_still_suppress_same_kind_descendants() {
+        let temporary = tempfile::tempdir().unwrap();
+        write(&temporary.path().join("WORKSPACE"), "workspace");
+        write(&temporary.path().join("nested/WORKSPACE"), "nested");
+        write(&temporary.path().join("nested/deeper/WORKSPACE"), "deeper");
+        let mut owner = schema("bazel", "WORKSPACE", &[]);
+        owner.owns_descendants = true;
+        let schemas = vec![owner];
+        let boundary = crate::workspace::load_workspace_scan(temporary.path()).unwrap();
+
+        let (matches, _) =
+            detect_native_projects_with_schemas(temporary.path(), &schemas, &boundary).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].native_project, "bazel");
+        assert!(matches[0].package.is_empty());
+    }
+
+    #[test]
+    fn ownership_folds_multiple_declarations_that_lower_to_one_kind() {
+        // Bazel is registered as three separate `native_project` declarations
+        // (MODULE.bazel, WORKSPACE, WORKSPACE.bazel) that all lower to
+        // `bazel_workspace`. Discovery must treat them as the same kind so a
+        // repository with both a MODULE.bazel and a WORKSPACE does not surface
+        // two separate seeds — the workspace still owns its nested descendants,
+        // and same-kind matches at the same package collapse.
+        let temporary = tempfile::tempdir().unwrap();
+        write(&temporary.path().join("MODULE.bazel"), "module");
+        write(&temporary.path().join("WORKSPACE"), "workspace");
+        write(
+            &temporary.path().join("nested/MODULE.bazel"),
+            "nested module",
+        );
+        let mut module_schema = schema("bazel_module", "MODULE.bazel", &[]);
+        module_schema.target_kind = "bazel_workspace".to_string();
+        module_schema.owns_descendants = true;
+        let mut workspace_schema = schema("bazel_workspace_file", "WORKSPACE", &[]);
+        workspace_schema.target_kind = "bazel_workspace".to_string();
+        workspace_schema.owns_descendants = true;
+        let schemas = vec![module_schema, workspace_schema];
+        let boundary = crate::workspace::load_workspace_scan(temporary.path()).unwrap();
+
+        let (matches, _) =
+            detect_native_projects_with_schemas(temporary.path(), &schemas, &boundary).unwrap();
+
+        // Both root declarations survive (same kind and same package do not
+        // suppress each other), but the nested MODULE.bazel is claimed by the
+        // root workspace and does not surface.
+        let packages: Vec<_> = matches
+            .iter()
+            .map(|matched| (matched.native_project.as_str(), matched.package.as_str()))
+            .collect();
+        assert_eq!(
+            packages,
+            vec![("bazel_module", ""), ("bazel_workspace_file", "")],
+            "root MODULE.bazel and WORKSPACE both survive, nested MODULE.bazel is owned by the root"
+        );
+    }
+
+    #[test]
+    fn same_package_matches_of_different_kinds_coexist() {
+        let temporary = tempfile::tempdir().unwrap();
+        write(&temporary.path().join("MODULE.bazel"), "module");
+        write(&temporary.path().join("Cargo.toml"), "[package]");
+        let mut owner = schema("bazel", "MODULE.bazel", &[]);
+        owner.owns_descendants = true;
+        let schemas = vec![owner, schema("cargo", "Cargo.toml", &[])];
+        let boundary = crate::workspace::load_workspace_scan(temporary.path()).unwrap();
+
+        let (matches, _) =
+            detect_native_projects_with_schemas(temporary.path(), &schemas, &boundary).unwrap();
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|matched| (matched.native_project.as_str(), matched.package.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("bazel", ""), ("cargo", "")]
+        );
+    }
+
+    #[test]
+    fn owning_projects_do_not_suppress_sibling_projects() {
+        let temporary = tempfile::tempdir().unwrap();
+        write(
+            &temporary.path().join("apps/apple/Project.xcode"),
+            "project",
+        );
+        write(&temporary.path().join("tools/Cargo.toml"), "[workspace]");
+        let mut owner = schema("xcode", "Project.xcode", &[]);
+        owner.owns_descendants = true;
+        let schemas = vec![owner, schema("cargo", "Cargo.toml", &[])];
+        let boundary = crate::workspace::load_workspace_scan(temporary.path()).unwrap();
+
+        let (matches, _) =
+            detect_native_projects_with_schemas(temporary.path(), &schemas, &boundary).unwrap();
+
+        assert_eq!(
+            matches
+                .iter()
+                .map(|matched| (matched.native_project.as_str(), matched.package.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("xcode", "apps/apple"), ("cargo", "tools")]
+        );
     }
 
     #[test]

@@ -10,7 +10,9 @@ use crate::cli::{self, Cli, Cmd, Output};
 use crate::commands;
 
 pub(crate) async fn dispatch(cli: Cli) -> Result<ExitCode> {
-    let output = Output::new(cli.format, cli.quiet);
+    let output = Output::new(cli.format, cli.quiet)
+        .with_color(cli.color)
+        .with_verbose(cli.verbose);
     if cli.list {
         return commands::surface::print(&cli.surface_path(), output)
             .await
@@ -42,6 +44,24 @@ pub(crate) async fn dispatch(cli: Cli) -> Result<ExitCode> {
         command,
     ))
     .await
+}
+
+/// Whether this command produces action-shaped work worth marking with the
+/// `--sound` opening and closing tones. Informational verbs (query, cache
+/// stats, help-style paths) are left silent.
+fn command_makes_sound(command: &Cmd) -> bool {
+    matches!(
+        command,
+        Cmd::Build { .. }
+            | Cmd::Lint { .. }
+            | Cmd::Run { .. }
+            | Cmd::Test { .. }
+            | Cmd::Exec { .. }
+            | Cmd::Compatibility { .. }
+            | Cmd::PackageCompatibility { .. }
+            | Cmd::BazelCompatibility { .. }
+            | Cmd::CrateCompatibility { .. }
+    )
 }
 
 fn resolve_workspace(directory: Option<PathBuf>) -> Result<PathBuf> {
@@ -76,6 +96,10 @@ async fn run_command(
     resource_limits: &ResourceLimits,
     command: Cmd,
 ) -> Result<ExitCode> {
+    if command_makes_sound(&command) {
+        crate::sound::seed(commands::sound_seed::for_command(&command));
+        crate::sound::emit(crate::sound::Event::Started);
+    }
     if let Some(invocation) = command.compatibility() {
         return Box::pin(commands::compatibility::run(
             workspace,
@@ -231,7 +255,6 @@ async fn run_command(
             run_query_command(workspace, output, expression.as_deref(), cmd).await
         }
         Cmd::Edit { cmd } => run_edit_command(workspace, output, cmd).await,
-        Cmd::Native { cmd } => run_native_command(workspace, output, cmd).await,
         Cmd::Runtime { cmd } => run_runtime_command(workspace, output, cmd).await,
         Cmd::Mcp {
             workspace: workspace_override,
@@ -249,6 +272,7 @@ async fn run_command(
         Cmd::ChangeTracker => commands::change_tracker::serve(workspace, xdg).await,
         Cmd::Compatibility { .. }
         | Cmd::PackageCompatibility { .. }
+        | Cmd::BazelCompatibility { .. }
         | Cmd::CrateCompatibility { .. } => {
             unreachable!("compatibility commands are routed before command dispatch")
         }
@@ -274,25 +298,6 @@ fn resolve_mcp_workspace(workspace: &Path, workspace_override: Option<PathBuf>) 
     }
 }
 
-#[cfg(all(test, unix))]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn mcp_workspace_override_is_canonicalized() {
-        let temporary = tempfile::tempdir().unwrap();
-        let workspace = temporary.path().join("workspace");
-        let alias = temporary.path().join("alias");
-        std::fs::create_dir(&workspace).unwrap();
-        std::os::unix::fs::symlink(&workspace, &alias).unwrap();
-
-        assert_eq!(
-            resolve_mcp_workspace(temporary.path(), Some(alias)).unwrap(),
-            std::fs::canonicalize(workspace).unwrap()
-        );
-    }
-}
-
 #[allow(clippy::too_many_arguments)]
 async fn dispatch_build(
     workspace: &Path,
@@ -304,7 +309,7 @@ async fn dispatch_build(
     resolved: commands::graph::ResolvedConfiguration,
     ui: bool,
 ) -> Result<ExitCode> {
-    let target = resolve_required_target(workspace, target)?;
+    let target = resolve_build_target(workspace, target)?;
     let cache = crate::cache_provider::resolve(workspace, xdg)?;
     Box::pin(commands::graph::build(
         workspace,
@@ -378,7 +383,11 @@ async fn dispatch_test(workspace: &Path, xdg: &Xdg, args: TestDispatchArgs) -> R
         ))
         .await;
     }
-    if !args.all && args.changed_paths.is_empty() && args.jobs.is_none() && args.test_unit.is_none()
+    if args.target.is_some()
+        && !args.all
+        && args.changed_paths.is_empty()
+        && args.jobs.is_none()
+        && args.test_unit.is_none()
     {
         let target = resolve_required_target(workspace, args.target)?;
         let cache = crate::cache_provider::resolve(workspace, xdg)?;
@@ -411,8 +420,16 @@ async fn dispatch_test(workspace: &Path, xdg: &Xdg, args: TestDispatchArgs) -> R
                 commands::query::explicit_test_plan_with_graph(workspace, &graph, &[target])?
             }
         }
-        None => {
+        None if args.all || !args.changed_paths.is_empty() => {
             commands::query::test_plan_for_paths_with_graph(workspace, &graph, &args.changed_paths)?
+        }
+        None => {
+            let resolver_kinds = once_frontend::target_kind_schemas_for_workspace(workspace)?
+                .into_iter()
+                .filter(once_frontend::TargetKindSchema::has_resolver)
+                .map(|schema| schema.kind)
+                .collect();
+            commands::query::default_test_plan_with_graph(workspace, &graph, &resolver_kinds)?
         }
     };
     Box::pin(commands::test_schedule::run(
@@ -606,29 +623,6 @@ async fn run_edit_command(
             .await
             .map(|()| ExitCode::SUCCESS),
         None => anyhow::bail!("edit subcommand required"),
-    }
-}
-
-async fn run_native_command(
-    workspace: &Path,
-    output: Output,
-    command: Option<cli::NativeCmd>,
-) -> Result<ExitCode> {
-    match command {
-        Some(cli::NativeCmd::List) => commands::query::native_projects(workspace, output)
-            .await
-            .map(|()| ExitCode::SUCCESS),
-        Some(cli::NativeCmd::Show { name, path }) => {
-            commands::query::native_project(workspace, output, &name, path.as_deref())
-                .await
-                .map(|()| ExitCode::SUCCESS)
-        }
-        Some(cli::NativeCmd::Init { name, path }) => {
-            commands::edit::init_native_project(workspace, output, &name, path.as_deref())
-                .await
-                .map(|()| ExitCode::SUCCESS)
-        }
-        None => anyhow::bail!("native subcommand required"),
     }
 }
 
@@ -918,6 +912,71 @@ fn resolve_required_target(workspace: &Path, target: Option<String>) -> Result<S
     resolve_target_arg(workspace, &raw)
 }
 
+fn resolve_build_target(workspace: &Path, target: Option<String>) -> Result<String> {
+    if let Some(target) = target {
+        return resolve_target_arg(workspace, &target);
+    }
+    let resolver_kinds = once_frontend::target_kind_schemas_for_workspace(workspace)?
+        .into_iter()
+        .filter(|schema| {
+            schema.has_resolver()
+                && schema
+                    .capabilities
+                    .iter()
+                    .any(|capability| capability.name == "build")
+        })
+        .map(|schema| schema.kind)
+        .collect::<std::collections::BTreeSet<_>>();
+    let candidates = once_frontend::load_workspace(workspace)?
+        .iter()
+        .filter(|target| resolver_kinds.contains(&target.kind))
+        .map(once_frontend::Target::id)
+        .collect::<Vec<_>>();
+    match candidates.as_slice() {
+        [target] => Ok(target.clone()),
+        [] => anyhow::bail!(
+            "no default build target was discovered; pass `once build <target>` using an id from `once query targets`"
+        ),
+        _ => anyhow::bail!(
+            "multiple default build targets were discovered; pass `once build <target>` using one of: {}",
+            candidates.join(", ")
+        ),
+    }
+}
+
 fn resolve_target_arg(workspace: &Path, raw: &str) -> Result<String> {
     once_frontend::normalize_cli_target(workspace, raw).context("resolving target argument")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[cfg(unix)]
+    #[test]
+    fn mcp_workspace_override_is_canonicalized() {
+        let temporary = tempfile::tempdir().unwrap();
+        let workspace = temporary.path().join("workspace");
+        let alias = temporary.path().join("alias");
+        std::fs::create_dir(&workspace).unwrap();
+        std::os::unix::fs::symlink(&workspace, &alias).unwrap();
+
+        assert_eq!(
+            resolve_mcp_workspace(temporary.path(), Some(alias)).unwrap(),
+            std::fs::canonicalize(workspace).unwrap()
+        );
+    }
+
+    #[test]
+    fn default_build_target_does_not_expand_native_project_resolvers() {
+        let temporary = tempfile::tempdir().unwrap();
+        let project = temporary.path().join("App.xcodeproj");
+        std::fs::create_dir(&project).unwrap();
+        std::fs::write(project.join("project.pbxproj"), "not a project").unwrap();
+
+        assert_eq!(
+            resolve_build_target(temporary.path(), None).unwrap(),
+            "xcode"
+        );
+    }
 }

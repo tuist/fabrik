@@ -68,6 +68,8 @@ contents remain part of action keys.
 Full build ecosystems have incremental guides with a first project,
 query-before-build workflow, current limitations, and follow-up steps:
 
+- [Bazel](/guide/graph/bazel) builds and tests an existing Bazel workspace
+  without a Once manifest while Bazel retains its native graph and cache.
 - [Apple](/guide/graph/apple) covers libraries, frameworks, applications, and
   tests written in Swift, Objective-C, C, and C++.
 - [Xcode Projects](/guide/graph/apple/xcode) covers reading an existing
@@ -92,6 +94,9 @@ query-before-build workflow, current limitations, and follow-up steps:
 - [React Native](/guide/graph/react-native) covers New Architecture
   dependencies, native modules, JavaScript bundles, Apple and Android
   applications, and Fast Refresh.
+- [Nx](/guide/graph/nx) reads an existing Nx workspace, derives one Once
+  target per project and task, and schedules `nx:run-commands` and
+  `nx:run-script` tasks directly through Once.
 - [Zig](/guide/graph/zig) covers modules, binaries, tests, libraries, and C or
   C++ dependencies.
 

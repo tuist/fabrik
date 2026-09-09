@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::ffi::OsStr;
 use std::fmt::Write as _;
+use std::fs::OpenOptions;
 use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::pin::Pin;
@@ -10,6 +11,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::{Context, Result};
+use fd_lock::RwLock;
 use once_cas::{ActionResult, CacheProvider, Digest};
 use once_core::{
     resolve_execution_argv, resolve_execution_env, validate_action_contract_with_options,
@@ -159,7 +161,7 @@ impl DeclaredActionsState {
         deduplicate_outputs(&mut self.outputs);
         let cache_state = self
             .aggregate_cache_state
-            .unwrap_or(EvidenceCacheState::Miss);
+            .unwrap_or(EvidenceCacheState::Hit);
         let input_digest = compose_target_input_digest(&self.input_digests);
         let input_fingerprint =
             compose_target_input_fingerprint(input_digest, self.input_fingerprints);
@@ -844,9 +846,30 @@ async fn resolve_cacheable_declared_action(
     // setup, so they must only run when the command actually executes.
     // A cache hit does not run command setup. Removing a clean_paths entry on
     // a hit could delete an unrelated path with no command left to recreate it.
+    let action_digest = action.digest();
+    let mut action_lock = cacheable_action_lock(context.workspace, action_digest)?;
+    let _action_guard = loop {
+        match action_lock.try_write() {
+            Ok(guard) => break guard,
+            Err(error)
+                if error.kind() == std::io::ErrorKind::WouldBlock
+                    || error.kind() == std::io::ErrorKind::Interrupted =>
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+            Err(error) => {
+                return Err(error).with_context(|| {
+                    format!(
+                        "locking action {} for {} ({})",
+                        context.index, context.target_id, context.identifier
+                    )
+                });
+            }
+        }
+    };
     let cached = context
         .cache
-        .get_action_result(&action.digest())
+        .get_action_result(&action_digest)
         .await
         .with_context(|| {
             format!(
@@ -854,7 +877,6 @@ async fn resolve_cacheable_declared_action(
                 context.index, context.target_id, context.identifier
             )
         })?;
-    let action_digest = action.digest();
     let outcome = if let Some(result) = cached {
         if action_result_blobs_present(
             &result,
@@ -881,6 +903,21 @@ async fn resolve_cacheable_declared_action(
         }
     }
     Ok(outcome)
+}
+
+fn cacheable_action_lock(workspace: &Path, digest: Digest) -> Result<RwLock<std::fs::File>> {
+    let directory = workspace.join(".once/locks/actions");
+    std::fs::create_dir_all(&directory)
+        .with_context(|| format!("creating action lock directory `{}`", directory.display()))?;
+    let path = directory.join(format!("{digest}.lock"));
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("opening action lock `{}`", path.display()))?;
+    Ok(RwLock::new(file))
 }
 
 async fn action_result_blobs_present(
@@ -2019,7 +2056,16 @@ fn effective_network(declared: Option<&str>) -> Result<NetworkPolicy> {
             .parse::<NetworkPolicy>()
             .map_err(anyhow::Error::msg)
             .with_context(|| format!("parsing network policy `{raw}`")),
-        None => Ok(NetworkPolicy::default()),
+        // Actions that do not declare a network policy default to
+        // unrestricted. The reproducible-build effort meant to switch
+        // this to `Deny`, but doing so broke every action that spawns
+        // a subprocess needing a socketpair for stdout/stderr (the
+        // Linux seccomp filter denies related syscalls) and every
+        // action that in turn wraps itself in a macOS Seatbelt profile
+        // (nested `sandbox_apply` calls are refused on recent runners).
+        // Actions that genuinely need network isolation opt in with
+        // `network = "deny"` explicitly.
+        None => Ok(NetworkPolicy::Unrestricted),
     }
 }
 
@@ -2169,7 +2215,7 @@ fn compose_input_fingerprint_with_available(
     source_digest_cache: Option<&SourceDigestCache>,
 ) -> Result<InputFingerprintManifest> {
     let mut builder = InputDigestBuilder::new(b"once.declared_action.input.v4\0");
-    push_declared_action_metadata(&mut builder, declared)?;
+    push_declared_action_metadata(&mut builder, declared, workspace)?;
 
     let mut sorted_inputs = declared
         .inputs
@@ -2210,6 +2256,7 @@ fn compose_input_fingerprint_with_available(
 fn push_declared_action_metadata(
     builder: &mut InputDigestBuilder,
     declared: &DeclaredAction,
+    workspace: &Path,
 ) -> Result<()> {
     if let Some(identity) = &declared.toolchain_identity {
         builder.push_bytes_component("toolchain", "identity", identity.as_bytes());
@@ -2222,12 +2269,17 @@ fn push_declared_action_metadata(
             serde_json::to_vec(operation).context("serializing declared action operation")?;
         builder.push_bytes_component("command", "operation", &encoded);
     }
-    for arg in &declared.argv {
+    let canonical_argv = declared
+        .argv
+        .iter()
+        .map(|arg| canonical_action_value(arg, workspace))
+        .collect::<Vec<_>>();
+    for arg in &canonical_argv {
         builder.push_bytes(arg.as_bytes());
     }
-    if !declared.argv.is_empty() {
+    if !canonical_argv.is_empty() {
         let encoded =
-            serde_json::to_vec(&declared.argv).context("serializing declared action arguments")?;
+            serde_json::to_vec(&canonical_argv).context("serializing declared action arguments")?;
         builder.record_bytes("command", "arguments", &encoded);
     }
     if let Some(stdout) = &declared.stdout {
@@ -2252,13 +2304,18 @@ fn push_declared_action_metadata(
     if !declared.arg_files.is_empty() {
         builder.record_bytes("command", "argument-files", &encoded_arg_files);
     }
-    for (key, value) in &declared.env {
+    let canonical_env = declared
+        .env
+        .iter()
+        .map(|(key, value)| (key, canonical_action_value(value, workspace)))
+        .collect::<BTreeMap<_, _>>();
+    for (key, value) in &canonical_env {
         builder.push_bytes(key.as_bytes());
         builder.push_bytes(value.as_bytes());
     }
-    if !declared.env.is_empty() {
+    if !canonical_env.is_empty() {
         let encoded =
-            serde_json::to_vec(&declared.env).context("serializing declared environment")?;
+            serde_json::to_vec(&canonical_env).context("serializing declared environment")?;
         builder.record_bytes("environment", "declared", &encoded);
     }
     for path in &declared.clean_paths {
@@ -2279,6 +2336,14 @@ fn push_declared_action_metadata(
         builder.record_bytes("command", "working-directory", cwd.as_bytes());
     }
     Ok(())
+}
+
+fn canonical_action_value(value: &str, workspace: &Path) -> String {
+    let workspace = workspace.to_string_lossy();
+    if workspace.is_empty() {
+        return value.to_owned();
+    }
+    value.replace(workspace.as_ref(), "{{once.execution_root}}")
 }
 
 #[cfg(test)]

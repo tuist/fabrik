@@ -46,6 +46,12 @@ jobs:
           install_args: "git-cliff"
       - name: Detect release
         id: detect
+        env:
+          # git-cliff resolves pull request titles and authors through the
+          # GitHub API. Unauthenticated calls from Actions runners get rate
+          # limited, and git-cliff treats that as fatal, so the token is what
+          # keeps release detection from failing.
+          GITHUB_TOKEN: ${{ github.token }}
         run: mise run release:detect
 
   build:
@@ -83,8 +89,11 @@ jobs:
           version: ${{ env.MISE_VERSION }}
           # Restrict to the build tools needed on every matrix host.
           install_args: "rust jq"
+      # libcap-ng-dev links the embedded sandbox provider; libasound2-dev
+      # resolves the ALSA backend that the audio output layer links on
+      # Linux, whether or not sound is used at runtime.
       - if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y binutils build-essential libcap-ng-dev
+        run: sudo apt-get update && sudo apt-get install -y binutils build-essential libcap-ng-dev libasound2-dev
       - name: Cache Rust
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
@@ -166,8 +175,9 @@ jobs:
         with:
           version: ${{ env.MISE_VERSION }}
           install_args: "rust jq"
+      # Same native libraries as the CLI build above.
       - if: startsWith(matrix.runner, 'ubuntu-')
-        run: sudo apt-get update && sudo apt-get install -y binutils build-essential libcap-ng-dev
+        run: sudo apt-get update && sudo apt-get install -y binutils build-essential libcap-ng-dev libasound2-dev
       - name: Cache Rust
         continue-on-error: true
         uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
@@ -210,6 +220,8 @@ jobs:
       - name: Flatten artifacts
         run: find dist -type f -exec mv {} dist/ \;
       - name: Generate release notes
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: mise run release:notes --version "${{ needs.detect.outputs.next-version }}" > release-notes.md
       - name: Publish release
         env:
@@ -224,6 +236,14 @@ jobs:
       - build-sdk-libs
     if: needs.detect.outputs.should-release == 'true' && needs.publish.result == 'success' && needs.build-sdk-libs.result == 'success'
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      # npm authenticates through trusted publishing: it trades this workflow's
+      # OIDC identity for a short-lived publish credential, so there is no npm
+      # token to store or rotate. The trusted publisher registered on npmjs.com
+      # pins the org, the repository and this workflow's filename, which means
+      # renaming this file revokes npm publishing until it is re-registered.
+      id-token: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/download-artifact@v8
@@ -243,14 +263,12 @@ jobs:
           export-env: true
         env:
           RUBYGEMS_API_KEY: op://once/RubyGems API Key/api_key
-          NPM_TOKEN: op://once/npm Automation Token/token
-      - name: Configure package registries
-        run: |
-          echo "::add-mask::${RUBYGEMS_API_KEY}"
-          echo "::add-mask::${NPM_TOKEN}"
-          printf '%s\n' "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-          chmod 0600 ~/.npmrc
+      # No ~/.npmrc is written on purpose. npm only starts the OIDC exchange
+      # when it finds no configured credential, so an _authToken line here
+      # would make it publish anonymously and fail with a 404 that says the
+      # package does not exist rather than that the credential was refused.
       - name: Publish SDK packages
         run: |
+          echo "::add-mask::${RUBYGEMS_API_KEY}"
           export GEM_HOST_API_KEY="${RUBYGEMS_API_KEY}"
           mise run release:publish-sdks --version "${{ needs.detect.outputs.next-version }}"

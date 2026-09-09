@@ -17,9 +17,11 @@ PRELUDE_SOURCES = [
     "python.star",
     "ruby.star",
     "javascript.star",
+    "nx.star",
     "react_native.star",
     "oci.star",
     "dockerfile.star",
+    "bazel.star",
 ]
 
 PRELUDE_DEPENDENCIES = {
@@ -56,6 +58,7 @@ PRELUDE_TARGET_KINDS = {
         "apple_xcframework_import",
         "apple_framework",
         "apple_application",
+        "apple_executable",
         "apple_thinned_package",
         "apple_test_bundle",
         "shellspec_test",
@@ -126,6 +129,10 @@ PRELUDE_TARGET_KINDS = {
         "vitest_test",
         "jest_test",
     ],
+    "nx.star": [
+        "nx_workspace",
+        "nx_task",
+    ],
     "react_native.star": [
         "react_native_dependencies",
         "react_native_module",
@@ -142,5 +149,11 @@ PRELUDE_TARGET_KINDS = {
     ],
     "dockerfile.star": [
         "dockerfile_image",
+    ],
+    "bazel.star": [
+        "bazel_workspace",
+        "bazel_target",
+        "bazel_test",
+        "bazel_binary",
     ],
 }
