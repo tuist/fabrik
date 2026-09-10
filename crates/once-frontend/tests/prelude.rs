@@ -14,6 +14,21 @@ use starlark::syntax::{AstModule, Dialect};
 use starlark::values::list::ListRef;
 use tempfile::TempDir;
 
+#[path = "prelude/swift_package_traits.rs"]
+mod swift_package_traits;
+
+#[path = "prelude/swift_macro_testing.rs"]
+mod swift_macro_testing;
+
+#[path = "prelude/swift_package_linking.rs"]
+mod swift_package_linking;
+
+#[path = "prelude/swift_testing_library.rs"]
+mod swift_testing_library;
+
+#[path = "prelude/swift_testing_results.rs"]
+mod swift_testing_results;
+
 fn store_for(workspace: &Path, package: &str) -> AnalysisStore {
     AnalysisStore::new(
         workspace.to_path_buf(),
@@ -13140,6 +13155,10 @@ result = repr([codesign["codesign_path"], codesign["env"]])
 /// not contain xcrun even when discovery went through it. This
 /// keeps cache keys identical whether or not the user pins a
 /// developer dir.
+///
+/// A Swift toolchain installed outside Xcode contributes the compiler
+/// but not the linker, so the resolved environment has to carry the
+/// directory where the linker actually lives.
 #[test]
 fn prelude_resolve_swiftc_fallback_returns_direct_invocation() {
     let prelude = apple_prelude_source();
@@ -13152,7 +13171,9 @@ def host_which(name):
 
 def host_command(argv, env = None, merge_stderr = None):
     if "--find" in argv and argv[len(argv) - 1] == "swiftc":
-        return "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/swiftc\n"
+        return "/Toolchains/swift-snapshot.xctoolchain/usr/bin/swiftc\n"
+    if "--find" in argv and argv[len(argv) - 1] == "ld":
+        return "/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ld\n"
     if "--show-sdk-path" in argv:
         return "/Applications/Xcode.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator.sdk\n"
     if "--version" in argv:
@@ -13165,6 +13186,7 @@ result = repr([
     swiftc["swiftc_path"],
     swiftc["sdk_path"],
     swiftc["env"],
+    swiftc["identity"],
 ])
 "#
     );
@@ -13174,13 +13196,25 @@ result = repr([
         "fallback argv must not include xcrun: {out}"
     );
     assert!(
-        out.contains("XcodeDefault.xctoolchain/usr/bin/swiftc"),
+        out.contains("swift-snapshot.xctoolchain/usr/bin/swiftc"),
         "{out}"
     );
     assert!(out.contains("iPhoneSimulator.sdk"), "{out}");
     assert!(
         out.contains("\"SWIFT_DETERMINISTIC_HASHING\": \"1\""),
         "{out}"
+    );
+    assert!(
+        out.contains(
+            "\"PATH\": \"/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/usr/bin:/bin\""
+        ),
+        "the linker directory must reach actions through PATH: {out}"
+    );
+    assert_eq!(
+        out.matches("XcodeDefault.xctoolchain/usr/bin:/usr/bin:/bin")
+            .count(),
+        2,
+        "the tool search path must also partition the action cache: {out}"
     );
 }
 
@@ -15673,27 +15707,6 @@ result = repr([
 }
 
 #[test]
-fn prelude_xcode_orders_swift_package_default_traits() {
-    let prelude = xcode_prelude_source();
-    let source = format!(
-        r#"{prelude}
-package = {{
-    "info": {{
-        "traits": [
-            {{"name": "default", "enabledTraits": ["FoundationNetworking", "Clocks", "Foundation", "Clocks"]}},
-        ],
-    }},
-}}
-result = repr(_xcode_swift_package_default_traits(package))
-"#
-    );
-    assert_eq!(
-        eval_prelude_source_to_repr(source).unwrap(),
-        r#"["Clocks", "Foundation", "FoundationNetworking"]"#
-    );
-}
-
-#[test]
 fn prelude_xcode_translates_swift_feature_settings_generically() {
     let prelude = xcode_prelude_source();
     let source = format!(
@@ -17490,7 +17503,7 @@ def host_file_exists(path):
 def host_file_read(path):
     return ""
 
-def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {{}}, lazy_dependency = "", target_prefix = "SwiftPackage"):
+def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {{}}, lazy_dependency = "", target_prefix = "SwiftPackage", root_identities = None):
     return {{
         "specs": [{{
             "name": "XcodePackage_swift-argument-parser_changelog-authors",

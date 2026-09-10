@@ -20,7 +20,7 @@ def _swift_package_workspace_resolver(ctx):
     swift_info_cache[absolute_package_path] = {"info": info}
     package = {"identity": _basename(package_path) or info.get("name") or ctx["label"]["name"], "path": package_path, "info": info}
     packages = [package] + _swift_package_remote_infos(ctx, info, swift, swiftc["env"], absolute_package_path, package_path, cache = swift_info_cache)
-    graph = _xcode_local_swift_package_specs(ctx, packages, attrs.get("platform") or "macos", attrs.get("minimum_os") or "13.0", attrs.get("sdk_variant") or "simulator")
+    graph = _xcode_local_swift_package_specs(ctx, packages, attrs.get("platform") or "macos", attrs.get("minimum_os") or "13.0", attrs.get("sdk_variant") or "simulator", root_identities = [package["identity"]])
     roots = []
     test_roots = []
     for product in info.get("products") or []:

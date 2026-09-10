@@ -106,6 +106,20 @@ def _developer_env(xcode_developer_dir):
         env["DEVELOPER_DIR"] = xcode_developer_dir
     return env
 
+def _apple_linker_dir(xcode_developer_dir, env):
+    # A Swift toolchain installed next to Xcode rather than inside it ships a
+    # compiler but no linker, and the compiler locates `ld` by searching the
+    # environment. Actions run with an environment Once controls, so the
+    # directory holding the linker has to be resolved and passed explicitly.
+    if xcode_developer_dir:
+        return xcode_developer_dir + "/" + _XCTOOLCHAIN_BIN_REL
+    return _parent_dir(host_command([host_which("xcrun"), "--find", "ld"], env = env).strip())
+
+def _apple_compiler_env(xcode_developer_dir, env):
+    action_env = dict(env)
+    action_env["PATH"] = _apple_linker_dir(xcode_developer_dir, env) + ":/usr/bin:/bin"
+    return action_env
+
 # When a target sets `xcode_developer_dir`, the build resolves tools and
 # SDK paths directly from the layout under that directory rather than
 # shelling out to `xcrun`. The xcrun fallback still applies when no
@@ -168,9 +182,10 @@ def _resolve_swiftc(platform, sdk_variant, xcode_developer_dir):
         swiftc_path = host_command([xcrun, "--sdk", sdk, "--find", "swiftc"], env = env).strip()
         sdk_path = host_command([xcrun, "--sdk", sdk, "--show-sdk-path"], env = env).strip()
     version = host_command([swiftc_path, "--version"], env = env).strip()
+    action_env = _apple_compiler_env(xcode_developer_dir, env)
     # Identity folds in the developer dir override so different Xcode
     # installations partition the action cache cleanly.
-    identity = "once.apple.swiftc.v1\x00" + swiftc_path + "\x00" + version + "\x00" + (xcode_developer_dir or "")
+    identity = "once.apple.swiftc.v1\x00" + swiftc_path + "\x00" + version + "\x00" + (xcode_developer_dir or "") + "\x00" + action_env["PATH"]
     return {
         # Once supplies the outer action sandbox. Disabling Swift's nested
         # subprocess sandbox lets compiler plugins run inside that same policy
@@ -180,7 +195,7 @@ def _resolve_swiftc(platform, sdk_variant, xcode_developer_dir):
         "sdk_name": sdk,
         "sdk_path": sdk_path,
         "identity": identity,
-        "env": env,
+        "env": action_env,
     }
 
 def _filter_swift_sources(paths):
@@ -211,14 +226,15 @@ def _resolve_clang(platform, sdk_variant, xcode_developer_dir):
         clangxx_path = host_command([xcrun, "--sdk", sdk, "--find", "clang++"], env = env).strip()
         sdk_path = host_command([xcrun, "--sdk", sdk, "--show-sdk-path"], env = env).strip()
     version = host_command([clang_path, "--version"], env = env).strip()
-    identity = "once.apple.clang.v1\x00" + clang_path + "\x00" + version + "\x00" + (xcode_developer_dir or "")
+    action_env = _apple_compiler_env(xcode_developer_dir, env)
+    identity = "once.apple.clang.v1\x00" + clang_path + "\x00" + version + "\x00" + (xcode_developer_dir or "") + "\x00" + action_env["PATH"]
     return {
         "clang_path": clang_path,
         "clangxx_path": clangxx_path,
         "sdk_name": sdk,
         "sdk_path": sdk_path,
         "identity": identity,
-        "env": env,
+        "env": action_env,
     }
 
 def _resolve_libtool(platform, sdk_variant, xcode_developer_dir):
@@ -370,12 +386,292 @@ def _resolve_apple_thinning_tools(xcode_developer_dir):
         "env": action_env,
     }
 
-def _swift_testing_macros_plugin(swiftc_path):
+def _swift_toolchain_dir(swiftc_path):
     suffix = "/usr/bin/swiftc"
     if not _ends_with(swiftc_path, suffix):
         fail("unable to derive Swift toolchain path from swiftc at " + swiftc_path)
-    toolchain_dir = swiftc_path[:len(swiftc_path) - len(suffix)]
-    return toolchain_dir + "/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+    return swiftc_path[:len(swiftc_path) - len(suffix)]
+
+def _swift_testing_macros_plugin(swiftc_path):
+    return _swift_toolchain_dir(swiftc_path) + "/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+
+def _apple_swift_testing_compile_flags(testing_library_dir, testing_framework_dir, testing_macros_plugin):
+    if testing_library_dir:
+        return ["-I", testing_library_dir, "-load-plugin-library", testing_macros_plugin]
+    return ["-F", testing_framework_dir, "-framework", "Testing", "-load-plugin-library", testing_macros_plugin]
+
+def _apple_swift_testing_link_flags(testing_library_dir):
+    # The compiler's own Swift Testing library is a dynamic library resolved
+    # through an rpath rather than a framework the platform already exposes.
+    if not testing_library_dir:
+        return ["-framework", "Testing"]
+    return ["-L", testing_library_dir, "-lTesting", "-Xlinker", "-rpath", "-Xlinker", testing_library_dir]
+
+def _apple_swift_testing_entry_point_source():
+    # A loadable test bundle has no entry point of its own, so the only way to
+    # reach the testing library is through whatever host loads the bundle, and
+    # that host decides what gets reported. Swift Package Manager answers this
+    # by compiling an entry point into the bundle: it stays loadable by
+    # `xctest`, which finds XCTest cases through the Objective-C runtime and
+    # ignores `main`, while a caller that wants the testing library's own
+    # structured output loads the bundle and calls `main` instead.
+    #
+    # Once goes one step further and normalizes that output here, in the
+    # process that produced it, rather than re-deriving outcomes from console
+    # text. The testing library writes its event stream to the path Once names,
+    # and this turns those records into normalized results.
+    return """#if canImport(Testing)
+import Testing
+#endif
+import Foundation
+
+enum OnceTestReport {
+    struct Case {
+        var name: String
+        var suite: String
+        var file: String
+        var status: String
+    }
+
+    static let quote = String(UnicodeScalar(34))
+    static let backslash = String(UnicodeScalar(92))
+
+    static func environmentPath(_ name: String) -> String? {
+        guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    static func records(at path: String) -> [[String: Any]] {
+        guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return []
+        }
+        return contents.components(separatedBy: .newlines).compactMap { line in
+            guard let data = line.data(using: .utf8) else { return nil }
+            return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        }
+    }
+
+    /// A test function's identifier is its suite's identifier followed by the
+    /// function, so the enclosing suite is the longest suite identifier that
+    /// prefixes it. A free function has no such suite and falls back to the
+    /// name of the file that declares it.
+    static func suiteName(forTest id: String, suites: [String: String], file: String) -> String {
+        var best = ""
+        for (suiteID, suiteName) in suites where id.hasPrefix(suiteID + "/") && !suiteName.isEmpty {
+            if suiteID.count > best.count {
+                best = suiteID
+            }
+        }
+        if let name = suites[best], !name.isEmpty {
+            return name
+        }
+        var stem = (file as NSString).lastPathComponent
+        if stem.hasSuffix(".swift") {
+            stem = String(stem.dropLast(6))
+        }
+        return stem
+    }
+
+    static func relativePath(_ path: String) -> String {
+        let root = FileManager.default.currentDirectoryPath
+        if !root.isEmpty, path.hasPrefix(root + "/") {
+            return String(path.dropFirst(root.count + 1))
+        }
+        return path
+    }
+
+    static func quoted(_ value: String) -> String {
+        var out = quote
+        for scalar in value.unicodeScalars {
+            if scalar.value == 34 {
+                out += backslash + quote
+            } else if scalar.value == 92 {
+                out += backslash + backslash
+            } else if scalar.value < 0x20 {
+                out += backslash + "u" + String(format: "%04x", scalar.value)
+            } else {
+                out.unicodeScalars.append(scalar)
+            }
+        }
+        return out + quote
+    }
+
+    static func jsonArray(_ value: String?) -> String {
+        guard let value else { return "[]" }
+        return "[" + quoted(value) + "]"
+    }
+
+    static func write(exitCode: CInt) {
+        guard let resultsPath = environmentPath("ONCE_TEST_RESULTS"),
+              let streamPath = environmentPath("ONCE_TEST_EVENT_STREAM") else {
+            return
+        }
+        let target = environmentPath("ONCE_TEST_TARGET") ?? ""
+        var suites: [String: String] = [:]
+        var order: [String] = []
+        var cases: [String: Case] = [:]
+
+        for record in records(at: streamPath) {
+            guard let payload = record["payload"] as? [String: Any],
+                  let kind = payload["kind"] as? String else { continue }
+            switch record["kind"] as? String {
+            case "test":
+                guard let id = payload["id"] as? String else { continue }
+                if kind == "suite" {
+                    suites[id] = payload["name"] as? String ?? ""
+                } else if kind == "function" {
+                    let location = payload["sourceLocation"] as? [String: Any] ?? [:]
+                    let declared = location["_filePath"] as? String ?? location["filePath"] as? String ?? ""
+                    var name = payload["name"] as? String ?? id
+                    if name.hasSuffix("()") {
+                        name = String(name.dropLast(2))
+                    }
+                    order.append(id)
+                    // Nothing confirms a test ran until the stream says so. A
+                    // test the run never reached stays without a verdict rather
+                    // than being credited with an outcome it never produced.
+                    cases[id] = Case(name: name, suite: "", file: relativePath(declared), status: "skipped")
+                }
+            case "event":
+                guard let id = payload["testID"] as? String, var entry = cases[id] else { continue }
+                switch kind {
+                case "testStarted":
+                    entry.status = "unknown"
+                case "testSkipped":
+                    entry.status = "skipped"
+                case "testCancelled", "testCaseCancelled":
+                    entry.status = "unknown"
+                case "issueRecorded":
+                    let issue = payload["issue"] as? [String: Any] ?? [:]
+                    let isFailure = issue["isFailure"] as? Bool ?? true
+                    let isKnown = issue["isKnown"] as? Bool ?? false
+                    if isFailure && !isKnown {
+                        entry.status = "failed"
+                    }
+                case "testEnded":
+                    if entry.status == "unknown" {
+                        entry.status = "passed"
+                    }
+                default:
+                    break
+                }
+                cases[id] = entry
+            default:
+                break
+            }
+        }
+
+        var encodedCases: [String] = []
+        var passed = 0
+        var failed = 0
+        var skipped = 0
+        for id in order {
+            guard var entry = cases[id] else { continue }
+            entry.suite = suiteName(forTest: id, suites: suites, file: entry.file)
+            switch entry.status {
+            case "passed": passed += 1
+            case "failed": failed += 1
+            case "skipped": skipped += 1
+            default: break
+            }
+            var encoded = "{"
+            encoded += quoted("id") + ":" + quoted(target + "::" + entry.suite + "/" + entry.name) + ","
+            encoded += quoted("name") + ":" + quoted(entry.name) + ","
+            encoded += quoted("suite") + ":" + quoted(entry.suite) + ","
+            encoded += quoted("file") + ":" + quoted(entry.file) + ","
+            encoded += quoted("status") + ":" + quoted(entry.status) + ","
+            encoded += quoted("attempts") + ":[{" + quoted("status") + ":" + quoted(entry.status) + "}],"
+            encoded += quoted("runner_metadata") + ":{" + quoted("runner") + ":" + quoted("swift_testing") + "}}"
+            encodedCases.append(encoded)
+        }
+
+        // The key order is spelled out rather than left to a dictionary so the
+        // same run always writes the same bytes.
+        var report = "{"
+        report += quoted("schema") + ":" + quoted("once.test_results.v1") + ","
+        report += quoted("target") + ":" + quoted(target) + ","
+        report += quoted("runner") + ":{" + quoted("type") + ":" + quoted("swift_testing") + "," + quoted("metadata") + ":{}},"
+        report += quoted("status") + ":" + quoted((exitCode == 0 && failed == 0) ? "passed" : "failed") + ","
+        report += quoted("summary") + ":{"
+        report += quoted("total") + ":" + String(encodedCases.count) + ","
+        report += quoted("passed") + ":" + String(passed) + ","
+        report += quoted("failed") + ":" + String(failed) + ","
+        report += quoted("skipped") + ":" + String(skipped) + ","
+        report += quoted("flaky") + ":0},"
+        report += quoted("cases") + ":[" + encodedCases.joined(separator: ",") + "],"
+        report += quoted("artifacts") + ":{"
+        report += quoted("logs") + ":" + jsonArray(environmentPath("ONCE_TEST_LOG")) + ","
+        report += quoted("native_results") + ":" + jsonArray(environmentPath("ONCE_TEST_NATIVE_RESULTS")) + "}}"
+        try? report.write(toFile: resultsPath, atomically: true, encoding: .utf8)
+    }
+}
+
+@main
+@available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+@available(*, deprecated, message: "Not deprecated. Marked so that tests covering deprecated functionality do not warn.")
+struct OnceTestEntryPoint {
+    private static func requestedTestingLibrary() -> String {
+        var arguments = CommandLine.arguments.makeIterator()
+        while let argument = arguments.next() {
+            if argument == "--testing-library", let name = arguments.next() {
+                return name.lowercased()
+            }
+        }
+        return "xctest"
+    }
+
+    static func main() async {
+#if canImport(Testing)
+        if Self.requestedTestingLibrary() == "swift-testing" {
+            let exitCode: CInt = await Testing.__swiftPMEntryPoint()
+            OnceTestReport.write(exitCode: exitCode)
+            exit(exitCode)
+        }
+#endif
+    }
+}
+"""
+
+def _apple_swift_testing_helper(swiftc_path):
+    # Running the testing library directly means loading the bundle and calling
+    # its entry point, which a loadable bundle cannot do for itself. Every
+    # Swift toolchain ships the small host that does it.
+    path = _swift_toolchain_dir(swiftc_path) + "/usr/libexec/swift/pm/swiftpm-testing-helper"
+    return path if host_file_exists(path) else ""
+
+def _apple_sources_import_xctest(sources):
+    for source in sources:
+        path = source if source.startswith("/") else workspace_root() + "/" + source
+        if not host_file_exists(path):
+            continue
+        contents = host_file_read(path)
+        if "import XCTest" in contents or "<XCTest/XCTest.h>" in contents:
+            return True
+    return False
+
+def _apple_swift_testing_filter(selector):
+    # Once names a case `Suite/method`; the testing library matches a regular
+    # expression against its own identifiers, which carry the module name in
+    # front and the argument list behind.
+    escaped = ""
+    for index in range(len(selector)):
+        character = selector[index]
+        if character in ".^$*+?()[]{}|\\":
+            escaped += "\\"
+        escaped += character
+    return escaped + "\\("
+
+def _swift_testing_library_dir(swiftc_path, sdk_name):
+    # Xcode publishes Swift Testing as a platform framework. A Swift toolchain
+    # installed beside Xcode instead ships its own copy next to the compiler,
+    # and its macro plugin expands to code only that copy declares. The two
+    # move independently, so the compiler's own library wins when it has one.
+    directory = _swift_toolchain_dir(swiftc_path) + "/usr/lib/swift/" + sdk_name + "/testing"
+    if host_file_exists(directory + "/libTesting.dylib"):
+        return directory
+    return ""
 
 def _unique_dirs(paths):
     seen = {}
@@ -1131,6 +1427,12 @@ def _apple_test_cases_script(swift_srcs, cases_file, target, runner_type, select
     # their enclosing `XCTestCase` subclass as the suite; Swift Testing
     # functions (`@Test func x`) take their enclosing type, defaulting to the
     # file name for free functions.
+    #
+    # Reading a declaration says a case exists, never that it ran or how it
+    # ended: source can compile away behind a condition, and a runner can
+    # filter, skip, or never reach it. Every case listed here is therefore
+    # `unknown`, and the run's own exit status carries the outcome. A runner
+    # that reports per-case results does not come through here at all.
     specs = _shell_words(swift_srcs)
     selected_cases = _shell_words(selectors)
     return """total=0
@@ -1151,7 +1453,7 @@ emit_case() {{
     done
     [ "$selected" = true ] || return 0
   fi
-  if [ "$status" -eq 0 ]; then case_status=passed; else case_status=unknown; fi
+  case_status=unknown
   total=$((total + 1))
   if [ "$total" -gt 1 ]; then printf ',\n' >> "$cases_file"; fi
   printf '{{"id":"%s::%s/%s","name":"%s","suite":"%s","file":"%s","status":"%s","attempts":[{{"status":"%s"}}],"runner_metadata":{{"runner":"%s"}}}}' "{target}" "$case_suite" "$case_name" "$case_name" "$case_suite" "$case_file" "$case_status" "$case_status" "{runner_type}" >> "$cases_file"
@@ -1201,6 +1503,23 @@ done
         specs = specs,
         selector_count = len(selectors),
         selected_cases = selected_cases,
+        target = target,
+        runner_type = runner_type,
+    )
+
+def _apple_test_report_script(swift_srcs, cases_file, target, runner_type, selectors = []):
+    # The run's exit status is the one outcome this path can state. The cases it
+    # lists come from the sources, so they are reported without a verdict.
+    return """{cases_script}
+if [ "$status" -eq 0 ]; then run_status=passed; else run_status=failed; fi
+{{
+  printf '{{"schema":"once.test_results.v1","target":"%s","runner":{{"type":"%s","metadata":{{}}}},"status":"%s","summary":{{"total":%s,"passed":0,"failed":0,"skipped":0,"flaky":0}},"cases":[' "{target}" "{runner_type}" "$run_status" "$total"
+  cat "$cases_file"
+  printf '],"artifacts":{{"logs":["%s"],"native_results":["%s"]}}}}\n' "$log" "$native_results"
+}} > "$results"
+""".format(
+        cases_script = _apple_test_cases_script(swift_srcs, cases_file, target, runner_type, selectors),
+        cases_file = _shell_literal(cases_file),
         target = target,
         runner_type = runner_type,
     )
@@ -1316,6 +1635,7 @@ def _apple_library_impl(ctx):
     testing_framework_dir = ""
     testing_usr_lib_dir = ""
     testing_macros_plugin = ""
+    testing_library_dir = ""
     if swift_testing or xctest_support:
         if xcode_developer_dir:
             testing_platform_path = _developer_platform_path(xcode_developer_dir, swiftc["sdk_name"])
@@ -1325,6 +1645,7 @@ def _apple_library_impl(ctx):
         testing_usr_lib_dir = testing_platform_path + "/Developer/usr/lib"
     if swift_testing:
         testing_macros_plugin = _swift_testing_macros_plugin(swiftc["swiftc_path"])
+        testing_library_dir = _swift_testing_library_dir(swiftc["swiftc_path"], swiftc["sdk_name"])
     archive = declare_output(module_name + ".a")
 
     deps = _apple_native_deps(ctx)
@@ -1729,7 +2050,7 @@ def _apple_library_impl(ctx):
             if generated_framework_module:
                 swift_base_argv.extend(["-F", generated_framework_search_dir])
             if swift_testing:
-                swift_base_argv.extend(["-F", testing_framework_dir, "-framework", "Testing", "-load-plugin-library", testing_macros_plugin])
+                swift_base_argv.extend(_apple_swift_testing_compile_flags(testing_library_dir, testing_framework_dir, testing_macros_plugin))
             if xctest_support:
                 swift_base_argv.extend(["-F", testing_framework_dir, "-I", testing_usr_lib_dir, "-L", testing_usr_lib_dir, "-framework", "XCTest", "-lXCTestSwiftSupport"])
             # Header search paths flow through `-Xcc -I` so swiftc's
@@ -2434,6 +2755,33 @@ def _swift_macro_impl(ctx):
     ) = _collect_dep_compile_inputs(deps, ctx["build_dir"])
     dep_swiftmodule_inputs = _apple_collect_swiftmodule_inputs(deps)
 
+    # The sources compile twice: once into the plugin executable the compiler
+    # loads, and once into an archive a test target can link. Everything that
+    # describes how to compile them is shared.
+    compile_argv = []
+    for d in dep_swiftmodule_dirs:
+        compile_argv.extend(["-I", d])
+    for hdir in dep_header_dirs:
+        compile_argv.extend(["-Xcc", "-I", "-Xcc", hdir])
+    for modulemap in dep_modulemaps:
+        compile_argv.extend(["-Xcc", "-fmodule-map-file=" + modulemap])
+    for hmap in dep_hmaps:
+        compile_argv.extend(["-Xcc", "-I", "-Xcc", hmap])
+    for overlay in dep_vfs_overlays:
+        compile_argv.extend(["-Xcc", "-ivfsoverlay", "-Xcc", overlay])
+    for framework_dir in dep_framework_search_dirs:
+        compile_argv.extend(["-F", framework_dir])
+    _apple_disable_static_framework_autolinking(compile_argv, _apple_collect_link_framework_bundles(deps))
+    for framework in dep_framework_module_names:
+        compile_argv.extend(["-framework", framework])
+    for fw in dep_sdk_frameworks:
+        compile_argv.extend(["-framework", fw])
+    for dylib in dep_sdk_dylibs:
+        compile_argv.extend(["-l" + dylib])
+    _apple_add_swift_plugin_args(compile_argv, plugin_dylibs, plugin_executables)
+    for flag in _apple_swift_link_flags(swift_flags):
+        compile_argv.append(flag)
+
     swift_argv = list(swiftc["argv"]) + [
         "-emit-executable",
         "-emit-module",
@@ -2447,29 +2795,7 @@ def _swift_macro_impl(ctx):
         "-parse-as-library",
         "-o",
         plugin_executable,
-    ]
-    for d in dep_swiftmodule_dirs:
-        swift_argv.extend(["-I", d])
-    for hdir in dep_header_dirs:
-        swift_argv.extend(["-Xcc", "-I", "-Xcc", hdir])
-    for modulemap in dep_modulemaps:
-        swift_argv.extend(["-Xcc", "-fmodule-map-file=" + modulemap])
-    for hmap in dep_hmaps:
-        swift_argv.extend(["-Xcc", "-I", "-Xcc", hmap])
-    for overlay in dep_vfs_overlays:
-        swift_argv.extend(["-Xcc", "-ivfsoverlay", "-Xcc", overlay])
-    for framework_dir in dep_framework_search_dirs:
-        swift_argv.extend(["-F", framework_dir])
-    _apple_disable_static_framework_autolinking(swift_argv, _apple_collect_link_framework_bundles(deps))
-    for framework in dep_framework_module_names:
-        swift_argv.extend(["-framework", framework])
-    for fw in dep_sdk_frameworks:
-        swift_argv.extend(["-framework", fw])
-    for dylib in dep_sdk_dylibs:
-        swift_argv.extend(["-l" + dylib])
-    _apple_add_swift_plugin_args(swift_argv, plugin_dylibs, plugin_executables)
-    for flag in _apple_swift_link_flags(swift_flags):
-        swift_argv.append(flag)
+    ] + compile_argv
     for src in swift_srcs:
         swift_argv.append(src)
     # Dep archives appear as positional inputs; swiftc forwards
@@ -2514,11 +2840,45 @@ def _swift_macro_impl(ctx):
         identifier = "swift_macro_compile_" + module_name,
     )
 
+    # A macro is a tool for the targets that expand it, so its code stays out
+    # of what they link. A test target is the exception: it imports the module
+    # to exercise the implementation types, which needs them as an archive.
+    plugin_archive = declare_output(module_name + ".a")
+    archive_argv = list(swiftc["argv"]) + [
+        "-emit-library",
+        "-static",
+        "-module-name",
+        module_name,
+        "-target",
+        triple,
+        "-parse-as-library",
+        "-o",
+        plugin_archive,
+    ] + compile_argv + swift_srcs
+    run_action(
+        argv = archive_argv,
+        inputs = swift_inputs,
+        outputs = [plugin_archive],
+        env = swiftc["env"],
+        toolchain_identity = swiftc["identity"],
+        identifier = "swift_macro_archive_" + module_name,
+    )
+
     return {
         "label_id": ctx["label"]["id"],
         "plugin_executable": plugin_executable,
         "plugin_module_name": module_name,
         "transitive_plugin_executables": [plugin_executable + "#" + module_name],
+        "transitive_plugin_module_dirs": _unique([ctx["build_dir"]] + dep_swiftmodule_dirs),
+        "transitive_plugin_modulemaps": list(dep_modulemaps),
+        "transitive_plugin_header_dirs": list(dep_header_dirs),
+        "transitive_plugin_hmaps": list(dep_hmaps),
+        "transitive_plugin_vfs_overlays": list(dep_vfs_overlays),
+        "transitive_plugin_archives": _unique([plugin_archive] + dep_archives),
+        "transitive_plugin_module_inputs": _unique(
+            [plugin_swiftmodule] + plugin_module_sidecars +
+            _apple_swiftmodule_inputs_for_arch(dep_swiftmodule_inputs, host_arch()),
+        ),
     }
 
 # --- Bundle helpers ----------------------------------------------------
@@ -2984,6 +3344,32 @@ def _apple_swiftmodule_inputs_for_arch(inputs, arch):
                 continue
         selected.append(input)
     return selected
+
+_APPLE_MACRO_MODULE_KEYS = [
+    "module_dirs",
+    "modulemaps",
+    "header_dirs",
+    "hmaps",
+    "vfs_overlays",
+    "archives",
+    "module_inputs",
+]
+
+def _apple_collect_macro_module_inputs(deps):
+    """Aggregate what a test target needs to import the macros it depends on.
+
+    A macro is a tool everywhere else, so its module, its code, and what it was
+    built against reach only the targets that exercise the implementation
+    rather than every consumer that expands it.
+    """
+    collected = {key: [] for key in _APPLE_MACRO_MODULE_KEYS}
+    for dep in deps:
+        for key in _APPLE_MACRO_MODULE_KEYS:
+            values = collected[key]
+            for value in dep.get("transitive_plugin_" + key) or []:
+                if value and value not in values:
+                    values.append(value)
+    return collected
 
 def _collect_dep_compile_inputs(deps, build_dir):
     """Aggregate compile-visible inputs from dep providers.
@@ -4809,6 +5195,11 @@ def _apple_test_bundle_impl(ctx):
     assembly_srcs = _filter_assembly_sources(all_srcs)
     if len(swift_srcs) == 0 and len(objc_srcs) == 0 and len(c_srcs) == 0 and len(cxx_srcs) == 0 and len(assembly_srcs) == 0:
         fail("apple_test_bundle " + ctx["label"]["id"] + " has no compilable sources")
+    declared_swift_srcs = list(swift_srcs)
+    if swift_testing:
+        entry_point_source = declare_output("OnceTestEntryPoint.swift")
+        write_path(entry_point_source, _apple_swift_testing_entry_point_source())
+        swift_srcs = swift_srcs + [entry_point_source]
 
     test_dir = ctx["build_dir"] + "/test"
     results = test_dir + "/test_results.json"
@@ -4837,6 +5228,7 @@ def _apple_test_bundle_impl(ctx):
     xctest_framework_dir = platform_path + "/Developer/Library/Frameworks"
     xctest_usr_lib_dir = platform_path + "/Developer/usr/lib"
     testing_macros_plugin = _swift_testing_macros_plugin(swiftc["swiftc_path"])
+    testing_library_dir = _swift_testing_library_dir(swiftc["swiftc_path"], swiftc["sdk_name"]) if swift_testing else ""
 
     runner_name = product_name + "-Runner"
     runner_bundle_dir = runner_name + ".app"
@@ -4893,6 +5285,21 @@ def _apple_test_bundle_impl(ctx):
     ) = _collect_dep_compile_inputs(deps, ctx["build_dir"])
     compile_swiftmodule_inputs = _apple_collect_swiftmodule_inputs(deps)
     dep_archives = [archive for archive in dep_archives if archive not in host_link_archives]
+    macro_modules = _apple_collect_macro_module_inputs(deps)
+    for target_list, key in [
+        (compile_swiftmodule_dirs, "module_dirs"),
+        (dep_modulemaps, "modulemaps"),
+        (compile_header_dirs, "header_dirs"),
+        (dep_hmaps, "hmaps"),
+        (dep_vfs_overlays, "vfs_overlays"),
+        (compile_swiftmodule_inputs, "module_inputs"),
+    ]:
+        for value in macro_modules[key]:
+            if value not in target_list:
+                target_list.append(value)
+    for archive in macro_modules["archives"]:
+        if archive not in dep_archives and archive not in host_link_archives:
+            dep_archives.append(archive)
     alwayslink_archives = _apple_collect_alwayslink_archives(deps)
     runtime_framework_bundles = _apple_collect_runtime_framework_bundles(deps)
     runner_xcodebuild = ""
@@ -4966,12 +5373,10 @@ def _apple_test_bundle_impl(ctx):
         test_binary,
     ]
     if swift_testing:
-        swift_argv.extend([
-            "-framework",
-            "Testing",
-            "-load-plugin-library",
-            testing_macros_plugin,
-        ])
+        if testing_library_dir:
+            swift_argv.extend(["-I", testing_library_dir])
+        swift_argv.extend(_apple_swift_testing_link_flags(testing_library_dir))
+        swift_argv.extend(["-load-plugin-library", testing_macros_plugin])
     if host_executable:
         swift_argv.extend([
             "-Xlinker",
@@ -5331,13 +5736,46 @@ def _apple_test_bundle_impl(ctx):
             else:
                 selectors.append(case_filter)
         xctest_spec = ",".join(selectors) if selectors else "All"
+        # The XCTest host reports what it chooses to; the testing library's own
+        # entry point reports through the event stream, which names every test
+        # and what became of it. Take the second path when nothing else in the
+        # bundle needs the XCTest host, since only that host runs XCTest cases.
+        event_stream = test_dir + "/events.jsonl"
+        structured_swift_testing = (
+            swift_testing and
+            (platform == "macos" or platform == "macosx") and
+            not _apple_sources_import_xctest(declared_swift_srcs + objc_srcs) and
+            _apple_swift_testing_helper(swiftc["swiftc_path"]) != ""
+        )
+        if structured_swift_testing:
+            action_env["ONCE_TEST_RESULTS"] = results
+            action_env["ONCE_TEST_EVENT_STREAM"] = event_stream
+            action_env["ONCE_TEST_TARGET"] = ctx["label"]["id"]
+            action_env["ONCE_TEST_LOG"] = log
+            action_env["ONCE_TEST_NATIVE_RESULTS"] = native_results
         if platform == "macos" or platform == "macosx":
+            if structured_swift_testing:
+                runner_argv = [
+                    _apple_swift_testing_helper(swiftc["swiftc_path"]),
+                    "--test-bundle-path",
+                    test_binary,
+                    "--testing-library",
+                    "swift-testing",
+                    "--event-stream-output-path",
+                    event_stream,
+                    "--event-stream-version",
+                    "0",
+                ]
+                for selector in selectors:
+                    runner_argv.extend(["--filter", _apple_swift_testing_filter(selector)])
+            else:
+                runner_argv = [runner_xcrun, "xctest", "-XCTest", xctest_spec, test_bundle_path]
             runner_command = """cd {workspace}
 DYLD_LIBRARY_PATH={usr_lib}${{DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}} DYLD_FALLBACK_FRAMEWORK_PATH={frameworks}${{DYLD_FALLBACK_FRAMEWORK_PATH:+:$DYLD_FALLBACK_FRAMEWORK_PATH}} {command}""".format(
                 workspace = _shell_literal(workspace_root()),
                 usr_lib = _shell_literal(xctest_usr_lib_dir),
                 frameworks = _shell_literal(xctest_framework_dir),
-                command = _shell_words([runner_xcrun, "xctest", "-XCTest", xctest_spec, test_bundle_path]),
+                command = _shell_words(runner_argv),
             )
         elif sdk_variant == "simulator":
             simulator_setup = _ios_simulator_selection_script(runner_xcrun) + """
@@ -5393,13 +5831,7 @@ status_file={status_file}
 ) 2>&1 | tee "$log" >/dev/null
 status=$(cat "$status_file")
 cp "$log" "$native_results"
-{cases_script}
-if [ "$status" -eq 0 ]; then run_status=passed; failed=0; passed=$total; else run_status=failed; failed=1; passed=0; fi
-{{
-  printf '{{"schema":"once.test_results.v1","target":"%s","runner":{{"type":"%s","metadata":{{}}}},"status":"%s","summary":{{"total":%s,"passed":%s,"failed":%s,"skipped":0,"flaky":0}},"cases":[' "{target}" "{runner_type}" "$run_status" "$total" "$passed" "$failed"
-  cat "$cases_file"
-  printf '],"artifacts":{{"logs":["%s"],"native_results":["%s"]}}}}\n' "$log" "$native_results"
-}} > "$results"
+{report_script}
 exit "$status"
 """.format(
             test_dir = _shell_literal(test_dir),
@@ -5408,9 +5840,13 @@ exit "$status"
             native_results = _shell_literal(native_results),
             status_file = _shell_literal(test_dir + "/runner-status"),
             runner_command = runner_command,
-            cases_script = _apple_test_cases_script(swift_srcs, cases_file, ctx["label"]["id"], runner_type, selectors),
-            target = ctx["label"]["id"],
-            runner_type = runner_type,
+            report_script = "" if structured_swift_testing else _apple_test_report_script(
+                declared_swift_srcs,
+                cases_file,
+                ctx["label"]["id"],
+                runner_type,
+                selectors,
+            ),
         )
         test_inputs = [test_binary, info_plist, test_cs_stamp]
         test_inputs.extend(resource_files)
@@ -5845,7 +6281,7 @@ def _swift_package_dependencies_impl(ctx):
     swift = _swiftpm_swift_executable(attrs.get("swift") or "swift", xcode_developer_dir, swiftc["swiftc_path"])
     version = host_command([swift, "--version"], env = swiftc["env"]).strip()
     action_env = dict(swiftc["env"])
-    action_path = _parent_dir(swiftc["swiftc_path"]) + ":" + _parent_dir(swift) + ":/usr/bin:/bin"
+    action_path = _parent_dir(swiftc["swiftc_path"]) + ":" + _parent_dir(swift) + ":" + swiftc["env"]["PATH"]
     action_env["PATH"] = action_path
     triple = _apple_triple(platform, minimum_os, sdk_variant, arch, False)
     build_triple_dir = _swiftpm_build_triple_dir(platform, sdk_variant, arch)

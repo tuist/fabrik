@@ -1999,10 +1999,8 @@ def _xcode_package_condition_allows(condition, platform, enabled_traits = []):
         wanted = "macos" if platform == "macosx" else platform
         if wanted.lower() not in [name.lower() for name in names]:
             return False
-    for trait in (condition or {}).get("traits") or []:
-        if trait not in enabled_traits:
-            return False
-    return True
+    traits = (condition or {}).get("traits") or []
+    return not traits or any([trait in enabled_traits for trait in traits])
 
 def _xcode_swift_package_dependencies(target, identity, target_ids, product_ids, platform, enabled_traits = [], lazy_products = {}, lazy_dependency = ""):
     deps = []
@@ -2013,7 +2011,7 @@ def _xcode_swift_package_dependencies(target, identity, target_ids, product_ids,
                 continue
             condition = {}
             for value in values[1:]:
-                if type(value) == "dict" and value.get("platformNames"):
+                if type(value) == "dict" and (value.get("platformNames") or value.get("traits")):
                     condition = value
             if not _xcode_package_condition_allows(condition, platform, enabled_traits):
                 continue
@@ -2031,6 +2029,12 @@ def _xcode_swift_package_dependencies(target, identity, target_ids, product_ids,
             elif lazy_dependency and lazy_products.get(package_identity.lower() + "\x1f" + name) and "./" + lazy_dependency not in deps:
                 deps.append("./" + lazy_dependency)
     return deps
+
+def _xcode_swift_package_depends_on_macro(target, identity, target_ids, product_ids, platform, macro_target_ids, enabled_traits = [], lazy_products = {}, lazy_dependency = ""):
+    for dependency in _xcode_swift_package_dependencies(target, identity, target_ids, product_ids, platform, enabled_traits, lazy_products, lazy_dependency):
+        if macro_target_ids.get(dependency[2:]):
+            return True
+    return False
 
 def _xcode_swift_imports(sources):
     modules = []
@@ -2111,11 +2115,53 @@ def _xcode_swift_package_target_flags(target, platform, default_language_mode, e
         "language_mode": swift_language_mode,
     }
 
-def _xcode_swift_package_default_traits(package):
-    for trait in package["info"].get("traits") or []:
-        if (trait.get("name") or "") == "default":
-            return sorted(_unique(trait.get("enabledTraits") or []))
-    return []
+def _xcode_swift_package_resolved_traits(package_infos, root_identities = None):
+    packages = {package["identity"].lower(): package for package in package_infos}
+    dependencies = {}
+    referenced = {}
+    budget = len(packages) + 1
+    for identity, package in packages.items():
+        entries = []
+        budget += len(package["info"].get("traits") or [])
+        for dependency in package["info"].get("dependencies") or []:
+            for kind in ["sourceControl", "fileSystem", "registry"]:
+                for entry in dependency.get(kind) or []:
+                    dependency_identity = (entry.get("identity") or "").lower()
+                    if dependency_identity not in packages:
+                        continue
+                    requests = entry.get("traits")
+                    if requests == None:
+                        requests = [{"name": "default"}]
+                    entries.append((dependency_identity, requests))
+                    referenced[dependency_identity] = True
+                    budget += len(requests)
+        dependencies[identity] = entries
+    roots = [identity.lower() for identity in root_identities] if root_identities != None else [identity for identity in packages if identity not in referenced]
+    enabled = {identity: {"default": True} if identity in roots else {} for identity in packages}
+    # Each pass adds a trait or stops, including traits enabled across packages.
+    for _ in range(budget):
+        changed = False
+        for identity, package in packages.items():
+            active = enabled[identity]
+            for declaration in package["info"].get("traits") or []:
+                if declaration.get("name") not in active:
+                    continue
+                for trait in declaration.get("enabledTraits") or []:
+                    if trait not in active:
+                        active[trait] = True
+                        changed = True
+            for dependency_identity, requests in dependencies[identity]:
+                for request in requests:
+                    conditions = (request.get("condition") or {}).get("traits") or []
+                    if conditions and not any([trait in active for trait in conditions]):
+                        continue
+                    trait = request.get("name") or ""
+                    if trait and trait not in enabled[dependency_identity]:
+                        enabled[dependency_identity][trait] = True
+                        changed = True
+        if not changed:
+            return {identity: sorted([trait for trait in traits if trait != "default"]) for identity, traits in enabled.items()}
+    fail("Swift package trait resolution did not converge")
 
 def _xcode_swift_package_trait_flags(traits):
     flags = []
@@ -2123,7 +2169,7 @@ def _xcode_swift_package_trait_flags(traits):
         flags.extend(["-D", trait])
     return flags
 
-def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {}, lazy_dependency = "", target_prefix = "SwiftPackage"):
+def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {}, lazy_dependency = "", target_prefix = "SwiftPackage", root_identities = None):
     # Lower source package targets as ordinary Apple libraries. Products group
     # one or more targets, so consumers receive the complete product closure.
     target_ids = {}
@@ -2131,6 +2177,8 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
     host_target_ids = {}
     host_product_ids = {}
     module_ids = {}
+    macro_target_ids = {}
+    resolved_traits = _xcode_swift_package_resolved_traits(package_infos, root_identities)
     for package in package_infos:
         identity = package["identity"]
         for target in package["info"].get("targets") or []:
@@ -2138,6 +2186,8 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
             if name:
                 target_id = _xcode_swift_package_target_id(identity, name, target_prefix)
                 host_target_id = target_id if (target.get("type") or "") in ["binary", "macro", "test"] else _xcode_swift_package_host_target_id(identity, name, target_prefix)
+                if (target.get("type") or "") == "macro":
+                    macro_target_ids[target_id] = True
                 target_ids[identity + "\x1f" + name] = target_id
                 target_ids[identity.lower() + "\x1f" + name] = target_id
                 host_target_ids[identity + "\x1f" + name] = host_target_id
@@ -2170,7 +2220,7 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
     for package in package_infos:
         identity = package["identity"]
         package_path = package["path"]
-        package_traits = _xcode_swift_package_default_traits(package)
+        package_traits = resolved_traits[identity.lower()]
         package_minimum_os = _xcode_swift_package_minimum_os(package, platform, minimum_os)
         package_host_minimum_os = _xcode_swift_package_minimum_os(package, "macos", "13.0")
         for target in package["info"].get("targets") or []:
@@ -2249,13 +2299,30 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
                     },
                 })
                 continue
+            # A test target that depends on a macro links the macro's code, and
+            # a macro is only ever built for the host. Swift Package Manager
+            # answers that by building such a test target for the host too,
+            # which carries every one of its dependencies to the host as well.
+            # Anything less mixes host and destination builds of the same
+            # module in one link.
+            tests_a_macro = target_type == "test" and _xcode_swift_package_depends_on_macro(
+                target,
+                identity,
+                target_ids,
+                product_ids,
+                platform,
+                macro_target_ids,
+                package_traits,
+                lazy_products,
+                lazy_dependency,
+            )
             variants = [{
                 "id": target_id,
-                "platform": platform,
-                "minimum_os": package_minimum_os,
-                "sdk_variant": sdk_variant,
-                "target_ids": target_ids,
-                "product_ids": product_ids,
+                "platform": "macos" if tests_a_macro else platform,
+                "minimum_os": package_host_minimum_os if tests_a_macro else package_minimum_os,
+                "sdk_variant": "simulator" if tests_a_macro else sdk_variant,
+                "target_ids": host_target_ids if tests_a_macro else target_ids,
+                "product_ids": host_product_ids if tests_a_macro else product_ids,
             }]
             if target_type != "test":
                 variants.append({
@@ -2317,6 +2384,12 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
                     attrs["module_name"] = name
                     attrs["exported_deps"] = dependencies
                     attrs["swift_flags"] = attrs["swift_flags"] + ["-enable-testing"]
+                    # Swift Package Manager hands the linker every object file a
+                    # target produced. Reaching the same result through an
+                    # archive means force-loading it, otherwise a file whose only
+                    # contribution is a protocol conformance is dropped and the
+                    # conformance goes missing at runtime.
+                    attrs["alwayslink"] = True
                     attrs["exported_headers"] = _unique(_xcode_swift_package_target_headers(package_path, target))
                     attrs["modulemap"] = _xcode_swift_package_target_modulemap(package_path, target)
                     attrs["enable_modules"] = True
@@ -3655,6 +3728,7 @@ def _xcode_workspace_resolver(ctx):
             ctx["attr"].get("sdk_variant") or "simulator",
             configuration,
             target_prefix = "XcodePackage_" + _xcode_sanitized_target_name(ctx["label"]["id"]),
+            root_identities = _unique([ref["identity"] for ref in package_refs.values()] + [package["identity"] for package in local_package_infos]),
         )
         xcframework_specs = _xcode_workspace_xcframework_specs(ctx, package_platform, ctx["attr"].get("sdk_variant") or "simulator")
         xcframework_names = _xcode_xcframework_name_map(xcframework_specs)
