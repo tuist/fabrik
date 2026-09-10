@@ -2358,6 +2358,12 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
                     attrs["module_name"] = name
                     attrs["exported_deps"] = dependencies
                     attrs["swift_flags"] = attrs["swift_flags"] + ["-enable-testing"]
+                    # Swift Package Manager hands the linker every object file a
+                    # target produced. Reaching the same result through an
+                    # archive means force-loading it, otherwise a file whose only
+                    # contribution is a protocol conformance is dropped and the
+                    # conformance goes missing at runtime.
+                    attrs["alwayslink"] = True
                     attrs["exported_headers"] = _unique(_xcode_swift_package_target_headers(package_path, target))
                     attrs["modulemap"] = _xcode_swift_package_target_modulemap(package_path, target)
                     attrs["enable_modules"] = True

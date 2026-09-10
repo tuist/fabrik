@@ -17,6 +17,9 @@ use tempfile::TempDir;
 #[path = "prelude/swift_package_traits.rs"]
 mod swift_package_traits;
 
+#[path = "prelude/swift_package_linking.rs"]
+mod swift_package_linking;
+
 #[path = "prelude/swift_testing_library.rs"]
 mod swift_testing_library;
 

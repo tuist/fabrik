@@ -26,6 +26,11 @@ Swift Package Manager supplies manifest and lockfile metadata, but does not
 build the dependency products. Registry dependencies are not supported by
 native package lowering yet.
 
+Library targets are force-loaded into whatever links them, matching how Swift
+Package Manager hands the linker every object file a target produced. A source
+file whose only contribution is a protocol conformance would otherwise be
+dropped, and the conformance would be missing at runtime.
+
 Package traits follow the declarations in `Package.swift`. Once enables the
 root package's defaults, combines traits requested by all packages that use a
 dependency, and expands traits that enable other traits. Explicit dependency

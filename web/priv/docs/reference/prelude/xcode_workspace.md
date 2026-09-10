@@ -30,6 +30,12 @@ matching pinned revisions while lowering remote Swift packages. Checksum-pinned
 binary package archives download as normal cacheable dependencies instead of
 being fetched while the graph loads.
 
+Swift package traits requested by dependencies are combined across the package
+graph and applied to compilation, compiler settings, and optional target
+dependencies. Packages referenced directly by the Xcode project enable their
+default traits. Package library targets are force-loaded into whatever links
+them so conformances declared in an extension survive.
+
 See [Xcode Projects](/guide/graph/apple/xcode) for a walkthrough.
 
 ## Attributes
