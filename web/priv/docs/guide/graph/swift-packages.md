@@ -91,6 +91,25 @@ xcrun --find swift
 xcrun swift --version
 ```
 
+Once selects the Swift compiler through `xcrun`. A Swiftly `.swift-version`
+file does not change that selection. If a package requires a separately
+installed Swift toolchain, select its bundle identifier for the build:
+
+```sh
+TOOLCHAINS=your.toolchain.bundle.identifier once build
+```
+
+Check the selection with `TOOLCHAINS=your.toolchain.bundle.identifier xcrun
+swift --version`. The selected compiler must support the package's
+`swift-tools-version`.
+
+A Swift toolchain installed beside Xcode contributes the compiler and the
+macros it loads, while Xcode still contributes the linker and the software
+development kit. Once resolves each of those separately, so builds that mix
+them link and expand macros against matching tools. Swift Testing follows the
+same rule: when the selected compiler ships its own copy, tests compile and
+link against that one rather than the version Xcode publishes.
+
 Start with the [Apple guide](/guide/graph/apple) if a first-party Apple target
 does not build yet. Package integration is easier to diagnose after the local
 compiler, software development kit, linker, and code-signing path work.

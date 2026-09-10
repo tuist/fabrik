@@ -106,6 +106,20 @@ def _developer_env(xcode_developer_dir):
         env["DEVELOPER_DIR"] = xcode_developer_dir
     return env
 
+def _apple_linker_dir(xcode_developer_dir, env):
+    # A Swift toolchain installed next to Xcode rather than inside it ships a
+    # compiler but no linker, and the compiler locates `ld` by searching the
+    # environment. Actions run with an environment Once controls, so the
+    # directory holding the linker has to be resolved and passed explicitly.
+    if xcode_developer_dir:
+        return xcode_developer_dir + "/" + _XCTOOLCHAIN_BIN_REL
+    return _parent_dir(host_command([host_which("xcrun"), "--find", "ld"], env = env).strip())
+
+def _apple_compiler_env(xcode_developer_dir, env):
+    action_env = dict(env)
+    action_env["PATH"] = _apple_linker_dir(xcode_developer_dir, env) + ":/usr/bin:/bin"
+    return action_env
+
 # When a target sets `xcode_developer_dir`, the build resolves tools and
 # SDK paths directly from the layout under that directory rather than
 # shelling out to `xcrun`. The xcrun fallback still applies when no
@@ -168,9 +182,10 @@ def _resolve_swiftc(platform, sdk_variant, xcode_developer_dir):
         swiftc_path = host_command([xcrun, "--sdk", sdk, "--find", "swiftc"], env = env).strip()
         sdk_path = host_command([xcrun, "--sdk", sdk, "--show-sdk-path"], env = env).strip()
     version = host_command([swiftc_path, "--version"], env = env).strip()
+    action_env = _apple_compiler_env(xcode_developer_dir, env)
     # Identity folds in the developer dir override so different Xcode
     # installations partition the action cache cleanly.
-    identity = "once.apple.swiftc.v1\x00" + swiftc_path + "\x00" + version + "\x00" + (xcode_developer_dir or "")
+    identity = "once.apple.swiftc.v1\x00" + swiftc_path + "\x00" + version + "\x00" + (xcode_developer_dir or "") + "\x00" + action_env["PATH"]
     return {
         # Once supplies the outer action sandbox. Disabling Swift's nested
         # subprocess sandbox lets compiler plugins run inside that same policy
@@ -180,7 +195,7 @@ def _resolve_swiftc(platform, sdk_variant, xcode_developer_dir):
         "sdk_name": sdk,
         "sdk_path": sdk_path,
         "identity": identity,
-        "env": env,
+        "env": action_env,
     }
 
 def _filter_swift_sources(paths):
@@ -211,14 +226,15 @@ def _resolve_clang(platform, sdk_variant, xcode_developer_dir):
         clangxx_path = host_command([xcrun, "--sdk", sdk, "--find", "clang++"], env = env).strip()
         sdk_path = host_command([xcrun, "--sdk", sdk, "--show-sdk-path"], env = env).strip()
     version = host_command([clang_path, "--version"], env = env).strip()
-    identity = "once.apple.clang.v1\x00" + clang_path + "\x00" + version + "\x00" + (xcode_developer_dir or "")
+    action_env = _apple_compiler_env(xcode_developer_dir, env)
+    identity = "once.apple.clang.v1\x00" + clang_path + "\x00" + version + "\x00" + (xcode_developer_dir or "") + "\x00" + action_env["PATH"]
     return {
         "clang_path": clang_path,
         "clangxx_path": clangxx_path,
         "sdk_name": sdk,
         "sdk_path": sdk_path,
         "identity": identity,
-        "env": env,
+        "env": action_env,
     }
 
 def _resolve_libtool(platform, sdk_variant, xcode_developer_dir):
@@ -370,12 +386,36 @@ def _resolve_apple_thinning_tools(xcode_developer_dir):
         "env": action_env,
     }
 
-def _swift_testing_macros_plugin(swiftc_path):
+def _swift_toolchain_dir(swiftc_path):
     suffix = "/usr/bin/swiftc"
     if not _ends_with(swiftc_path, suffix):
         fail("unable to derive Swift toolchain path from swiftc at " + swiftc_path)
-    toolchain_dir = swiftc_path[:len(swiftc_path) - len(suffix)]
-    return toolchain_dir + "/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+    return swiftc_path[:len(swiftc_path) - len(suffix)]
+
+def _swift_testing_macros_plugin(swiftc_path):
+    return _swift_toolchain_dir(swiftc_path) + "/usr/lib/swift/host/plugins/testing/libTestingMacros.dylib"
+
+def _apple_swift_testing_compile_flags(testing_library_dir, testing_framework_dir, testing_macros_plugin):
+    if testing_library_dir:
+        return ["-I", testing_library_dir, "-load-plugin-library", testing_macros_plugin]
+    return ["-F", testing_framework_dir, "-framework", "Testing", "-load-plugin-library", testing_macros_plugin]
+
+def _apple_swift_testing_link_flags(testing_library_dir):
+    # The compiler's own Swift Testing library is a dynamic library resolved
+    # through an rpath rather than a framework the platform already exposes.
+    if not testing_library_dir:
+        return ["-framework", "Testing"]
+    return ["-L", testing_library_dir, "-lTesting", "-Xlinker", "-rpath", "-Xlinker", testing_library_dir]
+
+def _swift_testing_library_dir(swiftc_path, sdk_name):
+    # Xcode publishes Swift Testing as a platform framework. A Swift toolchain
+    # installed beside Xcode instead ships its own copy next to the compiler,
+    # and its macro plugin expands to code only that copy declares. The two
+    # move independently, so the compiler's own library wins when it has one.
+    directory = _swift_toolchain_dir(swiftc_path) + "/usr/lib/swift/" + sdk_name + "/testing"
+    if host_file_exists(directory + "/libTesting.dylib"):
+        return directory
+    return ""
 
 def _unique_dirs(paths):
     seen = {}
@@ -1316,6 +1356,7 @@ def _apple_library_impl(ctx):
     testing_framework_dir = ""
     testing_usr_lib_dir = ""
     testing_macros_plugin = ""
+    testing_library_dir = ""
     if swift_testing or xctest_support:
         if xcode_developer_dir:
             testing_platform_path = _developer_platform_path(xcode_developer_dir, swiftc["sdk_name"])
@@ -1325,6 +1366,7 @@ def _apple_library_impl(ctx):
         testing_usr_lib_dir = testing_platform_path + "/Developer/usr/lib"
     if swift_testing:
         testing_macros_plugin = _swift_testing_macros_plugin(swiftc["swiftc_path"])
+        testing_library_dir = _swift_testing_library_dir(swiftc["swiftc_path"], swiftc["sdk_name"])
     archive = declare_output(module_name + ".a")
 
     deps = _apple_native_deps(ctx)
@@ -1729,7 +1771,7 @@ def _apple_library_impl(ctx):
             if generated_framework_module:
                 swift_base_argv.extend(["-F", generated_framework_search_dir])
             if swift_testing:
-                swift_base_argv.extend(["-F", testing_framework_dir, "-framework", "Testing", "-load-plugin-library", testing_macros_plugin])
+                swift_base_argv.extend(_apple_swift_testing_compile_flags(testing_library_dir, testing_framework_dir, testing_macros_plugin))
             if xctest_support:
                 swift_base_argv.extend(["-F", testing_framework_dir, "-I", testing_usr_lib_dir, "-L", testing_usr_lib_dir, "-framework", "XCTest", "-lXCTestSwiftSupport"])
             # Header search paths flow through `-Xcc -I` so swiftc's
@@ -4837,6 +4879,7 @@ def _apple_test_bundle_impl(ctx):
     xctest_framework_dir = platform_path + "/Developer/Library/Frameworks"
     xctest_usr_lib_dir = platform_path + "/Developer/usr/lib"
     testing_macros_plugin = _swift_testing_macros_plugin(swiftc["swiftc_path"])
+    testing_library_dir = _swift_testing_library_dir(swiftc["swiftc_path"], swiftc["sdk_name"]) if swift_testing else ""
 
     runner_name = product_name + "-Runner"
     runner_bundle_dir = runner_name + ".app"
@@ -4966,12 +5009,10 @@ def _apple_test_bundle_impl(ctx):
         test_binary,
     ]
     if swift_testing:
-        swift_argv.extend([
-            "-framework",
-            "Testing",
-            "-load-plugin-library",
-            testing_macros_plugin,
-        ])
+        if testing_library_dir:
+            swift_argv.extend(["-I", testing_library_dir])
+        swift_argv.extend(_apple_swift_testing_link_flags(testing_library_dir))
+        swift_argv.extend(["-load-plugin-library", testing_macros_plugin])
     if host_executable:
         swift_argv.extend([
             "-Xlinker",
@@ -5845,7 +5886,7 @@ def _swift_package_dependencies_impl(ctx):
     swift = _swiftpm_swift_executable(attrs.get("swift") or "swift", xcode_developer_dir, swiftc["swiftc_path"])
     version = host_command([swift, "--version"], env = swiftc["env"]).strip()
     action_env = dict(swiftc["env"])
-    action_path = _parent_dir(swiftc["swiftc_path"]) + ":" + _parent_dir(swift) + ":/usr/bin:/bin"
+    action_path = _parent_dir(swiftc["swiftc_path"]) + ":" + _parent_dir(swift) + ":" + swiftc["env"]["PATH"]
     action_env["PATH"] = action_path
     triple = _apple_triple(platform, minimum_os, sdk_variant, arch, False)
     build_triple_dir = _swiftpm_build_triple_dir(platform, sdk_variant, arch)
