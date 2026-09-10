@@ -26,6 +26,14 @@ Swift Package Manager supplies manifest and lockfile metadata, but does not
 build the dependency products. Registry dependencies are not supported by
 native package lowering yet.
 
+Package traits follow the declarations in `Package.swift`. Once enables the
+root package's defaults, combines traits requested by all packages that use a
+dependency, and expands traits that enable other traits. Explicit dependency
+trait lists replace that dependency declaration's defaults; an empty list
+enables none. Conditional trait requests activate when any of their required
+traits is enabled. The resolved traits control compilation conditions,
+compiler settings, and optional target dependencies, including macro builds.
+
 ## Attributes
 
 | Attribute | Type | Required | Default | Description |

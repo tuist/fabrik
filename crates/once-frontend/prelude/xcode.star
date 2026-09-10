@@ -1999,10 +1999,8 @@ def _xcode_package_condition_allows(condition, platform, enabled_traits = []):
         wanted = "macos" if platform == "macosx" else platform
         if wanted.lower() not in [name.lower() for name in names]:
             return False
-    for trait in (condition or {}).get("traits") or []:
-        if trait not in enabled_traits:
-            return False
-    return True
+    traits = (condition or {}).get("traits") or []
+    return not traits or any([trait in enabled_traits for trait in traits])
 
 def _xcode_swift_package_dependencies(target, identity, target_ids, product_ids, platform, enabled_traits = [], lazy_products = {}, lazy_dependency = ""):
     deps = []
@@ -2013,7 +2011,7 @@ def _xcode_swift_package_dependencies(target, identity, target_ids, product_ids,
                 continue
             condition = {}
             for value in values[1:]:
-                if type(value) == "dict" and value.get("platformNames"):
+                if type(value) == "dict" and (value.get("platformNames") or value.get("traits")):
                     condition = value
             if not _xcode_package_condition_allows(condition, platform, enabled_traits):
                 continue
@@ -2111,11 +2109,53 @@ def _xcode_swift_package_target_flags(target, platform, default_language_mode, e
         "language_mode": swift_language_mode,
     }
 
-def _xcode_swift_package_default_traits(package):
-    for trait in package["info"].get("traits") or []:
-        if (trait.get("name") or "") == "default":
-            return sorted(_unique(trait.get("enabledTraits") or []))
-    return []
+def _xcode_swift_package_resolved_traits(package_infos, root_identities = None):
+    packages = {package["identity"].lower(): package for package in package_infos}
+    dependencies = {}
+    referenced = {}
+    budget = len(packages) + 1
+    for identity, package in packages.items():
+        entries = []
+        budget += len(package["info"].get("traits") or [])
+        for dependency in package["info"].get("dependencies") or []:
+            for kind in ["sourceControl", "fileSystem", "registry"]:
+                for entry in dependency.get(kind) or []:
+                    dependency_identity = (entry.get("identity") or "").lower()
+                    if dependency_identity not in packages:
+                        continue
+                    requests = entry.get("traits")
+                    if requests == None:
+                        requests = [{"name": "default"}]
+                    entries.append((dependency_identity, requests))
+                    referenced[dependency_identity] = True
+                    budget += len(requests)
+        dependencies[identity] = entries
+    roots = [identity.lower() for identity in root_identities] if root_identities != None else [identity for identity in packages if identity not in referenced]
+    enabled = {identity: {"default": True} if identity in roots else {} for identity in packages}
+    # Each pass adds a trait or stops, including traits enabled across packages.
+    for _ in range(budget):
+        changed = False
+        for identity, package in packages.items():
+            active = enabled[identity]
+            for declaration in package["info"].get("traits") or []:
+                if declaration.get("name") not in active:
+                    continue
+                for trait in declaration.get("enabledTraits") or []:
+                    if trait not in active:
+                        active[trait] = True
+                        changed = True
+            for dependency_identity, requests in dependencies[identity]:
+                for request in requests:
+                    conditions = (request.get("condition") or {}).get("traits") or []
+                    if conditions and not any([trait in active for trait in conditions]):
+                        continue
+                    trait = request.get("name") or ""
+                    if trait and trait not in enabled[dependency_identity]:
+                        enabled[dependency_identity][trait] = True
+                        changed = True
+        if not changed:
+            return {identity: sorted([trait for trait in traits if trait != "default"]) for identity, traits in enabled.items()}
+    fail("Swift package trait resolution did not converge")
 
 def _xcode_swift_package_trait_flags(traits):
     flags = []
@@ -2123,7 +2163,7 @@ def _xcode_swift_package_trait_flags(traits):
         flags.extend(["-D", trait])
     return flags
 
-def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {}, lazy_dependency = "", target_prefix = "SwiftPackage"):
+def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {}, lazy_dependency = "", target_prefix = "SwiftPackage", root_identities = None):
     # Lower source package targets as ordinary Apple libraries. Products group
     # one or more targets, so consumers receive the complete product closure.
     target_ids = {}
@@ -2131,6 +2171,7 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
     host_target_ids = {}
     host_product_ids = {}
     module_ids = {}
+    resolved_traits = _xcode_swift_package_resolved_traits(package_infos, root_identities)
     for package in package_infos:
         identity = package["identity"]
         for target in package["info"].get("targets") or []:
@@ -2170,7 +2211,7 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
     for package in package_infos:
         identity = package["identity"]
         package_path = package["path"]
-        package_traits = _xcode_swift_package_default_traits(package)
+        package_traits = resolved_traits[identity.lower()]
         package_minimum_os = _xcode_swift_package_minimum_os(package, platform, minimum_os)
         package_host_minimum_os = _xcode_swift_package_minimum_os(package, "macos", "13.0")
         for target in package["info"].get("targets") or []:
@@ -3655,6 +3696,7 @@ def _xcode_workspace_resolver(ctx):
             ctx["attr"].get("sdk_variant") or "simulator",
             configuration,
             target_prefix = "XcodePackage_" + _xcode_sanitized_target_name(ctx["label"]["id"]),
+            root_identities = _unique([ref["identity"] for ref in package_refs.values()] + [package["identity"] for package in local_package_infos]),
         )
         xcframework_specs = _xcode_workspace_xcframework_specs(ctx, package_platform, ctx["attr"].get("sdk_variant") or "simulator")
         xcframework_names = _xcode_xcframework_name_map(xcframework_specs)

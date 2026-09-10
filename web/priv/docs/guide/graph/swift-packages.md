@@ -115,3 +115,9 @@ once build SwiftPackage_MyPackage_MyLibrary
 There is no Once initialization step. A first build can access the network when
 Swift Package Manager must create `Package.resolved` or Once must materialize a
 pinned source dependency.
+
+Once preserves package traits requested by dependencies, including traits that
+enable other traits and conditional requests. Code guarded by a dependency's
+opt-in trait is compiled with that trait enabled. Explicit empty trait lists
+disable defaults for that dependency declaration; requests from other packages
+are still combined according to Swift Package Manager's rules.

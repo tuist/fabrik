@@ -14,6 +14,9 @@ use starlark::syntax::{AstModule, Dialect};
 use starlark::values::list::ListRef;
 use tempfile::TempDir;
 
+#[path = "prelude/swift_package_traits.rs"]
+mod swift_package_traits;
+
 fn store_for(workspace: &Path, package: &str) -> AnalysisStore {
     AnalysisStore::new(
         workspace.to_path_buf(),
@@ -15673,27 +15676,6 @@ result = repr([
 }
 
 #[test]
-fn prelude_xcode_orders_swift_package_default_traits() {
-    let prelude = xcode_prelude_source();
-    let source = format!(
-        r#"{prelude}
-package = {{
-    "info": {{
-        "traits": [
-            {{"name": "default", "enabledTraits": ["FoundationNetworking", "Clocks", "Foundation", "Clocks"]}},
-        ],
-    }},
-}}
-result = repr(_xcode_swift_package_default_traits(package))
-"#
-    );
-    assert_eq!(
-        eval_prelude_source_to_repr(source).unwrap(),
-        r#"["Clocks", "Foundation", "FoundationNetworking"]"#
-    );
-}
-
-#[test]
 fn prelude_xcode_translates_swift_feature_settings_generically() {
     let prelude = xcode_prelude_source();
     let source = format!(
@@ -17490,7 +17472,7 @@ def host_file_exists(path):
 def host_file_read(path):
     return ""
 
-def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {{}}, lazy_dependency = "", target_prefix = "SwiftPackage"):
+def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, sdk_variant, configuration = "Debug", lazy_products = {{}}, lazy_dependency = "", target_prefix = "SwiftPackage", root_identities = None):
     return {{
         "specs": [{{
             "name": "XcodePackage_swift-argument-parser_changelog-authors",
