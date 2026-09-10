@@ -407,6 +407,262 @@ def _apple_swift_testing_link_flags(testing_library_dir):
         return ["-framework", "Testing"]
     return ["-L", testing_library_dir, "-lTesting", "-Xlinker", "-rpath", "-Xlinker", testing_library_dir]
 
+def _apple_swift_testing_entry_point_source():
+    # A loadable test bundle has no entry point of its own, so the only way to
+    # reach the testing library is through whatever host loads the bundle, and
+    # that host decides what gets reported. Swift Package Manager answers this
+    # by compiling an entry point into the bundle: it stays loadable by
+    # `xctest`, which finds XCTest cases through the Objective-C runtime and
+    # ignores `main`, while a caller that wants the testing library's own
+    # structured output loads the bundle and calls `main` instead.
+    #
+    # Once goes one step further and normalizes that output here, in the
+    # process that produced it, rather than re-deriving outcomes from console
+    # text. The testing library writes its event stream to the path Once names,
+    # and this turns those records into normalized results.
+    return """#if canImport(Testing)
+import Testing
+#endif
+import Foundation
+
+enum OnceTestReport {
+    struct Case {
+        var name: String
+        var suite: String
+        var file: String
+        var status: String
+    }
+
+    static let quote = String(UnicodeScalar(34))
+    static let backslash = String(UnicodeScalar(92))
+
+    static func environmentPath(_ name: String) -> String? {
+        guard let value = ProcessInfo.processInfo.environment[name], !value.isEmpty else {
+            return nil
+        }
+        return value
+    }
+
+    static func records(at path: String) -> [[String: Any]] {
+        guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else {
+            return []
+        }
+        return contents.components(separatedBy: .newlines).compactMap { line in
+            guard let data = line.data(using: .utf8) else { return nil }
+            return (try? JSONSerialization.jsonObject(with: data)) as? [String: Any]
+        }
+    }
+
+    /// A test function's identifier is its suite's identifier followed by the
+    /// function, so the enclosing suite is the longest suite identifier that
+    /// prefixes it. A free function has no such suite and falls back to the
+    /// name of the file that declares it.
+    static func suiteName(forTest id: String, suites: [String: String], file: String) -> String {
+        var best = ""
+        for (suiteID, suiteName) in suites where id.hasPrefix(suiteID + "/") && !suiteName.isEmpty {
+            if suiteID.count > best.count {
+                best = suiteID
+            }
+        }
+        if let name = suites[best], !name.isEmpty {
+            return name
+        }
+        var stem = (file as NSString).lastPathComponent
+        if stem.hasSuffix(".swift") {
+            stem = String(stem.dropLast(6))
+        }
+        return stem
+    }
+
+    static func relativePath(_ path: String) -> String {
+        let root = FileManager.default.currentDirectoryPath
+        if !root.isEmpty, path.hasPrefix(root + "/") {
+            return String(path.dropFirst(root.count + 1))
+        }
+        return path
+    }
+
+    static func quoted(_ value: String) -> String {
+        var out = quote
+        for scalar in value.unicodeScalars {
+            if scalar.value == 34 {
+                out += backslash + quote
+            } else if scalar.value == 92 {
+                out += backslash + backslash
+            } else if scalar.value < 0x20 {
+                out += backslash + "u" + String(format: "%04x", scalar.value)
+            } else {
+                out.unicodeScalars.append(scalar)
+            }
+        }
+        return out + quote
+    }
+
+    static func jsonArray(_ value: String?) -> String {
+        guard let value else { return "[]" }
+        return "[" + quoted(value) + "]"
+    }
+
+    static func write(exitCode: CInt) {
+        guard let resultsPath = environmentPath("ONCE_TEST_RESULTS"),
+              let streamPath = environmentPath("ONCE_TEST_EVENT_STREAM") else {
+            return
+        }
+        let target = environmentPath("ONCE_TEST_TARGET") ?? ""
+        var suites: [String: String] = [:]
+        var order: [String] = []
+        var cases: [String: Case] = [:]
+
+        for record in records(at: streamPath) {
+            guard let payload = record["payload"] as? [String: Any],
+                  let kind = payload["kind"] as? String else { continue }
+            switch record["kind"] as? String {
+            case "test":
+                guard let id = payload["id"] as? String else { continue }
+                if kind == "suite" {
+                    suites[id] = payload["name"] as? String ?? ""
+                } else if kind == "function" {
+                    let location = payload["sourceLocation"] as? [String: Any] ?? [:]
+                    let declared = location["_filePath"] as? String ?? location["filePath"] as? String ?? ""
+                    var name = payload["name"] as? String ?? id
+                    if name.hasSuffix("()") {
+                        name = String(name.dropLast(2))
+                    }
+                    order.append(id)
+                    // Nothing confirms a test ran until the stream says so. A
+                    // test the run never reached stays without a verdict rather
+                    // than being credited with an outcome it never produced.
+                    cases[id] = Case(name: name, suite: "", file: relativePath(declared), status: "skipped")
+                }
+            case "event":
+                guard let id = payload["testID"] as? String, var entry = cases[id] else { continue }
+                switch kind {
+                case "testStarted":
+                    entry.status = "unknown"
+                case "testSkipped":
+                    entry.status = "skipped"
+                case "testCancelled", "testCaseCancelled":
+                    entry.status = "unknown"
+                case "issueRecorded":
+                    let issue = payload["issue"] as? [String: Any] ?? [:]
+                    let isFailure = issue["isFailure"] as? Bool ?? true
+                    let isKnown = issue["isKnown"] as? Bool ?? false
+                    if isFailure && !isKnown {
+                        entry.status = "failed"
+                    }
+                case "testEnded":
+                    if entry.status == "unknown" {
+                        entry.status = "passed"
+                    }
+                default:
+                    break
+                }
+                cases[id] = entry
+            default:
+                break
+            }
+        }
+
+        var encodedCases: [String] = []
+        var passed = 0
+        var failed = 0
+        var skipped = 0
+        for id in order {
+            guard var entry = cases[id] else { continue }
+            entry.suite = suiteName(forTest: id, suites: suites, file: entry.file)
+            switch entry.status {
+            case "passed": passed += 1
+            case "failed": failed += 1
+            case "skipped": skipped += 1
+            default: break
+            }
+            var encoded = "{"
+            encoded += quoted("id") + ":" + quoted(target + "::" + entry.suite + "/" + entry.name) + ","
+            encoded += quoted("name") + ":" + quoted(entry.name) + ","
+            encoded += quoted("suite") + ":" + quoted(entry.suite) + ","
+            encoded += quoted("file") + ":" + quoted(entry.file) + ","
+            encoded += quoted("status") + ":" + quoted(entry.status) + ","
+            encoded += quoted("attempts") + ":[{" + quoted("status") + ":" + quoted(entry.status) + "}],"
+            encoded += quoted("runner_metadata") + ":{" + quoted("runner") + ":" + quoted("swift_testing") + "}}"
+            encodedCases.append(encoded)
+        }
+
+        // The key order is spelled out rather than left to a dictionary so the
+        // same run always writes the same bytes.
+        var report = "{"
+        report += quoted("schema") + ":" + quoted("once.test_results.v1") + ","
+        report += quoted("target") + ":" + quoted(target) + ","
+        report += quoted("runner") + ":{" + quoted("type") + ":" + quoted("swift_testing") + "," + quoted("metadata") + ":{}},"
+        report += quoted("status") + ":" + quoted((exitCode == 0 && failed == 0) ? "passed" : "failed") + ","
+        report += quoted("summary") + ":{"
+        report += quoted("total") + ":" + String(encodedCases.count) + ","
+        report += quoted("passed") + ":" + String(passed) + ","
+        report += quoted("failed") + ":" + String(failed) + ","
+        report += quoted("skipped") + ":" + String(skipped) + ","
+        report += quoted("flaky") + ":0},"
+        report += quoted("cases") + ":[" + encodedCases.joined(separator: ",") + "],"
+        report += quoted("artifacts") + ":{"
+        report += quoted("logs") + ":" + jsonArray(environmentPath("ONCE_TEST_LOG")) + ","
+        report += quoted("native_results") + ":" + jsonArray(environmentPath("ONCE_TEST_NATIVE_RESULTS")) + "}}"
+        try? report.write(toFile: resultsPath, atomically: true, encoding: .utf8)
+    }
+}
+
+@main
+@available(macOS 10.15, iOS 13, watchOS 6, tvOS 13, *)
+@available(*, deprecated, message: "Not deprecated. Marked so that tests covering deprecated functionality do not warn.")
+struct OnceTestEntryPoint {
+    private static func requestedTestingLibrary() -> String {
+        var arguments = CommandLine.arguments.makeIterator()
+        while let argument = arguments.next() {
+            if argument == "--testing-library", let name = arguments.next() {
+                return name.lowercased()
+            }
+        }
+        return "xctest"
+    }
+
+    static func main() async {
+#if canImport(Testing)
+        if Self.requestedTestingLibrary() == "swift-testing" {
+            let exitCode: CInt = await Testing.__swiftPMEntryPoint()
+            OnceTestReport.write(exitCode: exitCode)
+            exit(exitCode)
+        }
+#endif
+    }
+}
+"""
+
+def _apple_swift_testing_helper(swiftc_path):
+    # Running the testing library directly means loading the bundle and calling
+    # its entry point, which a loadable bundle cannot do for itself. Every
+    # Swift toolchain ships the small host that does it.
+    path = _swift_toolchain_dir(swiftc_path) + "/usr/libexec/swift/pm/swiftpm-testing-helper"
+    return path if host_file_exists(path) else ""
+
+def _apple_sources_import_xctest(sources):
+    for source in sources:
+        path = source if source.startswith("/") else workspace_root() + "/" + source
+        if not host_file_exists(path):
+            continue
+        contents = host_file_read(path)
+        if "import XCTest" in contents or "<XCTest/XCTest.h>" in contents:
+            return True
+    return False
+
+def _apple_swift_testing_filter(selector):
+    # Once names a case `Suite/method`; the testing library matches a regular
+    # expression against its own identifiers, which carry the module name in
+    # front and the argument list behind.
+    escaped = ""
+    for index in range(len(selector)):
+        character = selector[index]
+        if character in ".^$*+?()[]{}|\\":
+            escaped += "\\"
+        escaped += character
+    return escaped + "\\("
+
 def _swift_testing_library_dir(swiftc_path, sdk_name):
     # Xcode publishes Swift Testing as a platform framework. A Swift toolchain
     # installed beside Xcode instead ships its own copy next to the compiler,
@@ -1171,6 +1427,12 @@ def _apple_test_cases_script(swift_srcs, cases_file, target, runner_type, select
     # their enclosing `XCTestCase` subclass as the suite; Swift Testing
     # functions (`@Test func x`) take their enclosing type, defaulting to the
     # file name for free functions.
+    #
+    # Reading a declaration says a case exists, never that it ran or how it
+    # ended: source can compile away behind a condition, and a runner can
+    # filter, skip, or never reach it. Every case listed here is therefore
+    # `unknown`, and the run's own exit status carries the outcome. A runner
+    # that reports per-case results does not come through here at all.
     specs = _shell_words(swift_srcs)
     selected_cases = _shell_words(selectors)
     return """total=0
@@ -1191,7 +1453,7 @@ emit_case() {{
     done
     [ "$selected" = true ] || return 0
   fi
-  if [ "$status" -eq 0 ]; then case_status=passed; else case_status=unknown; fi
+  case_status=unknown
   total=$((total + 1))
   if [ "$total" -gt 1 ]; then printf ',\n' >> "$cases_file"; fi
   printf '{{"id":"%s::%s/%s","name":"%s","suite":"%s","file":"%s","status":"%s","attempts":[{{"status":"%s"}}],"runner_metadata":{{"runner":"%s"}}}}' "{target}" "$case_suite" "$case_name" "$case_name" "$case_suite" "$case_file" "$case_status" "$case_status" "{runner_type}" >> "$cases_file"
@@ -1241,6 +1503,23 @@ done
         specs = specs,
         selector_count = len(selectors),
         selected_cases = selected_cases,
+        target = target,
+        runner_type = runner_type,
+    )
+
+def _apple_test_report_script(swift_srcs, cases_file, target, runner_type, selectors = []):
+    # The run's exit status is the one outcome this path can state. The cases it
+    # lists come from the sources, so they are reported without a verdict.
+    return """{cases_script}
+if [ "$status" -eq 0 ]; then run_status=passed; else run_status=failed; fi
+{{
+  printf '{{"schema":"once.test_results.v1","target":"%s","runner":{{"type":"%s","metadata":{{}}}},"status":"%s","summary":{{"total":%s,"passed":0,"failed":0,"skipped":0,"flaky":0}},"cases":[' "{target}" "{runner_type}" "$run_status" "$total"
+  cat "$cases_file"
+  printf '],"artifacts":{{"logs":["%s"],"native_results":["%s"]}}}}\n' "$log" "$native_results"
+}} > "$results"
+""".format(
+        cases_script = _apple_test_cases_script(swift_srcs, cases_file, target, runner_type, selectors),
+        cases_file = _shell_literal(cases_file),
         target = target,
         runner_type = runner_type,
     )
@@ -4916,6 +5195,11 @@ def _apple_test_bundle_impl(ctx):
     assembly_srcs = _filter_assembly_sources(all_srcs)
     if len(swift_srcs) == 0 and len(objc_srcs) == 0 and len(c_srcs) == 0 and len(cxx_srcs) == 0 and len(assembly_srcs) == 0:
         fail("apple_test_bundle " + ctx["label"]["id"] + " has no compilable sources")
+    declared_swift_srcs = list(swift_srcs)
+    if swift_testing:
+        entry_point_source = declare_output("OnceTestEntryPoint.swift")
+        write_path(entry_point_source, _apple_swift_testing_entry_point_source())
+        swift_srcs = swift_srcs + [entry_point_source]
 
     test_dir = ctx["build_dir"] + "/test"
     results = test_dir + "/test_results.json"
@@ -5452,13 +5736,46 @@ def _apple_test_bundle_impl(ctx):
             else:
                 selectors.append(case_filter)
         xctest_spec = ",".join(selectors) if selectors else "All"
+        # The XCTest host reports what it chooses to; the testing library's own
+        # entry point reports through the event stream, which names every test
+        # and what became of it. Take the second path when nothing else in the
+        # bundle needs the XCTest host, since only that host runs XCTest cases.
+        event_stream = test_dir + "/events.jsonl"
+        structured_swift_testing = (
+            swift_testing and
+            (platform == "macos" or platform == "macosx") and
+            not _apple_sources_import_xctest(declared_swift_srcs + objc_srcs) and
+            _apple_swift_testing_helper(swiftc["swiftc_path"]) != ""
+        )
+        if structured_swift_testing:
+            action_env["ONCE_TEST_RESULTS"] = results
+            action_env["ONCE_TEST_EVENT_STREAM"] = event_stream
+            action_env["ONCE_TEST_TARGET"] = ctx["label"]["id"]
+            action_env["ONCE_TEST_LOG"] = log
+            action_env["ONCE_TEST_NATIVE_RESULTS"] = native_results
         if platform == "macos" or platform == "macosx":
+            if structured_swift_testing:
+                runner_argv = [
+                    _apple_swift_testing_helper(swiftc["swiftc_path"]),
+                    "--test-bundle-path",
+                    test_binary,
+                    "--testing-library",
+                    "swift-testing",
+                    "--event-stream-output-path",
+                    event_stream,
+                    "--event-stream-version",
+                    "0",
+                ]
+                for selector in selectors:
+                    runner_argv.extend(["--filter", _apple_swift_testing_filter(selector)])
+            else:
+                runner_argv = [runner_xcrun, "xctest", "-XCTest", xctest_spec, test_bundle_path]
             runner_command = """cd {workspace}
 DYLD_LIBRARY_PATH={usr_lib}${{DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}} DYLD_FALLBACK_FRAMEWORK_PATH={frameworks}${{DYLD_FALLBACK_FRAMEWORK_PATH:+:$DYLD_FALLBACK_FRAMEWORK_PATH}} {command}""".format(
                 workspace = _shell_literal(workspace_root()),
                 usr_lib = _shell_literal(xctest_usr_lib_dir),
                 frameworks = _shell_literal(xctest_framework_dir),
-                command = _shell_words([runner_xcrun, "xctest", "-XCTest", xctest_spec, test_bundle_path]),
+                command = _shell_words(runner_argv),
             )
         elif sdk_variant == "simulator":
             simulator_setup = _ios_simulator_selection_script(runner_xcrun) + """
@@ -5514,13 +5831,7 @@ status_file={status_file}
 ) 2>&1 | tee "$log" >/dev/null
 status=$(cat "$status_file")
 cp "$log" "$native_results"
-{cases_script}
-if [ "$status" -eq 0 ]; then run_status=passed; failed=0; passed=$total; else run_status=failed; failed=1; passed=0; fi
-{{
-  printf '{{"schema":"once.test_results.v1","target":"%s","runner":{{"type":"%s","metadata":{{}}}},"status":"%s","summary":{{"total":%s,"passed":%s,"failed":%s,"skipped":0,"flaky":0}},"cases":[' "{target}" "{runner_type}" "$run_status" "$total" "$passed" "$failed"
-  cat "$cases_file"
-  printf '],"artifacts":{{"logs":["%s"],"native_results":["%s"]}}}}\n' "$log" "$native_results"
-}} > "$results"
+{report_script}
 exit "$status"
 """.format(
             test_dir = _shell_literal(test_dir),
@@ -5529,9 +5840,13 @@ exit "$status"
             native_results = _shell_literal(native_results),
             status_file = _shell_literal(test_dir + "/runner-status"),
             runner_command = runner_command,
-            cases_script = _apple_test_cases_script(swift_srcs, cases_file, ctx["label"]["id"], runner_type, selectors),
-            target = ctx["label"]["id"],
-            runner_type = runner_type,
+            report_script = "" if structured_swift_testing else _apple_test_report_script(
+                declared_swift_srcs,
+                cases_file,
+                ctx["label"]["id"],
+                runner_type,
+                selectors,
+            ),
         )
         test_inputs = [test_binary, info_plist, test_cs_stamp]
         test_inputs.extend(resource_files)

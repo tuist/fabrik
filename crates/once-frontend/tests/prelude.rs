@@ -26,6 +26,9 @@ mod swift_package_linking;
 #[path = "prelude/swift_testing_library.rs"]
 mod swift_testing_library;
 
+#[path = "prelude/swift_testing_results.rs"]
+mod swift_testing_results;
+
 fn store_for(workspace: &Path, package: &str) -> AnalysisStore {
     AnalysisStore::new(
         workspace.to_path_buf(),

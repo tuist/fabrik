@@ -42,6 +42,19 @@ so code guarded by `canImport` of the macro module compiles. A macro only ever
 builds for the host, so a test bundle that depends on one builds for the host
 as well, along with everything it depends on.
 
+## Reported Results
+
+A Swift Testing bundle reports every test and what became of it. The testing
+library records the run and Once turns that record into normalized results, so
+a test that was filtered out, skipped, or never reached is reported as such
+rather than as a pass, and an issue the test marked as known is not a failure.
+
+Where results have to come from the XCTest host instead, that host reports the
+run's outcome and not each test's. Once still lists the cases it finds in the
+sources so a shard can address them, but lists them without a verdict. A
+bundle stays with the XCTest host when it holds XCTest cases, which only that
+host runs, and when it runs anywhere other than macOS.
+
 ## Attributes
 
 | Attribute | Type | Required | Default | Description |
