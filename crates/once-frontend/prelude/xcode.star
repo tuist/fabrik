@@ -2030,6 +2030,12 @@ def _xcode_swift_package_dependencies(target, identity, target_ids, product_ids,
                 deps.append("./" + lazy_dependency)
     return deps
 
+def _xcode_swift_package_depends_on_macro(target, identity, target_ids, product_ids, platform, macro_target_ids, enabled_traits = [], lazy_products = {}, lazy_dependency = ""):
+    for dependency in _xcode_swift_package_dependencies(target, identity, target_ids, product_ids, platform, enabled_traits, lazy_products, lazy_dependency):
+        if macro_target_ids.get(dependency[2:]):
+            return True
+    return False
+
 def _xcode_swift_imports(sources):
     modules = []
     for source in sources:
@@ -2171,6 +2177,7 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
     host_target_ids = {}
     host_product_ids = {}
     module_ids = {}
+    macro_target_ids = {}
     resolved_traits = _xcode_swift_package_resolved_traits(package_infos, root_identities)
     for package in package_infos:
         identity = package["identity"]
@@ -2179,6 +2186,8 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
             if name:
                 target_id = _xcode_swift_package_target_id(identity, name, target_prefix)
                 host_target_id = target_id if (target.get("type") or "") in ["binary", "macro", "test"] else _xcode_swift_package_host_target_id(identity, name, target_prefix)
+                if (target.get("type") or "") == "macro":
+                    macro_target_ids[target_id] = True
                 target_ids[identity + "\x1f" + name] = target_id
                 target_ids[identity.lower() + "\x1f" + name] = target_id
                 host_target_ids[identity + "\x1f" + name] = host_target_id
@@ -2290,13 +2299,30 @@ def _xcode_local_swift_package_specs(ctx, package_infos, platform, minimum_os, s
                     },
                 })
                 continue
+            # A test target that depends on a macro links the macro's code, and
+            # a macro is only ever built for the host. Swift Package Manager
+            # answers that by building such a test target for the host too,
+            # which carries every one of its dependencies to the host as well.
+            # Anything less mixes host and destination builds of the same
+            # module in one link.
+            tests_a_macro = target_type == "test" and _xcode_swift_package_depends_on_macro(
+                target,
+                identity,
+                target_ids,
+                product_ids,
+                platform,
+                macro_target_ids,
+                package_traits,
+                lazy_products,
+                lazy_dependency,
+            )
             variants = [{
                 "id": target_id,
-                "platform": platform,
-                "minimum_os": package_minimum_os,
-                "sdk_variant": sdk_variant,
-                "target_ids": target_ids,
-                "product_ids": product_ids,
+                "platform": "macos" if tests_a_macro else platform,
+                "minimum_os": package_host_minimum_os if tests_a_macro else package_minimum_os,
+                "sdk_variant": "simulator" if tests_a_macro else sdk_variant,
+                "target_ids": host_target_ids if tests_a_macro else target_ids,
+                "product_ids": host_product_ids if tests_a_macro else product_ids,
             }]
             if target_type != "test":
                 variants.append({

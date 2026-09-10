@@ -37,6 +37,11 @@ directory, stages the required testing frameworks, and launches the declared
 application under test. Compilation, linking, packaging, and signing remain
 Once build actions.
 
+A bundle that depends on a Swift macro links the macro and imports its module,
+so code guarded by `canImport` of the macro module compiles. A macro only ever
+builds for the host, so a test bundle that depends on one builds for the host
+as well, along with everything it depends on.
+
 ## Attributes
 
 | Attribute | Type | Required | Default | Description |

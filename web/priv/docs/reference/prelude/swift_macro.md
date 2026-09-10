@@ -11,6 +11,14 @@ swift-syntax checkout supplied through `deps`. Any
 reaches a `swift_macro` target picks up the executable and declaring module
 automatically.
 
+A macro is a tool for the targets that expand it, so its code stays out of what
+they link. A target that unit-tests the macro is the exception: it imports the
+module to reach the implementation types, so an
+[`apple_test_bundle`](/reference/prelude/apple_test_bundle) that depends on a
+macro compiles and links against it. A macro only ever builds for the host, so
+such a test target builds for the host too, and so does everything it depends
+on.
+
 ## Attributes
 
 | Attribute | Type | Required | Default | Description |

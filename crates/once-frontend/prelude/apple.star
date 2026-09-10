@@ -2476,6 +2476,33 @@ def _swift_macro_impl(ctx):
     ) = _collect_dep_compile_inputs(deps, ctx["build_dir"])
     dep_swiftmodule_inputs = _apple_collect_swiftmodule_inputs(deps)
 
+    # The sources compile twice: once into the plugin executable the compiler
+    # loads, and once into an archive a test target can link. Everything that
+    # describes how to compile them is shared.
+    compile_argv = []
+    for d in dep_swiftmodule_dirs:
+        compile_argv.extend(["-I", d])
+    for hdir in dep_header_dirs:
+        compile_argv.extend(["-Xcc", "-I", "-Xcc", hdir])
+    for modulemap in dep_modulemaps:
+        compile_argv.extend(["-Xcc", "-fmodule-map-file=" + modulemap])
+    for hmap in dep_hmaps:
+        compile_argv.extend(["-Xcc", "-I", "-Xcc", hmap])
+    for overlay in dep_vfs_overlays:
+        compile_argv.extend(["-Xcc", "-ivfsoverlay", "-Xcc", overlay])
+    for framework_dir in dep_framework_search_dirs:
+        compile_argv.extend(["-F", framework_dir])
+    _apple_disable_static_framework_autolinking(compile_argv, _apple_collect_link_framework_bundles(deps))
+    for framework in dep_framework_module_names:
+        compile_argv.extend(["-framework", framework])
+    for fw in dep_sdk_frameworks:
+        compile_argv.extend(["-framework", fw])
+    for dylib in dep_sdk_dylibs:
+        compile_argv.extend(["-l" + dylib])
+    _apple_add_swift_plugin_args(compile_argv, plugin_dylibs, plugin_executables)
+    for flag in _apple_swift_link_flags(swift_flags):
+        compile_argv.append(flag)
+
     swift_argv = list(swiftc["argv"]) + [
         "-emit-executable",
         "-emit-module",
@@ -2489,29 +2516,7 @@ def _swift_macro_impl(ctx):
         "-parse-as-library",
         "-o",
         plugin_executable,
-    ]
-    for d in dep_swiftmodule_dirs:
-        swift_argv.extend(["-I", d])
-    for hdir in dep_header_dirs:
-        swift_argv.extend(["-Xcc", "-I", "-Xcc", hdir])
-    for modulemap in dep_modulemaps:
-        swift_argv.extend(["-Xcc", "-fmodule-map-file=" + modulemap])
-    for hmap in dep_hmaps:
-        swift_argv.extend(["-Xcc", "-I", "-Xcc", hmap])
-    for overlay in dep_vfs_overlays:
-        swift_argv.extend(["-Xcc", "-ivfsoverlay", "-Xcc", overlay])
-    for framework_dir in dep_framework_search_dirs:
-        swift_argv.extend(["-F", framework_dir])
-    _apple_disable_static_framework_autolinking(swift_argv, _apple_collect_link_framework_bundles(deps))
-    for framework in dep_framework_module_names:
-        swift_argv.extend(["-framework", framework])
-    for fw in dep_sdk_frameworks:
-        swift_argv.extend(["-framework", fw])
-    for dylib in dep_sdk_dylibs:
-        swift_argv.extend(["-l" + dylib])
-    _apple_add_swift_plugin_args(swift_argv, plugin_dylibs, plugin_executables)
-    for flag in _apple_swift_link_flags(swift_flags):
-        swift_argv.append(flag)
+    ] + compile_argv
     for src in swift_srcs:
         swift_argv.append(src)
     # Dep archives appear as positional inputs; swiftc forwards
@@ -2556,11 +2561,45 @@ def _swift_macro_impl(ctx):
         identifier = "swift_macro_compile_" + module_name,
     )
 
+    # A macro is a tool for the targets that expand it, so its code stays out
+    # of what they link. A test target is the exception: it imports the module
+    # to exercise the implementation types, which needs them as an archive.
+    plugin_archive = declare_output(module_name + ".a")
+    archive_argv = list(swiftc["argv"]) + [
+        "-emit-library",
+        "-static",
+        "-module-name",
+        module_name,
+        "-target",
+        triple,
+        "-parse-as-library",
+        "-o",
+        plugin_archive,
+    ] + compile_argv + swift_srcs
+    run_action(
+        argv = archive_argv,
+        inputs = swift_inputs,
+        outputs = [plugin_archive],
+        env = swiftc["env"],
+        toolchain_identity = swiftc["identity"],
+        identifier = "swift_macro_archive_" + module_name,
+    )
+
     return {
         "label_id": ctx["label"]["id"],
         "plugin_executable": plugin_executable,
         "plugin_module_name": module_name,
         "transitive_plugin_executables": [plugin_executable + "#" + module_name],
+        "transitive_plugin_module_dirs": _unique([ctx["build_dir"]] + dep_swiftmodule_dirs),
+        "transitive_plugin_modulemaps": list(dep_modulemaps),
+        "transitive_plugin_header_dirs": list(dep_header_dirs),
+        "transitive_plugin_hmaps": list(dep_hmaps),
+        "transitive_plugin_vfs_overlays": list(dep_vfs_overlays),
+        "transitive_plugin_archives": _unique([plugin_archive] + dep_archives),
+        "transitive_plugin_module_inputs": _unique(
+            [plugin_swiftmodule] + plugin_module_sidecars +
+            _apple_swiftmodule_inputs_for_arch(dep_swiftmodule_inputs, host_arch()),
+        ),
     }
 
 # --- Bundle helpers ----------------------------------------------------
@@ -3026,6 +3065,32 @@ def _apple_swiftmodule_inputs_for_arch(inputs, arch):
                 continue
         selected.append(input)
     return selected
+
+_APPLE_MACRO_MODULE_KEYS = [
+    "module_dirs",
+    "modulemaps",
+    "header_dirs",
+    "hmaps",
+    "vfs_overlays",
+    "archives",
+    "module_inputs",
+]
+
+def _apple_collect_macro_module_inputs(deps):
+    """Aggregate what a test target needs to import the macros it depends on.
+
+    A macro is a tool everywhere else, so its module, its code, and what it was
+    built against reach only the targets that exercise the implementation
+    rather than every consumer that expands it.
+    """
+    collected = {key: [] for key in _APPLE_MACRO_MODULE_KEYS}
+    for dep in deps:
+        for key in _APPLE_MACRO_MODULE_KEYS:
+            values = collected[key]
+            for value in dep.get("transitive_plugin_" + key) or []:
+                if value and value not in values:
+                    values.append(value)
+    return collected
 
 def _collect_dep_compile_inputs(deps, build_dir):
     """Aggregate compile-visible inputs from dep providers.
@@ -4936,6 +5001,21 @@ def _apple_test_bundle_impl(ctx):
     ) = _collect_dep_compile_inputs(deps, ctx["build_dir"])
     compile_swiftmodule_inputs = _apple_collect_swiftmodule_inputs(deps)
     dep_archives = [archive for archive in dep_archives if archive not in host_link_archives]
+    macro_modules = _apple_collect_macro_module_inputs(deps)
+    for target_list, key in [
+        (compile_swiftmodule_dirs, "module_dirs"),
+        (dep_modulemaps, "modulemaps"),
+        (compile_header_dirs, "header_dirs"),
+        (dep_hmaps, "hmaps"),
+        (dep_vfs_overlays, "vfs_overlays"),
+        (compile_swiftmodule_inputs, "module_inputs"),
+    ]:
+        for value in macro_modules[key]:
+            if value not in target_list:
+                target_list.append(value)
+    for archive in macro_modules["archives"]:
+        if archive not in dep_archives and archive not in host_link_archives:
+            dep_archives.append(archive)
     alwayslink_archives = _apple_collect_alwayslink_archives(deps)
     runtime_framework_bundles = _apple_collect_runtime_framework_bundles(deps)
     runner_xcodebuild = ""
