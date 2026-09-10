@@ -45,8 +45,8 @@ fn a_listing_taken_from_sources_reports_no_verdict() {
     );
 }
 
-/// Only the XCTest host runs XCTest cases, so a bundle that has any is left to
-/// it. A bundle without them is free to run through the testing library's own
+/// Only the `XCTest` host runs `XCTest` cases, so a bundle that has any is left
+/// to it. A bundle without them is free to run through the testing library's own
 /// entry point, which reports every test and what became of it.
 #[test]
 fn a_bundle_holding_xctest_cases_stays_with_the_xctest_host() {
@@ -107,42 +107,7 @@ fn normalized_results_follow_the_event_stream() {
     )
     .unwrap();
 
-    let suite = r#"{"kind":"test","payload":{"kind":"suite","id":"M.Suite","name":"Suite","sourceLocation":{"_filePath":"Tests/Suite.swift","line":1,"column":1}},"version":0}"#;
-    let test = |name: &str| {
-        format!(
-            r#"{{"kind":"test","payload":{{"kind":"function","id":"M.Suite/{name}()/Tests/Suite.swift:2:3","name":"{name}()","isParameterized":false,"sourceLocation":{{"_filePath":"Tests/Suite.swift","line":2,"column":3}}}},"version":0}}"#
-        )
-    };
-    let event = |kind: &str, name: &str, extra: &str| {
-        format!(
-            r#"{{"kind":"event","payload":{{"kind":"{kind}","testID":"M.Suite/{name}()/Tests/Suite.swift:2:3","messages":[]{extra}}},"version":0}}"#
-        )
-    };
-    let stream = [
-        suite.to_string(),
-        test("passes"),
-        test("failsForReal"),
-        test("hasKnownIssue"),
-        test("neverRuns"),
-        event("testStarted", "passes", ""),
-        event("testEnded", "passes", ""),
-        event("testStarted", "failsForReal", ""),
-        event(
-            "issueRecorded",
-            "failsForReal",
-            r#","issue":{"isKnown":false,"isFailure":true,"severity":"error"}"#,
-        ),
-        event("testEnded", "failsForReal", ""),
-        event("testStarted", "hasKnownIssue", ""),
-        event(
-            "issueRecorded",
-            "hasKnownIssue",
-            r#","issue":{"isKnown":true,"isFailure":true,"severity":"error"}"#,
-        ),
-        event("testEnded", "hasKnownIssue", ""),
-    ]
-    .join("\n");
-    std::fs::write(dir.path().join("events.jsonl"), stream).unwrap();
+    std::fs::write(dir.path().join("events.jsonl"), event_stream()).unwrap();
 
     let compiled = std::process::Command::new("xcrun")
         .args([
@@ -201,4 +166,46 @@ fn normalized_results_follow_the_event_stream() {
     assert_eq!(by_name("neverRuns")["status"], "skipped");
     assert_eq!(by_name("passes")["id"], "tests/Bundle::Suite/passes");
     assert_eq!(by_name("passes")["suite"], "Suite");
+}
+
+/// One run's worth of records, in the shape the testing library writes them:
+/// a test that passes, one that records a real failure, one whose only issue
+/// the test itself marks as known, and one the run never reaches.
+#[cfg(target_os = "macos")]
+fn event_stream() -> String {
+    let suite = r#"{"kind":"test","payload":{"kind":"suite","id":"M.Suite","name":"Suite","sourceLocation":{"_filePath":"Tests/Suite.swift","line":1,"column":1}},"version":0}"#;
+    let test = |name: &str| {
+        format!(
+            r#"{{"kind":"test","payload":{{"kind":"function","id":"M.Suite/{name}()/Tests/Suite.swift:2:3","name":"{name}()","isParameterized":false,"sourceLocation":{{"_filePath":"Tests/Suite.swift","line":2,"column":3}}}},"version":0}}"#
+        )
+    };
+    let event = |kind: &str, name: &str, extra: &str| {
+        format!(
+            r#"{{"kind":"event","payload":{{"kind":"{kind}","testID":"M.Suite/{name}()/Tests/Suite.swift:2:3","messages":[]{extra}}},"version":0}}"#
+        )
+    };
+    [
+        suite.to_string(),
+        test("passes"),
+        test("failsForReal"),
+        test("hasKnownIssue"),
+        test("neverRuns"),
+        event("testStarted", "passes", ""),
+        event("testEnded", "passes", ""),
+        event("testStarted", "failsForReal", ""),
+        event(
+            "issueRecorded",
+            "failsForReal",
+            r#","issue":{"isKnown":false,"isFailure":true,"severity":"error"}"#,
+        ),
+        event("testEnded", "failsForReal", ""),
+        event("testStarted", "hasKnownIssue", ""),
+        event(
+            "issueRecorded",
+            "hasKnownIssue",
+            r#","issue":{"isKnown":true,"isFailure":true,"severity":"error"}"#,
+        ),
+        event("testEnded", "hasKnownIssue", ""),
+    ]
+    .join("\n")
 }
